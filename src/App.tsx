@@ -315,7 +315,7 @@ function App() {
         
         {/* Show Navbar if launched or if user is admin */}
         {(isLaunched() || isAdmin === true) && (
-          <div className="relative z-20">
+          <div className="relative z-30">
             <Navbar 
               currentUser={currentUser} 
               isAdmin={isAdmin === true} 
