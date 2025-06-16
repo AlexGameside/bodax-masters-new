@@ -9,35 +9,13 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Start Discord bot
-let bot = null;
-try {
-  const { Client, GatewayIntentBits } = require('discord.js');
-  bot = new Client({
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.DirectMessages,
-      GatewayIntentBits.MessageContent,
-    ],
-  });
-
-  bot.once('ready', () => {
-    console.log(`Discord bot logged in as ${bot.user.tag}`);
-  });
-
-  bot.login(process.env.DISCORD_BOT_TOKEN);
-} catch (error) {
-  console.log('Discord bot not started (missing discord.js or token)');
-}
-
 // Root health check endpoint for Render
 app.get('/', (req, res) => {
   res.json({ 
     status: 'ok', 
     message: 'Discord bot API is running',
     timestamp: new Date().toISOString(),
-    botStatus: bot ? 'connected' : 'not connected'
+    service: 'Discord Notification API'
   });
 });
 
@@ -46,7 +24,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     message: 'Discord bot API is running',
-    botStatus: bot ? 'connected' : 'not connected'
+    service: 'Discord Notification API'
   });
 });
 
@@ -71,7 +49,9 @@ async function sendDiscordDM(userId, message) {
     });
 
     if (!dmResponse.ok) {
-      throw new Error('Failed to create DM channel');
+      const errorText = await dmResponse.text();
+      console.error('DM channel creation failed:', dmResponse.status, errorText);
+      throw new Error(`Failed to create DM channel: ${dmResponse.status}`);
     }
 
     const dmChannel = await dmResponse.json();
@@ -88,7 +68,13 @@ async function sendDiscordDM(userId, message) {
       }),
     });
 
-    return messageResponse.ok;
+    if (!messageResponse.ok) {
+      const errorText = await messageResponse.text();
+      console.error('Message sending failed:', messageResponse.status, errorText);
+      throw new Error(`Failed to send message: ${messageResponse.status}`);
+    }
+
+    return true;
   } catch (error) {
     console.error('Error sending Discord DM:', error);
     return false;
@@ -167,8 +153,20 @@ app.use((req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Discord bot API server running on port ${PORT}`);
   console.log(`Health check available at: http://localhost:${PORT}/`);
   console.log(`API health check at: http://localhost:${PORT}/api/health`);
+});
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  process.exit(0);
 }); 
