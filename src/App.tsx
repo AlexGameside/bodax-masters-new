@@ -26,6 +26,8 @@ import GDPR from './pages/GDPR';
 import ContactUs from './pages/ContactUs';
 import HelpCenter from './pages/HelpCenter';
 import FAQ from './pages/FAQ';
+import TournamentRules from './pages/TournamentRules';
+import DiscordCallback from './pages/DiscordCallback';
 import type { User, Team, Match, TeamInvitation } from './types/tournament';
 import { 
   getTeams, 
@@ -512,6 +514,8 @@ function App() {
                 )
               } 
             />
+            <Route path="/tournament-rules" element={<TournamentRules />} />
+            <Route path="/discord-callback" element={<DiscordCallback />} />
             
             {/* Catch all route - redirect to countdown */}
             <Route path="*" element={<Navigate to="/" replace />} />

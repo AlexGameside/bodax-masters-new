@@ -1,0 +1,145 @@
+const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Start Discord bot
+let bot = null;
+try {
+  const { Client, GatewayIntentBits } = require('discord.js');
+  bot = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.DirectMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+  });
+
+  bot.once('ready', () => {
+    console.log(`Discord bot logged in as ${bot.user.tag}`);
+  });
+
+  bot.login(process.env.DISCORD_BOT_TOKEN);
+} catch (error) {
+  console.log('Discord bot not started (missing discord.js or token)');
+}
+
+// Simple function to send Discord DM without requiring the full bot
+async function sendDiscordDM(userId, message) {
+  try {
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+    if (!botToken) {
+      throw new Error('Discord bot token not configured');
+    }
+
+    // Create DM channel
+    const dmResponse = await fetch('https://discord.com/api/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        recipient_id: userId,
+      }),
+    });
+
+    if (!dmResponse.ok) {
+      throw new Error('Failed to create DM channel');
+    }
+
+    const dmChannel = await dmResponse.json();
+
+    // Send message to DM channel
+    const messageResponse = await fetch(`https://discord.com/api/channels/${dmChannel.id}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: message,
+      }),
+    });
+
+    return messageResponse.ok;
+  } catch (error) {
+    console.error('Error sending Discord DM:', error);
+    return false;
+  }
+}
+
+// API endpoint to send Discord notifications
+app.post('/api/send-discord-notification', async (req, res) => {
+  try {
+    const { userIds, title, message, type } = req.body;
+    
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'userIds must be a non-empty array' 
+      });
+    }
+    
+    if (!message) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'message is required' 
+      });
+    }
+
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    for (const userId of userIds) {
+      try {
+        const fullMessage = title ? `**${title}**\n\n${message}` : message;
+        const success = await sendDiscordDM(userId, fullMessage);
+        
+        if (success) {
+          results.success.push(userId);
+          console.log(`Notification sent to ${userId}`);
+        } else {
+          results.failed.push(userId);
+          console.log(`Failed to send notification to ${userId}`);
+        }
+      } catch (error) {
+        results.failed.push(userId);
+        console.error(`Error sending to ${userId}:`, error.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      results
+    });
+  } catch (error) {
+    console.error('Error sending Discord notification:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send notification'
+    });
+  }
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Discord bot API is running',
+    botStatus: bot ? 'connected' : 'not connected'
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Discord bot API server running on port ${PORT}`);
+}); 

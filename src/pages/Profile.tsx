@@ -3,8 +3,9 @@ import { useAuth } from '../hooks/useAuth';
 import { updateUserProfile, getUserMatches, getUserTeams, inviteTeamMember, leaveTeam, deleteTeam } from '../services/firebaseService';
 import { resetPassword } from '../services/authService';
 import type { User, Match, Team } from '../types/tournament';
-import { Shield, Users, Trophy, Settings, UserPlus, LogOut, Edit3, Save, X, Trash2, ExternalLink } from 'lucide-react';
+import { Shield, Users, Trophy, Settings, UserPlus, LogOut, Edit3, Save, X, Trash2, ExternalLink, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getDiscordAuthUrl } from '../services/discordService';
 
 const Profile = () => {
   const { currentUser, loading } = useAuth();
@@ -315,6 +316,52 @@ const Profile = () => {
                     </label>
                     <p className="text-white">
                       {currentUser.createdAt ? new Date(currentUser.createdAt).toLocaleDateString() : 'Unknown'}
+                    </p>
+                  </div>
+
+                  {/* Discord Account Linking */}
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Discord Account
+                    </label>
+                    {currentUser.discordLinked ? (
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2">
+                          <MessageCircle className="w-5 h-5 text-green-400" />
+                          <span className="text-green-400 font-medium">Linked</span>
+                        </div>
+                        <span className="text-white">
+                          {currentUser.discordUsername || 'Discord User'}
+                        </span>
+                        <button
+                          onClick={() => {
+                            // TODO: Implement unlink functionality
+                            setMessage('Discord unlink functionality coming soon');
+                            setTimeout(() => setMessage(''), 3000);
+                          }}
+                          className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                        >
+                          Unlink
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2">
+                          <MessageCircle className="w-5 h-5 text-gray-400" />
+                          <span className="text-gray-400">Not Linked</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            window.location.href = getDiscordAuthUrl();
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-blue-800"
+                        >
+                          Link Discord
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Link your Discord account to receive tournament notifications and match reminders.
                     </p>
                   </div>
                 </div>

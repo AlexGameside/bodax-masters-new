@@ -161,20 +161,20 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
           <div className="flex items-center justify-between mb-4">
             <div className="flex-1"></div>
             <div className="flex-1">
-              <h1 className="text-4xl font-bold text-white mb-2">{tournament.name}</h1>
-              <p className="text-gray-300 mb-4">{tournament.description}</p>
-              <div className="flex items-center justify-center space-x-6 text-sm text-gray-400">
-                <div className="flex items-center">
-                  <Trophy className="w-4 h-4 mr-2" />
+          <h1 className="text-4xl font-bold text-white mb-2">{tournament.name}</h1>
+          <p className="text-gray-300 mb-4">{tournament.description}</p>
+          <div className="flex items-center justify-center space-x-6 text-sm text-gray-400">
+            <div className="flex items-center">
+              <Trophy className="w-4 h-4 mr-2" />
                   <span>{tournament.format?.type?.replace('-', ' ')?.toUpperCase() || 'UNKNOWN'}</span>
-                </div>
-                <div className="flex items-center">
-                  <Users className="w-4 h-4 mr-2" />
-                  <span>{tournament.teams?.length || 0} Teams</span>
-                </div>
-                <div className="flex items-center">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  <span>{tournament.status}</span>
+            </div>
+            <div className="flex items-center">
+              <Users className="w-4 h-4 mr-2" />
+              <span>{tournament.teams?.length || 0} Teams</span>
+            </div>
+            <div className="flex items-center">
+              <Calendar className="w-4 h-4 mr-2" />
+              <span>{tournament.status}</span>
                 </div>
               </div>
             </div>

@@ -1,0 +1,29 @@
+{
+  "name": "bodax-masters-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Bodax Masters tournament notifications",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "bot": "node bot.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "tournament",
+    "valorant",
+    "notifications"
+  ],
+  "author": "Bodax Masters",
+  "license": "MIT"
+}

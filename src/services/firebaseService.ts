@@ -922,6 +922,17 @@ export const updateUserProfile = async (userId: string, updates: { displayName?:
   await updateDoc(userRef, updates);
 };
 
+// Update Discord information for a user
+export const updateUserDiscordInfo = async (userId: string, discordInfo: { 
+  discordId?: string; 
+  discordUsername?: string; 
+  discordAvatar?: string; 
+  discordLinked?: boolean; 
+}): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, discordInfo);
+};
+
 export const leaveTeam = async (teamId: string, userId: string): Promise<void> => {
   const teamRef = doc(db, 'teams', teamId);
   const team = await getTeamById(teamId);
@@ -2440,7 +2451,7 @@ export const completeMatch = async (matchId: string, team1Score: number, team2Sc
   console.log('✅ DEBUG: Match completed successfully');
   
   // If this is a tournament match, advance the winner to the next round
-  if (matchData.tournamentId) {
+    if (matchData.tournamentId) {
     console.log('🚀 DEBUG: Calling advanceWinnerToNextRound with:', {
       tournamentId: matchData.tournamentId,
       currentRound: matchData.round,
@@ -2656,7 +2667,7 @@ export const resolveScoreDispute = async (
   });
   
   // If this is a tournament match, advance the winner to the next round
-  if (matchData.tournamentId) {
+    if (matchData.tournamentId) {
     await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
     
     // Check if this round is complete and if we should advance to the next round
@@ -2769,7 +2780,7 @@ export const forceSubmitResults = async (matchId: string, team1Score: number, te
   });
   
   // If this is a tournament match, advance the winner to the next round
-  if (matchData.tournamentId) {
+    if (matchData.tournamentId) {
     await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
     
     // Check if this round is complete and if we should advance to the next round
@@ -3200,5 +3211,77 @@ export const startSingleElimination = async (tournamentId: string): Promise<void
   } catch (error) {
     console.error('Error starting single elimination:', error);
     throw error;
+  }
+};
+
+// Send Discord notification to a specific user
+export const sendDiscordNotificationToUser = async (userId: string, message: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    // Get user data to check if they have Discord linked
+    const user = await getUserById(userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    if (!user.discordId || !user.discordLinked) {
+      return { success: false, error: 'User does not have Discord linked' };
+    }
+
+    // Call the Discord bot API instead of Discord directly
+    const discordApiUrl = import.meta.env.VITE_DISCORD_API_URL || 'http://localhost:3001';
+    const response = await fetch(`${discordApiUrl}/api/send-discord-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userIds: [user.discordId],
+        title: 'Tournament Notification',
+        message: message,
+        type: 'info'
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      return { success: false, error: errorData.error || 'Failed to send notification' };
+    }
+
+    const result = await response.json();
+    return { success: result.success };
+  } catch (error) {
+    console.error('Error sending Discord notification:', error);
+    return { success: false, error: 'Failed to send notification' };
+  }
+};
+
+// Get all users with Discord linked
+export const getUsersWithDiscord = async (): Promise<User[]> => {
+  try {
+    const users = await getAllUsers();
+    return users.filter(user => user.discordLinked && user.discordId);
+  } catch (error) {
+    console.error('Error getting users with Discord:', error);
+    return [];
+  }
+};
+
+// Get user by ID
+export const getUserById = async (userId: string): Promise<User | null> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      return null;
+    }
+    
+    return {
+      id: userDoc.id,
+      ...userDoc.data()
+    } as User;
+  } catch (error) {
+    console.error('Error getting user by ID:', error);
+    return null;
   }
 };

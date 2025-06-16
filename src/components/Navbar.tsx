@@ -19,6 +19,8 @@ const Navbar = ({ currentUser, isAdmin = false, onTeamUpdate, onNavigate, onLogo
   const navigate = useNavigate();
   const [activeMatches, setActiveMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = React.useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -138,7 +140,7 @@ const Navbar = ({ currentUser, isAdmin = false, onTeamUpdate, onNavigate, onLogo
 
           <div className="hidden lg:flex items-center space-x-4">
             {currentUser ? (
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-3 relative">
                 {/* Active Match Indicator */}
                 {activeMatches.length > 0 && (
                   <button
@@ -150,20 +152,35 @@ const Navbar = ({ currentUser, isAdmin = false, onTeamUpdate, onNavigate, onLogo
                     <span className="text-sm font-medium">Match Active</span>
                   </button>
                 )}
-                
                 <NotificationBell userId={currentUser.id} onTeamUpdate={onTeamUpdate} onNavigate={onNavigate} />
-                <div className="flex items-center space-x-2 text-sm text-gray-300">
-                  <User className="w-4 h-4" />
-                  <span className="hidden sm:block">{currentUser.username}</span>
+                {/* Profile Dropdown */}
+                <div className="relative" ref={profileDropdownRef}>
+                  <button
+                    onClick={() => setProfileDropdownOpen((open) => !open)}
+                    className="flex items-center space-x-2 text-sm text-gray-300 hover:text-white focus:outline-none"
+                  >
+                    <User className="w-4 h-4" />
+                    <span className="hidden sm:block">{currentUser.username}</span>
+                  </button>
+                  {profileDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-40 bg-black border border-gray-700 rounded-lg shadow-lg z-50">
+                      <Link
+                        to="/profile"
+                        className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white rounded-t-lg transition-colors"
+                        onClick={() => setProfileDropdownOpen(false)}
+                      >
+                        Profile
+                      </Link>
+                      <button
+                        onClick={handleLogout}
+                        disabled={loading}
+                        className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white rounded-b-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={handleLogout}
-                  disabled={loading}
-                  className="text-gray-300 hover:text-white transition-colors duration-200 p-2 rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Logout"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
               </div>
             ) : (
               <Link
@@ -253,51 +270,15 @@ const Navbar = ({ currentUser, isAdmin = false, onTeamUpdate, onNavigate, onLogo
                   <span>Tournament Management</span>
                 </Link>
               )}
-              {currentUser ? (
-                <div className="border-t border-gray-700 pt-3 mt-3">
-                  <div className="px-3 py-2 text-sm text-gray-300 flex items-center space-x-2">
-                    <User className="w-4 h-4" />
-                    <span>{currentUser.username}</span>
-                  </div>
-                  
-                  {/* Active Match Indicator for Mobile */}
-                  {activeMatches.length > 0 && (
-                    <div className="px-3 py-2">
-                      <button
-                        onClick={handleMatchClick}
-                        className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-3 py-2 rounded-lg transition-all duration-200 flex items-center space-x-2 animate-pulse border border-green-800"
-                        title={`You have ${activeMatches.length} active match${activeMatches.length > 1 ? 'es' : ''}`}
-                      >
-                        <Gamepad2 className="w-4 h-4" />
-                        <span className="text-sm font-medium">Match Active</span>
-                      </button>
-                    </div>
-                  )}
-                  
-                  <div className="px-3 py-2">
-                    <NotificationBell userId={currentUser.id} onTeamUpdate={onTeamUpdate} onNavigate={onNavigate} />
-                  </div>
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setIsOpen(false);
-                    }}
-                    disabled={loading}
-                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors flex items-center space-x-2 w-full text-left"
-                    title="Logout"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>Logout</span>
-                  </button>
-                </div>
-              ) : (
+              {currentUser ? null : (
                 <Link
-                  to="/login"
-                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-800 transition-all duration-200 text-sm flex items-center space-x-2 mt-3"
+                  to="/register"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                    isActive('/register') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                  }`}
                   onClick={() => setIsOpen(false)}
                 >
-                  <LogIn className="w-4 h-4" />
-                  <span>Login</span>
+                  Register
                 </Link>
               )}
             </div>

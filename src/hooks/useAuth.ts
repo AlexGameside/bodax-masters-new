@@ -10,32 +10,46 @@ export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchUserData = async (firebaseUser: FirebaseUser) => {
+    try {
+      // Get user data from Firestore
+      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const customUser: User = {
+          id: userDoc.id,
+          username: userData.username,
+          email: userData.email,
+          riotId: userData.riotId,
+          discordUsername: userData.discordUsername,
+          discordId: userData.discordId,
+          discordAvatar: userData.discordAvatar,
+          discordLinked: userData.discordLinked,
+          createdAt: userData.createdAt.toDate(),
+          teamIds: userData.teamIds || [],
+          isAdmin: userData.isAdmin || false
+        };
+        setCurrentUser(customUser);
+      } else {
+        setCurrentUser(null);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      setCurrentUser(null);
+    }
+  };
+
+  const refreshUser = async () => {
+    const firebaseUser = auth.currentUser;
+    if (firebaseUser) {
+      await fetchUserData(firebaseUser);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        try {
-          // Get user data from Firestore
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            const customUser: User = {
-              id: userDoc.id,
-              username: userData.username,
-              email: userData.email,
-              riotId: userData.riotId,
-              discordUsername: userData.discordUsername,
-              createdAt: userData.createdAt.toDate(),
-              teamIds: userData.teamIds || [],
-              isAdmin: userData.isAdmin || false
-            };
-            setCurrentUser(customUser);
-          } else {
-            setCurrentUser(null);
-          }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          setCurrentUser(null);
-        }
+        await fetchUserData(firebaseUser);
       } else {
         setCurrentUser(null);
       }
@@ -48,6 +62,6 @@ export const useAuth = () => {
   return {
     currentUser,
     loading,
-    isAuthenticated: !!currentUser
+    refreshUser
   };
 }; 

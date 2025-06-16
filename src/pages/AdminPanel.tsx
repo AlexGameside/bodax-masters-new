@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Team, Match, User } from '../types/tournament';
-import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink } from 'lucide-react';
-import { getAllUsers, updateUserAdminStatus, createTestScenario, clearTestData, createTestUsersWithAuth, getTestUsers, migrateAllTeams, updateAllInvitationsExpiration } from '../services/firebaseService';
+import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink, MessageCircle } from 'lucide-react';
+import { getAllUsers, updateUserAdminStatus, createTestScenario, clearTestData, createTestUsersWithAuth, getTestUsers, migrateAllTeams, updateAllInvitationsExpiration, sendDiscordNotificationToUser, getUsersWithDiscord } from '../services/firebaseService';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -32,7 +32,7 @@ const AdminPanel = ({
   onGenerateFinalBracket
 }: AdminPanelProps) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'tournaments' | 'teams' | 'matches' | 'disputes'>('tournaments');
+  const [activeTab, setActiveTab] = useState<'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications'>('tournaments');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -42,6 +42,11 @@ const AdminPanel = ({
   const [testUsers, setTestUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [disputedMatches, setDisputedMatches] = useState<Match[]>([]);
+  const [discordUsers, setDiscordUsers] = useState<User[]>([]);
+  const [selectedDiscordUser, setSelectedDiscordUser] = useState<string>('');
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [notificationResult, setNotificationResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Add null checks for teams and matches
   const safeTeams = teams || [];
@@ -108,6 +113,13 @@ const AdminPanel = ({
     loadDisputedMatches();
   }, []);
 
+  // Load Discord users when notifications tab is active
+  useEffect(() => {
+    if (activeTab === 'notifications') {
+      loadDiscordUsers();
+    }
+  }, [activeTab]);
+
   const loadUsers = async () => {
     setLoadingUsers(true);
     try {
@@ -126,6 +138,15 @@ const AdminPanel = ({
       setTestUsers(fetchedTestUsers);
     } catch (error) {
       console.error('Error loading test users:', error);
+    }
+  };
+
+  const loadDiscordUsers = async () => {
+    try {
+      const users = await getUsersWithDiscord();
+      setDiscordUsers(users);
+    } catch (error) {
+      console.error('Error loading Discord users:', error);
     }
   };
 
@@ -307,6 +328,32 @@ const AdminPanel = ({
     }
   };
 
+  const handleSendDiscordNotification = async () => {
+    if (!selectedDiscordUser || !notificationMessage.trim()) {
+      setNotificationResult({ success: false, message: 'Please select a user and enter a message' });
+      return;
+    }
+
+    setSendingNotification(true);
+    setNotificationResult(null);
+
+    try {
+      const result = await sendDiscordNotificationToUser(selectedDiscordUser, notificationMessage);
+      
+      if (result.success) {
+        setNotificationResult({ success: true, message: 'Notification sent successfully!' });
+        setNotificationMessage('');
+        setSelectedDiscordUser('');
+      } else {
+        setNotificationResult({ success: false, message: result.error || 'Failed to send notification' });
+      }
+    } catch (error) {
+      setNotificationResult({ success: false, message: 'Error sending notification' });
+    } finally {
+      setSendingNotification(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 section-padding">
       <div className="container-modern">
@@ -365,6 +412,17 @@ const AdminPanel = ({
                   {disputedMatches.length}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'notifications'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4 inline mr-2" />
+              Notifications
             </button>
           </div>
         </div>
@@ -664,6 +722,95 @@ const AdminPanel = ({
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Notifications Tab */}
+        {activeTab === 'notifications' && (
+          <div className="card">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white flex items-center">
+                <MessageCircle className="w-6 h-6 mr-3 text-primary-400" />
+                Discord Notifications ({discordUsers.length} users with Discord linked)
+              </h2>
+            </div>
+
+            <div className="space-y-6">
+              <div className="p-6 border border-gray-600 rounded-lg bg-gray-700">
+                <h3 className="text-lg font-bold text-white mb-3">Send Test Notification</h3>
+                <p className="text-gray-300 mb-4">Send a test Discord notification to a user with Discord linked.</p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Select User
+                    </label>
+                    <select
+                      value={selectedDiscordUser}
+                      onChange={(e) => setSelectedDiscordUser(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Choose a user...</option>
+                      {discordUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.username} ({user.discordUsername})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Message
+                    </label>
+                    <textarea
+                      value={notificationMessage}
+                      onChange={(e) => setNotificationMessage(e.target.value)}
+                      placeholder="Enter your test message here..."
+                      rows={4}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleSendDiscordNotification}
+                    disabled={sendingNotification || !selectedDiscordUser || !notificationMessage.trim()}
+                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {sendingNotification ? 'Sending...' : 'Send Notification'}
+                  </button>
+
+                  {notificationResult && (
+                    <div className={`p-4 rounded-md ${
+                      notificationResult.success 
+                        ? 'bg-green-900/50 border border-green-700 text-green-300' 
+                        : 'bg-red-900/50 border border-red-700 text-red-300'
+                    }`}>
+                      {notificationResult.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-6 border border-gray-600 rounded-lg bg-gray-700">
+                <h3 className="text-lg font-bold text-white mb-3">Users with Discord Linked</h3>
+                <div className="space-y-2">
+                  {discordUsers.length === 0 ? (
+                    <p className="text-gray-400">No users have Discord linked yet.</p>
+                  ) : (
+                    discordUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-md">
+                        <div>
+                          <span className="text-white font-medium">{user.username}</span>
+                          <span className="text-gray-400 ml-2">({user.discordUsername})</span>
+                        </div>
+                        <span className="text-green-400 text-sm">Discord Linked</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

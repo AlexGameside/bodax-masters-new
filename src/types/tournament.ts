@@ -5,6 +5,10 @@ export interface User {
   email: string;
   riotId: string;
   discordUsername: string;
+  // Discord OAuth fields
+  discordId?: string;
+  discordAvatar?: string;
+  discordLinked?: boolean;
   createdAt: Date;
   teamIds: string[]; // Array of team IDs the user is part of
   isAdmin: boolean;
