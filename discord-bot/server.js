@@ -31,6 +31,25 @@ try {
   console.log('Discord bot not started (missing discord.js or token)');
 }
 
+// Root health check endpoint for Render
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Discord bot API is running',
+    timestamp: new Date().toISOString(),
+    botStatus: bot ? 'connected' : 'not connected'
+  });
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Discord bot API is running',
+    botStatus: bot ? 'connected' : 'not connected'
+  });
+});
+
 // Simple function to send Discord DM without requiring the full bot
 async function sendDiscordDM(userId, message) {
   try {
@@ -131,15 +150,25 @@ app.post('/api/send-discord-notification', async (req, res) => {
   }
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    message: 'Discord bot API is running',
-    botStatus: bot ? 'connected' : 'not connected'
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error'
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Endpoint not found'
   });
 });
 
 app.listen(PORT, () => {
   console.log(`Discord bot API server running on port ${PORT}`);
+  console.log(`Health check available at: http://localhost:${PORT}/`);
+  console.log(`API health check at: http://localhost:${PORT}/api/health`);
 }); 
