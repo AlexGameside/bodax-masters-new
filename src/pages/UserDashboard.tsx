@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, 
@@ -18,6 +18,8 @@ import {
   UserX
 } from 'lucide-react';
 import type { User as UserType, Team, TeamInvitation, Match } from '../types/tournament';
+import DiscordLinkBanner from '../components/DiscordLinkBanner';
+import { checkUserInDiscordServer } from '../services/discordService';
 
 interface UserDashboardProps {
   currentUser: UserType;
@@ -48,6 +50,7 @@ const UserDashboard = ({
   const [activeTab, setActiveTab] = useState('overview');
   const [showInvitePlayer, setShowInvitePlayer] = useState(false);
   const [inviteUsername, setInviteUsername] = useState('');
+  const [realTimeInDiscordServer, setRealTimeInDiscordServer] = useState<boolean | null>(null);
 
   const upcomingMatches = userMatches.filter(match => 
     !match.isComplete && match.matchState === 'ready_up'
@@ -56,6 +59,11 @@ const UserDashboard = ({
   const activeMatches = userMatches.filter(match => 
     !match.isComplete && match.matchState === 'playing'
   );
+
+  // Determine Discord status
+  const discordLinked = !!(currentUser.discordId && currentUser.discordLinked);
+  // Use real-time check if available, otherwise fall back to user's stored status
+  const inDiscordServer = realTimeInDiscordServer !== null ? realTimeInDiscordServer : (discordLinked ? currentUser.inDiscordServer ?? false : false);
 
   const handleInvitePlayer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +79,31 @@ const UserDashboard = ({
     (member.role === 'captain' || member.role === 'owner')
   ) || false;
 
+  useEffect(() => {
+    const checkDiscordMembership = async () => {
+      if (discordLinked && currentUser.discordId) {
+        try {
+          const isMember = await checkUserInDiscordServer(currentUser.discordId);
+          setRealTimeInDiscordServer(isMember);
+        } catch (error) {
+          console.error('Error checking Discord server membership:', error);
+          // Fall back to stored status on error
+          setRealTimeInDiscordServer(currentUser.inDiscordServer ?? false);
+        }
+      } else {
+        setRealTimeInDiscordServer(false);
+      }
+    };
+
+    checkDiscordMembership();
+  }, [discordLinked, currentUser.discordId, currentUser.inDiscordServer]);
+
   return (
     <div className="min-h-screen bg-gray-900">
+      {/* Discord Link Banner */}
+      <div className="container-modern pt-6">
+        <DiscordLinkBanner discordLinked={discordLinked} inDiscordServer={inDiscordServer} />
+      </div>
       {/* Header */}
       <div className="bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-700 sticky top-0 z-30 shadow-lg">
         <div className="container-modern py-6">

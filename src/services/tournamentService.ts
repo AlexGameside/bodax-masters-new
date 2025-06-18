@@ -12,7 +12,8 @@ import {
   limit,
   serverTimestamp,
   Timestamp,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { 
@@ -25,8 +26,13 @@ import type {
   TournamentSchedule,
   PrizePool,
   TournamentStats,
-  SeedingMethod
+  SeedingMethod,
+  TournamentStage,
+  Match,
+  Team
 } from '../types/tournament';
+import { checkUserInDiscordServer } from './discordService';
+import { getUserById } from './firebaseService';
 
 // Helper function to retry Firebase operations
 const retryOperation = async <T>(
@@ -605,5 +611,157 @@ export const getTournamentAnalytics = async (tournamentId: string): Promise<{
   } catch (error) {
     console.error('Error getting tournament analytics:', error);
     throw new Error('Failed to get tournament analytics');
+  }
+};
+
+// Verify Discord requirements for tournament registration
+export const verifyDiscordRequirements = async (
+  tournamentId: string, 
+  teamId: string
+): Promise<{ 
+  canRegister: boolean; 
+  errors: string[]; 
+  warnings: string[]; 
+  missingDiscordUsers: string[] 
+}> => {
+  try {
+    const tournament = await getTournament(tournamentId);
+    if (!tournament) {
+      return {
+        canRegister: false,
+        errors: ['Tournament not found'],
+        warnings: [],
+        missingDiscordUsers: []
+      };
+    }
+
+    // Check if Discord is required for this tournament
+    if (!tournament.requirements?.requireDiscord) {
+      return {
+        canRegister: true,
+        errors: [],
+        warnings: [],
+        missingDiscordUsers: []
+      };
+    }
+
+    // Get team details
+    const teamRef = doc(db, 'teams', teamId);
+    const teamDoc = await getDoc(teamRef);
+    if (!teamDoc.exists()) {
+      return {
+        canRegister: false,
+        errors: ['Team not found'],
+        warnings: [],
+        missingDiscordUsers: []
+      };
+    }
+
+    const team = teamDoc.data() as Team;
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const missingDiscordUsers: string[] = [];
+
+    // Check each team member
+    for (const memberId of team.members) {
+      const user = await getUserById(memberId);
+      if (!user) {
+        errors.push(`Team member ${memberId} not found`);
+        continue;
+      }
+
+      // Check if user has Discord linked
+      if (!user.discordId || !user.discordLinked) {
+        missingDiscordUsers.push(user.username || user.email);
+        errors.push(`${user.username || user.email} does not have Discord linked`);
+        continue;
+      }
+
+      // Check if user is in our Discord server
+      try {
+        const isInServer = await checkUserInDiscordServer(user.discordId);
+        if (!isInServer) {
+          missingDiscordUsers.push(user.username || user.email);
+          errors.push(`${user.username || user.email} is not a member of our Discord server`);
+        }
+      } catch (error) {
+        console.error('Error checking Discord server membership:', error);
+        warnings.push(`Could not verify Discord server membership for ${user.username || user.email}`);
+      }
+    }
+
+    // Check team captain specifically
+    if (team.captainId) {
+      const captain = await getUserById(team.captainId);
+      if (captain && (!captain.discordId || !captain.discordLinked)) {
+        errors.push('Team captain must have Discord linked');
+      }
+    }
+
+    const canRegister = errors.length === 0;
+
+    return {
+      canRegister,
+      errors,
+      warnings,
+      missingDiscordUsers
+    };
+
+  } catch (error) {
+    console.error('Error verifying Discord requirements:', error);
+    return {
+      canRegister: false,
+      errors: ['Failed to verify Discord requirements'],
+      warnings: [],
+      missingDiscordUsers: []
+    };
+  }
+};
+
+// Enhanced team registration with Discord verification
+export const registerTeamForTournamentWithVerification = async (
+  tournamentId: string, 
+  teamId: string, 
+  registrationData: {
+    players: string[];
+    captainId: string;
+    entryFeePaid?: boolean;
+    verificationStatus?: 'pending' | 'approved' | 'rejected';
+  }
+): Promise<{ 
+  success: boolean; 
+  message: string; 
+  errors?: string[]; 
+  warnings?: string[] 
+}> => {
+  try {
+    // First verify Discord requirements
+    const verification = await verifyDiscordRequirements(tournamentId, teamId);
+    
+    if (!verification.canRegister) {
+      return {
+        success: false,
+        message: 'Discord requirements not met',
+        errors: verification.errors,
+        warnings: verification.warnings
+      };
+    }
+
+    // If verification passes, proceed with registration
+    await registerTeamForTournament(tournamentId, teamId, registrationData);
+
+    return {
+      success: true,
+      message: 'Team registered successfully',
+      warnings: verification.warnings
+    };
+
+  } catch (error) {
+    console.error('Error registering team with verification:', error);
+    return {
+      success: false,
+      message: 'Failed to register team',
+      errors: [error instanceof Error ? error.message : 'Unknown error']
+    };
   }
 }; 

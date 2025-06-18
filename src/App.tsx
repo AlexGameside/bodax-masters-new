@@ -18,6 +18,7 @@ import TournamentCreation from './pages/TournamentCreation';
 import TournamentDetail from './pages/TournamentDetail';
 import TournamentManagement from './pages/TournamentManagement';
 import ConnectionStatus from './components/ConnectionStatus';
+import GlobalDiscordNotification from './components/GlobalDiscordNotification';
 // Footer pages
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
@@ -528,6 +529,10 @@ function App() {
           </div>
         )}
         <ConnectionStatus />
+        <GlobalDiscordNotification 
+          discordLinked={!!(currentUser?.discordId && currentUser?.discordLinked)}
+          inDiscordServer={currentUser?.inDiscordServer ?? false}
+        />
       </div>
     </Router>
   );

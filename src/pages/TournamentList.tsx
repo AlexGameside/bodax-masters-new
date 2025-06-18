@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Trophy, Users, Calendar, Plus, ArrowRight, Clock, CheckCircle, Zap, X, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getTournaments, signupTeamForTournament, getUserTeams, fillTournamentWithDemoTeams, createTournament, startTournament, deleteAllTournaments, getTeamsInActiveMatches } from '../services/firebaseService';
+import { registerTeamForTournamentWithVerification } from '../services/tournamentService';
+import { checkUserInDiscordServer } from '../services/discordService';
+import DiscordRequirementWrapper from '../components/DiscordRequirementWrapper';
 import type { Tournament, Team, User } from '../types/tournament';
+import TeamMemberSelection from '../components/TeamMemberSelection';
 
 interface TournamentListProps {
   currentUser: User | null;
@@ -23,9 +27,15 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
   const [pendingTournamentId, setPendingTournamentId] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [teamsInActiveMatches, setTeamsInActiveMatches] = useState<{ teamId: string; match: any }[]>([]);
+  const [showTeamMemberSelection, setShowTeamMemberSelection] = useState(false);
+  const [selectedTeamForRegistration, setSelectedTeamForRegistration] = useState<Team | null>(null);
 
   // Check if user is admin
   const isAdmin = currentUser?.isAdmin === true;
+
+  // Check Discord requirements
+  const discordLinked = !!(currentUser?.discordId && currentUser?.discordLinked);
+  const inDiscordServer = discordLinked ? currentUser?.inDiscordServer ?? false : false;
 
   useEffect(() => {
     loadData();
@@ -59,14 +69,15 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
       return;
     }
 
-    if (userTeams.length === 1) {
-      // Only one team, sign up directly
-      await performSignup(tournamentId, userTeams[0].id);
-    } else {
-      // Multiple teams, show selection modal
-      setPendingTournamentId(tournamentId);
-      setShowTeamModal(true);
+    // If only one team, auto-select it; otherwise, let user pick
+    const team = userTeams.length === 1 ? userTeams[0] : selectedTeam;
+    if (!team) {
+      setError('No team selected');
+      return;
     }
+    setSelectedTeamForRegistration(team);
+    setPendingTournamentId(tournamentId);
+    setShowTeamMemberSelection(true);
   };
 
   const performSignup = async (tournamentId: string, teamId: string) => {
@@ -74,9 +85,60 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
     setError('');
 
     try {
-      await signupTeamForTournament(tournamentId, teamId);
-      toast.success('Successfully signed up for tournament!');
-      await loadData(); // Refresh the list
+      // Check Discord requirements first
+      if (!currentUser?.discordId || !currentUser?.discordLinked) {
+        toast.error('You must link your Discord account before registering for tournaments!');
+        toast.error('Please visit your profile to link Discord first.');
+        setError('Discord account not linked');
+        return;
+      }
+
+      // Check if user is in Discord server
+      try {
+        const inDiscordServer = await checkUserInDiscordServer(currentUser.discordId);
+        if (!inDiscordServer) {
+          toast.error('You must join our Discord server before registering for tournaments!');
+          toast.error('Please join our Discord server: https://discord.gg/MZzEyX3peN');
+          setError('Not in Discord server');
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking Discord server membership:', error);
+        toast.error('Unable to verify Discord server membership. Please try again.');
+        setError('Discord verification failed');
+        return;
+      }
+
+      // Use the new verification system
+      const result = await registerTeamForTournamentWithVerification(
+        tournamentId,
+        teamId,
+        {
+          players: userTeams.find(t => t.id === teamId)?.members.map(m => m.userId) || [],
+          captainId: userTeams.find(t => t.id === teamId)?.captainId || '',
+          verificationStatus: 'pending'
+        }
+      );
+
+      if (result.success) {
+        toast.success(result.message);
+        await loadData(); // Refresh the list
+        
+        // Show warnings if any
+        if (result.warnings && result.warnings.length > 0) {
+          toast.error(`Registration successful with warnings: ${result.warnings.join(', ')}`);
+        }
+      } else {
+        // Show detailed error messages
+        if (result.errors && result.errors.length > 0) {
+          const errorMessage = result.errors.join('\n');
+          toast.error(`Registration failed:\n${errorMessage}`);
+          setError(errorMessage);
+        } else {
+          toast.error(result.message || 'Failed to register team');
+          setError(result.message || 'Failed to register team');
+        }
+      }
     } catch (error: any) {
       console.error('Error signing up for tournament:', error);
       setError(error.message || 'Failed to sign up for tournament');
@@ -197,6 +259,60 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
 
   const isTeamSignedUp = (tournament: Tournament) => {
     return tournament.teams?.some(teamId => userTeams.some(userTeam => userTeam.id === teamId)) || false;
+  };
+
+  const handleTeamMembersSelected = async (selectedUserIds: string[]) => {
+    if (!pendingTournamentId || !selectedTeamForRegistration) return;
+    setShowTeamMemberSelection(false);
+    setSelectedTeamForRegistration(null);
+    setPendingTournamentId(null);
+    // Call performSignup with selected players
+    await performSignupWithPlayers(pendingTournamentId, selectedTeamForRegistration.id, selectedUserIds);
+  };
+
+  // New function to handle registration with selected players
+  const performSignupWithPlayers = async (tournamentId: string, teamId: string, playerIds: string[]) => {
+    setSigningUp(tournamentId);
+    setError('');
+    try {
+      // Use the new verification system with selected players
+      const result = await registerTeamForTournamentWithVerification(
+        tournamentId,
+        teamId,
+        {
+          players: playerIds,
+          captainId: userTeams.find(t => t.id === teamId)?.captainId || '',
+          verificationStatus: 'pending'
+        }
+      );
+      if (result.success) {
+        toast.success(result.message);
+        await loadData();
+        if (result.warnings && result.warnings.length > 0) {
+          toast.error(`Registration successful with warnings: ${result.warnings.join(', ')}`);
+        }
+      } else {
+        if (result.errors && result.errors.length > 0) {
+          const errorMessage = result.errors.join('\n');
+          toast.error(`Registration failed:\n${errorMessage}`);
+          setError(errorMessage);
+        } else {
+          toast.error(result.message || 'Failed to register team');
+          setError(result.message || 'Failed to register team');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error signing up for tournament:', error);
+      setError(error.message || 'Failed to sign up for tournament');
+    } finally {
+      setSigningUp(null);
+    }
+  };
+
+  const handleCancelTeamMemberSelection = () => {
+    setShowTeamMemberSelection(false);
+    setSelectedTeamForRegistration(null);
+    setPendingTournamentId(null);
   };
 
   if (loading) {
@@ -333,93 +449,64 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
             </button>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-col gap-24 w-full">
             {tournaments.map((tournament) => (
-              <div key={tournament.id} className="bg-black/60 border border-gray-700 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white mb-1">
-                      {tournament.name}
-                    </h3>
-                    {getStatusBadge(tournament)}
-                  </div>
-                  <Trophy className="w-6 h-6 text-red-400 flex-shrink-0" />
+              <section
+                key={tournament.id}
+                className="relative w-full flex flex-col items-center justify-center py-8 px-2 mb-10 bg-gradient-to-br from-[#1a1a2e] via-[#232946] to-[#0f3460] shadow-xl overflow-hidden rounded-2xl"
+                style={{ minHeight: '320px' }}
+              >
+                {/* Optional: Tournament Logo or Banner */}
+                <div className="mb-4 flex justify-center w-full">
+                  <Trophy className="w-12 h-12 text-red-400 drop-shadow-lg" />
                 </div>
-
+                <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight text-center mb-2 drop-shadow-xl">
+                  {tournament.name}
+                </h2>
+                <div className="text-lg md:text-xl text-gray-300 text-center mb-1 font-mono">
+                  {tournament.schedule?.startDate ? new Date(tournament.schedule.startDate).toLocaleDateString() : 'Date TBA'}
+                </div>
                 {tournament.description && (
-                  <p className="text-gray-300 text-sm mb-4 line-clamp-2">
+                  <p className="text-lg text-gray-200 text-center mb-4 max-w-xl mx-auto italic leading-snug">
                     {tournament.description}
                   </p>
                 )}
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center text-sm text-gray-300">
+                <div className="flex flex-wrap justify-center gap-3 mb-4">
+                  <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-black/40 text-green-300 border border-green-700">
                     <Users className="w-4 h-4 mr-2" />
-                    {tournament.teams?.length} / {tournament.requirements?.maxTeams || 8} teams
-                  </div>
-                  <div className="flex items-center text-sm text-gray-300">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    Created {tournament.createdAt.toLocaleDateString()}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => navigate(`/tournaments/${tournament.id}`)}
-                    className="bg-black/60 hover:bg-black/80 text-white px-4 py-2 rounded-lg flex items-center justify-center flex-1 border border-gray-700 transition-colors"
-                  >
-                    <ArrowRight className="w-4 h-4 mr-1" />
-                    View Details
-                  </button>
-                  
-                  {canSignup(tournament) && (
-                    <button
-                      onClick={() => handleSignup(tournament.id)}
-                      disabled={signingUp === tournament.id}
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center justify-center flex-1 border border-red-800 transition-colors"
-                    >
-                      {signingUp === tournament.id ? (
-                        <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Signing up...
-                        </div>
-                      ) : (
-                        'Sign Up'
-                      )}
-                    </button>
+                    {tournament.teams?.length} / {tournament.requirements?.maxTeams || 8} Teams
+                  </span>
+                  <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-black/40 text-yellow-200 border border-yellow-700">
+                    <Trophy className="w-4 h-4 mr-2" />
+                    Prize: €{tournament.prizePool?.total || 0}
+                  </span>
+                  <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-black/40 text-blue-200 border border-blue-700">
+                    Format: {tournament.format?.matchFormat || 'BO1'}
+                  </span>
+                  <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-black/40 text-red-200 border border-red-700">
+                    {tournament.region}
+                  </span>
+                  <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-black/40 text-purple-200 border border-purple-700">
+                    {tournament.format?.type?.replace(/-/g, ' ') || 'Format N/A'}
+                  </span>
+                  {tournament.requirements?.requireDiscord && (
+                    <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-blue-900 text-blue-200 border border-blue-700">Discord Required</span>
                   )}
-                  
-                  {isTeamSignedUp(tournament) && (
-                    <span className="inline-flex items-center px-3 py-2 text-sm font-medium text-green-300 bg-green-900/50 rounded-lg border border-green-700">
-                      <CheckCircle className="w-4 h-4 mr-1" />
-                      Signed Up
-                    </span>
+                  {tournament.requirements?.requireRiotId && (
+                    <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-purple-900 text-purple-200 border border-purple-700">Riot ID Required</span>
+                  )}
+                  {tournament.requirements?.minimumRank && (
+                    <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-yellow-900 text-yellow-200 border border-yellow-700">Min Rank: {tournament.requirements.minimumRank}</span>
                   )}
                 </div>
-
-                {/* Demo Fill Button - Show if tournament is open and has spots */}
-                {userTeams.length > 0 && tournament.status === 'registration-open' && (tournament.teams?.length || 0) < (tournament.requirements?.maxTeams || 8) && (
-                  <div className="mt-3 pt-3 border-t border-gray-700">
-                    <button
-                      onClick={() => handleFillDemo(tournament.id)}
-                      disabled={fillingDemo === tournament.id}
-                      className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2 border border-purple-800"
-                    >
-                      {fillingDemo === tournament.id ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          <span>Filling...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-4 h-4" />
-                          <span>Fill with Demo Teams</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
+                <button
+                  onClick={() => navigate(`/tournaments/${tournament.id}`)}
+                  className="mt-4 bg-gradient-to-r from-red-700 to-red-500 hover:from-red-800 hover:to-red-600 text-white px-10 py-3 rounded-2xl flex items-center justify-center border-2 border-red-800 font-extrabold text-xl shadow-lg transition-colors drop-shadow-xl"
+                >
+                  <ArrowRight className="w-6 h-6 mr-3" />
+                  View Details
+                </button>
+              </section>
             ))}
           </div>
         )}
@@ -540,6 +627,15 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Team Member Selection Modal */}
+      {showTeamMemberSelection && selectedTeamForRegistration && (
+        <TeamMemberSelection
+          teamMembers={selectedTeamForRegistration.members || []}
+          onMembersSelected={handleTeamMembersSelected}
+          onCancel={handleCancelTeamMemberSelection}
+        />
       )}
     </div>
   );

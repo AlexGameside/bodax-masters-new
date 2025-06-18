@@ -28,7 +28,8 @@ import {
   CheckSquare,
   XCircle,
   UserCheck,
-  UserX
+  UserX,
+  MessageCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { 
@@ -52,7 +53,10 @@ import {
   updateTournamentStatus,
   startSingleElimination
 } from '../services/firebaseService';
-import { getTournament } from '../services/tournamentService';
+import { 
+  getTournament,
+  registerTeamForTournamentWithVerification
+} from '../services/tournamentService';
 import { 
   generateGroups, 
   generateMatchDay, 
@@ -69,6 +73,8 @@ import TournamentBracket from '../components/TournamentBracket';
 import GroupStageBracket from '../components/GroupStageBracket';
 import TournamentSchedule from '../components/TournamentSchedule';
 import TournamentLeaderboard from '../components/TournamentLeaderboard';
+import TeamMemberSelection from '../components/TeamMemberSelection';
+import DiscordRequirementWrapper from '../components/DiscordRequirementWrapper';
 import { useAuth } from '../hooks/useAuth';
 
 interface TournamentDetailProps {
@@ -93,6 +99,16 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const [activeView, setActiveView] = useState<TournamentView>('overview');
   const [pendingTeams, setPendingTeams] = useState<Team[]>([]);
   const [approvedTeams, setApprovedTeams] = useState<Team[]>([]);
+  const [showTeamMemberSelection, setShowTeamMemberSelection] = useState(false);
+  const [selectedTeamForRegistration, setSelectedTeamForRegistration] = useState<Team | null>(null);
+
+  // Debug output for authentication
+  console.log('DEBUG: authUser', authUser);
+  console.log('DEBUG: currentUser (prop)', currentUser);
+
+  // Check Discord requirements
+  const discordLinked = !!(authUser?.discordId && authUser?.discordLinked);
+  const inDiscordServer = discordLinked ? authUser?.inDiscordServer ?? false : false;
 
   // Helper function to reload all tournament data
   const reloadTournamentData = async () => {
@@ -485,22 +501,71 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const handleSignup = async (teamId: string) => {
     if (!tournament || !authUser || signingUp) return;
     
+    const team = userTeams.find(t => t.id === teamId);
+    if (!team) {
+      toast.error('Team not found');
+      return;
+    }
+
+    // Show team member selection modal first
+    setSelectedTeamForRegistration(team);
+    setShowTeamMemberSelection(true);
+  };
+
+  const handleTeamMembersSelected = async (selectedUserIds: string[]) => {
+    if (!tournament || !authUser || !selectedTeamForRegistration) return;
+    
     try {
-      setSigningUp(teamId);
-      console.log('Signing up team for tournament:', teamId, tournament.id);
+      setSigningUp(selectedTeamForRegistration.id);
+      console.log('Signing up team for tournament:', selectedTeamForRegistration.id, tournament.id);
       
-      await signupTeamForTournament(tournament.id, teamId);
+      // Use the new verification system with selected members
+      const result = await registerTeamForTournamentWithVerification(
+        tournament.id, 
+        selectedTeamForRegistration.id, 
+        {
+          players: selectedUserIds,
+          captainId: selectedTeamForRegistration.captainId || '',
+          verificationStatus: 'pending'
+        }
+      );
       
-      // Reload tournament data
-      await reloadTournamentData();
-      
-      toast.success('Team signed up successfully!');
+      if (result.success) {
+        // Reload tournament data
+        await reloadTournamentData();
+        toast.success(result.message);
+        
+        // Show warnings if any
+        if (result.warnings && result.warnings.length > 0) {
+          toast.error(`Registration successful with warnings: ${result.warnings.join(', ')}`);
+        }
+      } else {
+        // Show detailed error messages
+        if (result.errors && result.errors.length > 0) {
+          const errorMessage = result.errors.join('\n');
+          toast.error(`Registration failed:\n${errorMessage}`);
+          
+          // If Discord requirements not met, show specific guidance
+          if (result.errors.some(error => error.includes('Discord'))) {
+            toast.error('Please link your Discord account in your profile and join our Discord server to register for this tournament.');
+          }
+        } else {
+          toast.error(result.message || 'Failed to register team');
+        }
+      }
     } catch (error) {
       console.error('Error signing up team:', error);
       toast.error('Failed to sign up team');
     } finally {
       setSigningUp(null);
+      setShowTeamMemberSelection(false);
+      setSelectedTeamForRegistration(null);
     }
+  };
+
+  const handleCancelTeamMemberSelection = () => {
+    setShowTeamMemberSelection(false);
+    setSelectedTeamForRegistration(null);
   };
 
   const handleMatchUpdate = async (matchId: string, result: { team1Score: number; team2Score: number }) => {
@@ -647,6 +712,23 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     }
   };
 
+  // Add a function to withdraw the user's team from the tournament
+  const handleWithdraw = async (teamId: string) => {
+    if (!tournament || !teamId) return;
+    try {
+      const tournamentRef = doc(db, 'tournaments', tournament.id);
+      const updatedTeams = (tournament.teams || []).filter(id => id !== teamId);
+      await updateDoc(tournamentRef, {
+        teams: updatedTeams,
+        updatedAt: new Date()
+      });
+      toast.success('Your team has been withdrawn from the tournament.');
+      await reloadTournamentData();
+    } catch (error) {
+      toast.error('Failed to withdraw from tournament.');
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -654,8 +736,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         <div className="text-center">
           <div className="text-red-500 text-2xl mb-4">LOADING...</div>
           <div className="text-gray-400 text-sm">Fetching tournament data</div>
-                    </div>
-                  </div>
+        </div>
+      </div>
     );
   }
 
@@ -663,7 +745,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   if (error || !tournament) {
     return (
       <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
-                    <div className="text-center">
+        <div className="text-center">
           <div className="text-red-500 text-2xl mb-4">ERROR</div>
           <div className="text-gray-400 text-sm mb-4">{error || 'Tournament not found'}</div>
           <button
@@ -673,8 +755,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
             <ArrowLeft className="w-4 h-4 inline mr-2" />
             Back to Tournaments
           </button>
-                      </div>
-                      </div>
+        </div>
+      </div>
     );
   }
 
@@ -684,14 +766,21 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
       <div className="absolute top-0 left-0 w-full px-4 pt-8 z-10 select-none pointer-events-none">
         <div className="text-sm md:text-lg lg:text-2xl text-gray-400 tracking-tight">
           <span className="text-gray-600">function</span> <span className="text-red-500 font-bold">TournamentDetail</span><span className="text-white">(&#123;id&#125;)</span> <span className="text-gray-600">&#123;</span>
-                    </div>
-                  </div>
+        </div>
+      </div>
 
       {/* Subtle grid/code background */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
 
       {/* Main Content */}
       <div className="relative z-20 container mx-auto px-4 pt-24 pb-8">
+        {/* Show warning if not logged in */}
+        {(!authUser || !authUser.uid) && (
+          <div className="bg-yellow-900 text-yellow-200 border border-yellow-700 rounded-lg p-4 mb-4 text-center font-bold">
+            Warning: No user detected. Please log in to manage your team.
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-center mb-2 tracking-tight bg-gradient-to-r from-red-500 to-white bg-clip-text text-transparent uppercase">
@@ -699,8 +788,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           </h1>
           <div className="text-center text-gray-400 mb-6 text-base md:text-lg">
             {tournament.description}
-                      </div>
-                      </div>
+          </div>
+        </div>
 
         {/* Tournament Info Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -714,27 +803,27 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               {tournament.status === 'completed' && 'Tournament completed'}
               {tournament.status === 'group-stage' && 'Group stage in progress'}
               {tournament.status === 'knockout-stage' && 'Knockout stage in progress'}
-                    </div>
-                  </div>
+            </div>
+          </div>
 
           <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
             <div className="text-red-400 font-bold text-sm mb-2">TEAMS</div>
             <div className="text-gray-200 text-lg font-bold">
               {tournament.teams?.length || 0} / {tournament.requirements?.maxTeams || 8}
-                      </div>
+            </div>
             <div className="text-gray-400 text-xs mt-1">
               {tournament.requirements?.maxTeams || 8} teams maximum
-                    </div>
-                  </div>
+            </div>
+          </div>
 
           <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
             <div className="text-red-400 font-bold text-sm mb-2">PRIZE POOL</div>
             <div className="text-gray-200 text-lg font-bold">€{tournament.prizePool?.total || 0}</div>
             <div className="text-gray-400 text-xs mt-1">
               {prizeDistributionText}
-                      </div>
-                      </div>
-                    </div>
+            </div>
+          </div>
+        </div>
 
         {/* Requirements */}
         <div className="bg-black/60 border border-gray-700 rounded-lg p-4 mb-8">
@@ -743,41 +832,59 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
             <div>
               <span className="text-gray-400">Format:</span>
               <span className="text-gray-200 ml-2 capitalize">{tournament.requirements?.format || 'Single Elimination'}</span>
-                  </div>
+            </div>
             <div>
               <span className="text-gray-400">Team Size:</span>
               <span className="text-gray-200 ml-2">{tournament.requirements?.teamSize || 5} players</span>
-                </div>
+            </div>
             <div>
               <span className="text-gray-400">Max Teams:</span>
               <span className="text-gray-200 ml-2">{tournament.requirements?.maxTeams || 8}</span>
-              </div>
+            </div>
             <div>
               <span className="text-gray-400">Skill Level:</span>
               <span className="text-gray-200 ml-2 capitalize">{tournament.requirements?.skillLevel || 'All Levels'}</span>
-                    </div>
-                  </div>
-                </div>
+            </div>
+          </div>
+        </div>
 
         {/* Signup Section */}
         {canSignupForUser && (
           <div className="bg-black/60 border border-gray-700 rounded-lg p-4 mb-8">
             <div className="text-red-400 font-bold text-sm mb-3">TEAM REGISTRATION</div>
+            
+            {/* Discord Requirement Notice */}
+            {tournament.requirements?.requireDiscord && (
+              <div className="bg-blue-900/20 border border-blue-500 rounded-lg p-3 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageCircle className="w-4 h-4 text-blue-400" />
+                  <span className="text-blue-400 font-bold text-sm">DISCORD REQUIRED</span>
+                </div>
+                <div className="text-blue-200 text-sm">
+                  All team members must have their Discord accounts linked and be members of our Discord server to register for this tournament.
+                </div>
+                <div className="text-blue-300 text-xs mt-2">
+                  • Link your Discord account in your profile<br/>
+                  • Join our Discord server: <a href="https://discord.gg/MZzEyX3peN" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-100">https://discord.gg/MZzEyX3peN</a>
+                </div>
+              </div>
+            )}
+            
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
                 <div className="text-gray-200 mb-1">Your Team: {userTeams[0].name}</div>
                 <div className="text-gray-400 text-sm">Click below to register your team for this tournament</div>
-                        </div>
-                        <button
+              </div>
+              <button
                 onClick={() => handleSignup(userTeams[0].id)}
                 disabled={!!signingUp}
                 className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg border border-red-800 transition-all duration-200"
               >
                 {signingUp ? 'Signing Up...' : 'Sign Up Team'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Admin Controls */}
         {(() => {
@@ -804,111 +911,129 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                 <div>Incomplete matches: {matches.filter(m => !m.isComplete).length}</div>
                 <div>Matches with teams: {matches.filter(m => m.team1Id && m.team2Id).length}</div>
                 <div>Current round: {matches.length > 0 ? Math.min(...matches.filter(m => !m.isComplete).map(m => m.round)) : 'N/A'}</div>
-                        </div>
+              </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {/* Registration Controls */}
               {tournament.status === 'registration-open' && (
                 <>
-                        <button
+                  <button
                     onClick={handleFillDemoTeams}
                     disabled={starting}
                     className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-purple-800 transition-all duration-200 text-sm"
                   >
                     <Zap className="w-4 h-4 inline mr-2" />
-                    Fill Demo Teams
-                        </button>
-                  
-                        <button
+                  </button>
+                
+                  <button
                     onClick={handleStartGroupStage}
                     disabled={starting}
                     className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-800 transition-all duration-200 text-sm"
                   >
                     <Grid3X3 className="w-4 h-4 inline mr-2" />
-                    Start Group Stage
-                        </button>
-                  
-                        <button
+                  </button>
+                
+                  <button
                     onClick={handleStartSingleElimination}
                     disabled={starting}
                     className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-800 transition-all duration-200 text-sm"
                   >
                     <Play className="w-4 h-4 inline mr-2" />
-                    Start Single Elimination
-                        </button>
+                  </button>
                 </>
               )}
               
               {/* Registration-Closed Controls */}
               {tournament.status === 'registration-closed' && (
                 <>
-                        <button
+                  <button
                     onClick={handleReopenRegistration}
                     disabled={starting}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-blue-800 transition-all duration-200 text-sm"
                   >
                     <RotateCcw className="w-4 h-4 inline mr-2" />
-                    Reopen Registration
-                        </button>
-                        <button
+                  </button>
+                  <button
                     onClick={handleStartGroupStage}
                     disabled={starting}
                     className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-800 transition-all duration-200 text-sm"
                   >
                     <Grid3X3 className="w-4 h-4 inline mr-2" />
-                    Start Group Stage
-                        </button>
-                        <button
+                  </button>
+                  <button
                     onClick={handleStartSingleElimination}
                     disabled={starting}
                     className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-purple-800 transition-all duration-200 text-sm"
                   >
                     <Play className="w-4 h-4 inline mr-2" />
-                    Start Single Elimination
-                        </button>
+                  </button>
                 </>
               )}
               
               {/* Group Stage Controls */}
               {tournament.status === 'group-stage' && (
                 <>
-                        <button
+                  <button
                     onClick={handleStartKnockoutStage}
                     disabled={starting}
                     className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-orange-800 transition-all duration-200 text-sm"
                   >
                     <TrendingUp className="w-4 h-4 inline mr-2" />
-                          Start Knockout Stage
-                        </button>
+                      Start Knockout Stage
+                  </button>
                 </>
               )}
               
               {/* Tournament Progress Controls */}
               {(tournament.status === 'in-progress' || tournament.status === 'knockout-stage') && (
                 <>
-                        <button
+                  <button
                     onClick={handleRegenerateBracket}
                     disabled={starting}
                     className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-yellow-800 transition-all duration-200 text-sm"
                   >
                     <RotateCcw className="w-4 h-4 inline mr-2" />
-                    Regenerate Bracket
-                        </button>
-                  
-                        <button
+                  </button>
+                
+                  <button
                     onClick={handleAutoCompleteCurrentRound}
                     disabled={starting}
                     className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-800 transition-all duration-200 text-sm"
                   >
                     <FastForward className="w-4 h-4 inline mr-2" />
-                    Auto-Complete Current Round
-                        </button>
+                  </button>
                 </>
               )}
-                      </div>
-                    </div>
-                  )}
+              {/* Withdraw Button for Registered Teams */}
+              <div className="bg-black/60 border border-yellow-700 rounded-lg p-4 mb-4">
+                <div className="text-yellow-400 font-bold text-xs mb-2">WITHDRAW BUTTON DEBUG</div>
+                <div className="text-gray-300 text-xs space-y-1">
+                  <div>authUser: {JSON.stringify(authUser)}</div>
+                  <div>userTeams: {JSON.stringify(userTeams)}</div>
+                  <div>tournament.teams: {JSON.stringify(tournament.teams)}</div>
+                  <div>tournament.status: {tournament.status}</div>
+                  <div>userTeams.length: {userTeams.length}</div>
+                  <div>Any user team in tournament: {userTeams.some(team => (tournament.teams || []).includes(team.id)) ? 'true' : 'false'}</div>
+                  <div>Teams with withdraw rights: {JSON.stringify(userTeams.map(team => (tournament.teams || []).includes(team.id) && (team.captainId === authUser?.uid || team.ownerId === authUser?.uid)))}</div>
+                </div>
+              </div>
+              {tournament.status === 'registration-open' && userTeams && userTeams.length > 0 && userTeams.some(team => (tournament.teams || []).includes(team.id)) && (
+                userTeams.map(team => (
+                  (tournament.teams || []).includes(team.id) && (team.captainId === authUser?.uid || team.ownerId === authUser?.uid) ? (
+                    <button
+                      key={team.id}
+                      onClick={() => handleWithdraw(team.id)}
+                      className="border border-red-500 text-red-500 hover:bg-red-500 hover:text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-all duration-200 text-sm mt-2"
+                    >
+                      Withdraw Team
+                    </button>
+                  ) : null
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Team Approval Section (for admins) */}
         {/* Removed for now */}
@@ -930,9 +1055,9 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               }`}
             >
               {tab.label}
-                        </button>
+            </button>
           ))}
-                      </div>
+        </div>
 
         {/* Tab Content */}
         <div className="min-h-96">
@@ -948,7 +1073,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                       <div key={teamId} className="bg-black/40 border border-gray-600 rounded-lg p-3">
                         <div className="text-gray-200 font-bold">{team.name}</div>
                         <div className="text-gray-400 text-xs">{team.members?.length || 0} members</div>
-                </div>
+                      </div>
                     ) : null;
                   })}
                 </div>
@@ -965,15 +1090,15 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                     <div>
                       <span className="text-gray-400">Total Matches:</span>
                       <span className="text-gray-200 ml-2">{matches.length}</span>
-                          </div>
-                          <div>
+                    </div>
+                    <div>
                       <span className="text-gray-400">Completed:</span>
                       <span className="text-gray-200 ml-2">{matches.filter(m => m.isComplete).length}</span>
-                          </div>
+                    </div>
                     <div>
                       <span className="text-gray-400">Remaining:</span>
                       <span className="text-gray-200 ml-2">{matches.filter(m => !m.isComplete).length}</span>
-                        </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -986,8 +1111,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               {tournament.type === 'group-stage-single-elim' ? (
                 <GroupStageBracket tournament={tournament} matches={matches} teams={teams} />
               ) : (
-            <TournamentBracket
-              tournament={tournament}
+                <TournamentBracket
+                  tournament={tournament}
                   matches={matches} 
                   teams={teams} 
                   currentUser={authUser}
@@ -996,8 +1121,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   onRefresh={reloadTournamentData}
                 />
               )}
-          </div>
-        )}
+            </div>
+          )}
 
           {activeView === 'schedule' && (
             <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
@@ -1005,16 +1130,27 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               <TournamentSchedule tournament={tournament} matches={matches} teams={teams} />
             </div>
           )}
-              </div>
-            </div>
+        </div>
+      </div>
 
       {/* Terminal-style footer */}
       <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
         <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-gray-500 font-mono tracking-tight gap-1 md:gap-0">
           <span>&gt; TOURNAMENT ID: {tournament.id}</span>
           <span className="text-red-500">// bodax.dev/masters</span>
-          </div>
+        </div>
       </div>
+
+      {/* Team Member Selection Modal */}
+      {showTeamMemberSelection && selectedTeamForRegistration && tournament && (
+        <TeamMemberSelection
+          teamMembers={selectedTeamForRegistration.members || []}
+          onMembersSelected={handleTeamMembersSelected}
+          onCancel={handleCancelTeamMemberSelection}
+          tournamentId={tournament.id}
+          maxPlayers={tournament.maxPlayers || 5}
+        />
+      )}
     </div>
   );
 };

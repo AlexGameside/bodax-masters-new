@@ -9,6 +9,7 @@ export interface User {
   discordId?: string;
   discordAvatar?: string;
   discordLinked?: boolean;
+  inDiscordServer?: boolean; // Whether user is a member of the Discord server
   createdAt: Date;
   teamIds: string[]; // Array of team IDs the user is part of
   isAdmin: boolean;

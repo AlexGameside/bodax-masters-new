@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Lock, Gamepad2, MessageCircle, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Lock, Gamepad2, Eye, EyeOff } from 'lucide-react';
 import type { User as UserType } from '../types/tournament';
 
 interface UserRegistrationProps {
@@ -14,8 +14,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
     email: '',
     password: '',
     confirmPassword: '',
-    riotId: '',
-    discordUsername: ''
+    riotId: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -62,13 +61,6 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
       newErrors.riotId = 'Riot ID must contain a # symbol';
     }
 
-    // Discord username validation
-    if (!formData.discordUsername.trim()) {
-      newErrors.discordUsername = 'Discord username is required';
-    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.discordUsername)) {
-      newErrors.discordUsername = 'Discord username can only contain letters, numbers, and underscores';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -86,7 +78,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
         username: formData.username.trim(),
         email: formData.email.trim().toLowerCase(),
         riotId: formData.riotId.trim(),
-        discordUsername: formData.discordUsername.trim(),
+        discordUsername: '', // Will be set when user links Discord
         teamIds: [],
         isAdmin: false,
         password: formData.password
@@ -126,6 +118,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
             <p className="text-gray-300">Join Bodax Masters Tournament</p>
+            <p className="text-gray-400 text-sm mt-2">You can link your Discord account later in your profile</p>
           </div>
 
           {errors.general && (
@@ -256,28 +249,6 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
               </div>
               {errors.riotId && (
                 <p className="text-red-400 text-sm mt-1">{errors.riotId}</p>
-              )}
-            </div>
-
-            {/* Discord Username */}
-            <div>
-              <label className="block text-sm font-medium text-gray-200 mb-2">
-                Discord Username *
-              </label>
-              <div className="relative">
-                <MessageCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={formData.discordUsername}
-                  onChange={(e) => handleInputChange('discordUsername', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white placeholder-gray-400 ${
-                    errors.discordUsername ? 'border-red-500' : 'border-gray-600'
-                  }`}
-                  placeholder="Enter Discord username"
-                />
-              </div>
-              {errors.discordUsername && (
-                <p className="text-red-400 text-sm mt-1">{errors.discordUsername}</p>
               )}
             </div>
 

@@ -1,7 +1,9 @@
 // Discord OAuth and API service
-const DISCORD_CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID || '1384240914058444893';
+
+const CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID;
 const DISCORD_CLIENT_SECRET = import.meta.env.VITE_DISCORD_CLIENT_SECRET || '16h8KtGaV_T3yJa-9ZMJeCmPI8ordabG';
-const REDIRECT_URI = import.meta.env.VITE_DISCORD_REDIRECT_URI || 'http://localhost:5173/discord-callback';
+const REDIRECT_URI = import.meta.env.VITE_DISCORD_REDIRECT_URI || 'https://bodax-masters.web.app/discord-callback';
+const DISCORD_SERVER_ID = import.meta.env.VITE_DISCORD_SERVER_ID || '1194567890123456789'; // Replace with your actual server ID
 
 export interface DiscordUser {
   id: string;
@@ -18,12 +20,13 @@ export interface DiscordGuild {
   icon: string;
   owner: boolean;
   permissions: string;
+  features: string[];
 }
 
 // Generate Discord OAuth URL
 export const getDiscordAuthUrl = (): string => {
   const params = new URLSearchParams({
-    client_id: DISCORD_CLIENT_ID,
+    client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
     scope: 'identify email guilds.join',
@@ -40,7 +43,7 @@ export const exchangeCodeForToken = async (code: string): Promise<string> => {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: new URLSearchParams({
-      client_id: DISCORD_CLIENT_ID,
+      client_id: CLIENT_ID,
       client_secret: DISCORD_CLIENT_SECRET,
       grant_type: 'authorization_code',
       code,
@@ -87,63 +90,120 @@ export const getDiscordGuilds = async (accessToken: string): Promise<DiscordGuil
 };
 
 // Add user to Discord server (requires bot token)
-export const addUserToGuild = async (
-  guildId: string, 
-  userId: string, 
-  accessToken: string,
-  botToken: string
-): Promise<boolean> => {
-  const response = await fetch(`https://discord.com/api/guilds/${guildId}/members/${userId}`, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bot ${botToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      access_token: accessToken,
-    }),
-  });
+export const addUserToDiscordServer = async (userId: string, guildId: string, botToken: string): Promise<boolean> => {
+  try {
+    const response = await fetch(`https://discord.com/api/guilds/${guildId}/members/${userId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bot ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        access_token: botToken,
+      }),
+    });
 
-  return response.ok;
+    return response.ok;
+  } catch (error) {
+    console.error('Error adding user to Discord server:', error);
+    return false;
+  }
 };
 
-// Send DM to user (requires bot token)
+// Check if user is a member of our Discord server
+export const checkUserInDiscordServer = async (discordId: string): Promise<boolean> => {
+  try {
+    const discordApiUrl = import.meta.env.VITE_DISCORD_API_URL || 'https://bodax-masters.onrender.com';
+    const response = await fetch(`${discordApiUrl}/api/check-server-membership`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: discordId,
+        serverId: DISCORD_SERVER_ID,
+      }),
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const data = await response.json();
+    return data.isMember || false;
+  } catch (error) {
+    console.error('Error checking Discord server membership:', error);
+    return false;
+  }
+};
+
+// Send Discord DM to a specific user
 export const sendDiscordDM = async (
   userId: string,
   message: string,
   botToken: string
 ): Promise<boolean> => {
-  // First, create DM channel
-  const dmResponse = await fetch('https://discord.com/api/users/@me/channels', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bot ${botToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      recipient_id: userId,
-    }),
-  });
+  try {
+    // Create DM channel
+    const dmResponse = await fetch('https://discord.com/api/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        recipient_id: userId,
+      }),
+    });
 
-  if (!dmResponse.ok) {
+    if (!dmResponse.ok) {
+      console.error('DM channel creation failed:', dmResponse.status, await dmResponse.text());
+      return false;
+    }
+
+    const dmChannel = await dmResponse.json();
+
+    // Send message
+    const messageResponse = await fetch(`https://discord.com/api/channels/${dmChannel.id}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: message,
+      }),
+    });
+
+    return messageResponse.ok;
+  } catch (error) {
+    console.error('Error sending Discord DM:', error);
     return false;
   }
+};
 
-  const dmChannel = await dmResponse.json();
+// Send Discord DM to multiple users
+export const sendDiscordDMToMultiple = async (
+  userIds: string[],
+  message: string,
+  botToken: string
+): Promise<{ success: string[]; failed: string[] }> => {
+  const results = await Promise.allSettled(
+    userIds.map(userId => sendDiscordDM(userId, message, botToken))
+  );
 
-  // Send message to DM channel
-  const messageResponse = await fetch(`https://discord.com/api/channels/${dmChannel.id}/messages`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bot ${botToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      content: message,
-    }),
+  const success: string[] = [];
+  const failed: string[] = [];
+
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled' && result.value) {
+      success.push(userIds[index]);
+    } else {
+      failed.push(userIds[index]);
+    }
   });
 
-  return messageResponse.ok;
+  return { success, failed };
 };
 
 // Send tournament notification to multiple users
