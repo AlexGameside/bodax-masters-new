@@ -25,8 +25,9 @@ interface UserDashboardProps {
   teamInvitations: TeamInvitation[];
   userMatches: Match[];
   teamPlayers: UserType[];
-  onCreateTeam: (teamData: Omit<Team, 'id' | 'createdAt'>) => Promise<void>;
-  onInvitePlayer: (teamId: string, username: string) => Promise<void>;
+  teams: Team[];
+  onCreateTeam: (teamData: Omit<Team, 'id' | 'createdAt'>) => Promise<any>;
+  onInvitePlayer: (teamId: string, username: string) => Promise<any>;
   onAcceptInvitation: (invitationId: string) => Promise<void>;
   onDeclineInvitation: (invitationId: string) => Promise<void>;
   onLogout: () => void;
@@ -38,6 +39,7 @@ const UserDashboard = ({
   teamInvitations,
   userMatches,
   teamPlayers,
+  teams,
   onCreateTeam,
   onInvitePlayer,
   onAcceptInvitation,
@@ -239,9 +241,6 @@ const UserDashboard = ({
                     <AlertCircle className="w-5 h-5 mr-2" />
                     <span className="font-medium">Not Registered</span>
                   </div>
-                  <p className="text-sm text-gray-400">
-                    {userTeam ? 'Register your team for the tournament' : 'Join a team first'}
-                  </p>
                   {userTeam && isTeamCaptain && (
                     <button
                       onClick={() => navigate('/tournaments')}
@@ -358,22 +357,13 @@ const UserDashboard = ({
             ) : (
               <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-8 text-center hover:shadow-xl transition-shadow">
                 <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-white mb-2">No Team Yet</h3>
-                <p className="text-gray-400 mb-6">Create a team or join an existing one to participate in tournaments.</p>
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <button
-                    onClick={() => navigate('/create-team')}
-                    className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-6 py-3 rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200"
-                  >
-                    Create Team
-                  </button>
-                  <button
-                    onClick={() => navigate('/team-management')}
-                    className="bg-gradient-to-r from-gray-700 to-gray-600 text-white px-6 py-3 rounded-lg hover:from-gray-600 hover:to-gray-500 transition-all duration-200"
-                  >
-                    Manage Teams
-                  </button>
-                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">No Team</h3>
+                <button
+                  onClick={() => navigate('/create-team')}
+                  className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-6 py-3 rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200"
+                >
+                  Create Team
+                </button>
               </div>
             )}
 
@@ -450,13 +440,7 @@ const UserDashboard = ({
                         <AlertCircle className="w-5 h-5 mr-2" />
                         <span className="font-medium">Not Registered</span>
                       </div>
-                      <p className="text-orange-300 text-sm mb-3">
-                        {isTeamCaptain 
-                          ? 'As team captain, you can register your team for the tournament.'
-                          : 'Your team captain needs to register the team for the tournament.'
-                        }
-                      </p>
-                      {isTeamCaptain && (
+                      {userTeam && isTeamCaptain && (
                         <button
                           onClick={() => navigate('/tournaments')}
                           className="bg-gradient-to-r from-orange-600 to-orange-700 text-white px-4 py-2 rounded-lg hover:from-orange-700 hover:to-orange-800 transition-all duration-200"
@@ -471,7 +455,6 @@ const UserDashboard = ({
                 <div className="text-center py-8">
                   <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-white mb-2">No Team</h3>
-                  <p className="text-gray-400 mb-4">You need to be part of a team to participate in tournaments.</p>
                   <button
                     onClick={() => setActiveTab('team')}
                     className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-6 py-3 rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200"
@@ -494,26 +477,32 @@ const UserDashboard = ({
                   <Gamepad2 className="w-5 h-5 mr-2" />
                   Active Match
                 </h3>
-                {activeMatches.map((match) => (
-                  <div key={match.id} className="bg-gray-700 rounded-lg p-4 border border-blue-600">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="font-semibold text-white">
-                          Team {match.team1Id || 'TBD'} vs Team {match.team2Id || 'TBD'}
-                        </h4>
-                        <p className="text-sm text-gray-400">
-                          Round {match.round} • Tournament
-                        </p>
+                {activeMatches.map((match) => {
+                  // Get team names for display
+                  const team1 = teams.find(t => t.id === match.team1Id);
+                  const team2 = teams.find(t => t.id === match.team2Id);
+                  
+                  return (
+                    <div key={match.id} className="bg-gray-700 rounded-lg p-4 border border-blue-600">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h4 className="font-semibold text-white">
+                            {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
+                          </h4>
+                          <p className="text-sm text-gray-400">
+                            Round {match.round} • Tournament
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => navigate(`/match/${match.id}`)}
+                          className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200"
+                        >
+                          Join Match
+                        </button>
                       </div>
-                      <button
-                        onClick={() => navigate(`/match/${match.id}`)}
-                        className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200"
-                      >
-                        Join Match
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

@@ -85,7 +85,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
       };
 
       await onRegister(userData);
-      navigate('/dashboard');
+      navigate('/profile');
     } catch (error: any) {
       console.error('Registration error:', error);
       if (error.message.includes('username')) {
@@ -109,20 +109,30 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center py-12">
-      <div className="max-w-md w-full">
-        <div className="bg-gray-800 rounded-2xl shadow-xl border border-gray-700 p-8">
+    <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden flex items-center justify-center py-12">
+      {/* Subtle grid/code background */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
+      
+      {/* Code/terminal style header overlay */}
+      <div className="absolute top-0 left-0 w-full px-4 pt-8 z-10 select-none pointer-events-none">
+        <div className="text-sm md:text-lg lg:text-2xl text-gray-400 tracking-tight">
+          <span className="text-gray-600">function</span> <span className="text-red-500 font-bold">UserRegistration</span><span className="text-white">()</span> <span className="text-gray-600">&#123;</span>
+        </div>
+      </div>
+
+      <div className="relative z-20 max-w-md w-full mx-4">
+        <div className="bg-black/60 border border-gray-700 rounded-2xl shadow-xl p-8 backdrop-blur-sm">
           <div className="text-center mb-8">
-            <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-3 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+            <div className="bg-gradient-to-r from-red-500 to-red-600 p-3 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
               <User className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
+            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Create Account</h1>
             <p className="text-gray-300">Join Bodax Masters Tournament</p>
             <p className="text-gray-400 text-sm mt-2">You can link your Discord account later in your profile</p>
           </div>
 
           {errors.general && (
-            <div className="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-6">
+            <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 mb-6">
               <p className="text-red-300 text-sm">{errors.general}</p>
             </div>
           )}
@@ -139,7 +149,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
                   type="text"
                   value={formData.username}
                   onChange={(e) => handleInputChange('username', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white placeholder-gray-400 ${
+                  className={`w-full pl-10 pr-4 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-white placeholder-gray-400 ${
                     errors.username ? 'border-red-500' : 'border-gray-600'
                   }`}
                   placeholder="Enter username"
@@ -161,7 +171,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white placeholder-gray-400 ${
+                  className={`w-full pl-10 pr-4 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-white placeholder-gray-400 ${
                     errors.email ? 'border-red-500' : 'border-gray-600'
                   }`}
                   placeholder="Enter email address"
@@ -183,7 +193,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
-                  className={`w-full pl-10 pr-12 py-3 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white placeholder-gray-400 ${
+                  className={`w-full pl-10 pr-12 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-white placeholder-gray-400 ${
                     errors.password ? 'border-red-500' : 'border-gray-600'
                   }`}
                   placeholder="Enter password"
@@ -212,7 +222,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={formData.confirmPassword}
                   onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                  className={`w-full pl-10 pr-12 py-3 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white placeholder-gray-400 ${
+                  className={`w-full pl-10 pr-12 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-white placeholder-gray-400 ${
                     errors.confirmPassword ? 'border-red-500' : 'border-gray-600'
                   }`}
                   placeholder="Confirm password"
@@ -241,10 +251,10 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
                   type="text"
                   value={formData.riotId}
                   onChange={(e) => handleInputChange('riotId', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white placeholder-gray-400 ${
+                  className={`w-full pl-10 pr-4 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-white placeholder-gray-400 ${
                     errors.riotId ? 'border-red-500' : 'border-gray-600'
                   }`}
-                  placeholder="Username#Tag"
+                  placeholder="e.g., PlayerName#TAG"
                 />
               </div>
               {errors.riotId && (
@@ -255,7 +265,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-primary-500 to-primary-600 text-white py-3 rounded-lg font-semibold hover:from-primary-600 hover:to-primary-700 transition-all disabled:bg-gray-600 disabled:cursor-not-allowed shadow-lg"
+              className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-3 rounded-lg font-bold hover:from-red-700 hover:to-red-800 transition-all disabled:bg-gray-600 disabled:cursor-not-allowed shadow-lg border border-red-800"
             >
               {isLoading ? 'Creating Account...' : 'Create Account'}
             </button>
@@ -266,7 +276,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
               Already have an account?{' '}
               <button
                 onClick={() => navigate('/login')}
-                className="text-primary-400 hover:text-primary-300 font-semibold transition-colors"
+                className="text-red-400 hover:text-red-300 font-semibold transition-colors"
               >
                 Sign In
               </button>

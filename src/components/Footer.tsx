@@ -113,9 +113,7 @@ const Footer = () => {
         {/* Bottom Section */}
         <div className="border-t border-gray-700 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center">
           <div className="flex items-center space-x-2 mb-4 md:mb-0">
-            <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">BM</span>
-            </div>
+            <img src="/bodax-pfp.png" alt="Bodax Masters" className="w-8 h-8" />
             <span className="text-white font-semibold">Bodax Masters</span>
           </div>
           

@@ -201,17 +201,6 @@ const ScoreSubmission: React.FC<ScoreSubmissionProps> = ({
             </div>
           </div>
         )}
-
-        {/* Instructions */}
-        <div className="mt-6 text-center">
-          <div className="bg-gray-700 border border-gray-600 rounded-lg p-4">
-            <h4 className="font-semibold text-white mb-2">How to Submit Scores</h4>
-            <p className="text-gray-300 text-sm">
-              Both teams should enter their scores. When the scores match, the result will be automatically submitted. 
-              {isAdmin && ' Admins can also manually submit scores using the override option above.'}
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );

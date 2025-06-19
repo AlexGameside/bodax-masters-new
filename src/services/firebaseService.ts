@@ -4190,3 +4190,192 @@ export const debugBracketState = async (tournamentId: string): Promise<void> => 
     console.error('Error debugging bracket state:', error);
   }
 };
+
+// Admin Logging Functions
+export interface AdminLog {
+  id?: string;
+  type: 'signup' | 'general' | 'tournament' | 'match' | 'team' | 'user';
+  action: string;
+  details: string;
+  userId?: string;
+  username?: string;
+  timestamp: Date;
+  adminId?: string;
+  adminUsername?: string;
+  metadata?: Record<string, any>;
+}
+
+export const createAdminLog = async (log: Omit<AdminLog, 'id' | 'timestamp'>): Promise<string> => {
+  const docRef = await addDoc(collection(db, 'adminLogs'), {
+    ...log,
+    timestamp: serverTimestamp()
+  });
+  return docRef.id;
+};
+
+export const getAdminLogs = async (type?: string, limitCount: number = 100): Promise<AdminLog[]> => {
+  let q = query(collection(db, 'adminLogs'), orderBy('timestamp', 'desc'), limit(limitCount));
+  
+  if (type) {
+    q = query(collection(db, 'adminLogs'), where('type', '==', type), orderBy('timestamp', 'desc'), limit(limitCount));
+  }
+  
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      type: data.type,
+      action: data.action,
+      details: data.details,
+      userId: data.userId,
+      username: data.username,
+      timestamp: data.timestamp?.toDate() || new Date(),
+      adminId: data.adminId,
+      adminUsername: data.adminUsername,
+      metadata: data.metadata || {}
+    };
+  }) as AdminLog[];
+};
+
+export const getSignupLogs = async (limitCount: number = 100): Promise<AdminLog[]> => {
+  return getAdminLogs('signup', limitCount);
+};
+
+export const getGeneralLogs = async (limitCount: number = 100): Promise<AdminLog[]> => {
+  return getAdminLogs('general', limitCount);
+};
+
+// Enhanced user registration with logging
+export const createUserWithLogging = async (userData: Omit<User, 'id' | 'createdAt'>, adminId?: string, adminUsername?: string): Promise<string> => {
+  try {
+    // Create the user
+    const docRef = await addDoc(collection(db, 'users'), {
+      ...userData,
+      createdAt: Timestamp.now()
+    });
+    
+    // Log the signup
+    await createAdminLog({
+      type: 'signup',
+      action: 'user_registered',
+      details: `New user registered: ${userData.username} (${userData.email})`,
+      userId: docRef.id,
+      username: userData.username,
+      adminId,
+      adminUsername,
+      metadata: {
+        email: userData.email,
+        riotId: userData.riotId,
+        discordLinked: userData.discordLinked || false
+      }
+    });
+    
+    return docRef.id;
+  } catch (error) {
+    // Log the error
+    await createAdminLog({
+      type: 'signup',
+      action: 'user_registration_failed',
+      details: `Failed to register user: ${userData.username} - ${error instanceof Error ? error.message : String(error)}`,
+      adminId,
+      adminUsername,
+      metadata: {
+        email: userData.email,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    });
+    throw error;
+  }
+};
+
+// Enhanced team creation with logging
+export const createTeamWithLogging = async (teamData: Omit<Team, 'id'>, adminId?: string, adminUsername?: string): Promise<string> => {
+  try {
+    const teamId = await addTeam(teamData);
+    
+    // Log the team creation
+    await createAdminLog({
+      type: 'team',
+      action: 'team_created',
+      details: `Team created: ${teamData.name} by ${teamData.captainId}`,
+      userId: teamData.captainId,
+      adminId,
+      adminUsername,
+      metadata: {
+        teamName: teamData.name,
+        teamTag: teamData.teamTag,
+        memberCount: teamData.members?.length || 0
+      }
+    });
+    
+    return teamId;
+  } catch (error) {
+    await createAdminLog({
+      type: 'team',
+      action: 'team_creation_failed',
+      details: `Failed to create team: ${teamData.name} - ${error instanceof Error ? error.message : String(error)}`,
+      adminId,
+      adminUsername,
+      metadata: {
+        teamName: teamData.name,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    });
+    throw error;
+  }
+};
+
+// Enhanced tournament creation with logging
+export const createTournamentWithLogging = async (tournamentData: Omit<Tournament, 'id' | 'teams' | 'status' | 'createdAt'>, adminId?: string, adminUsername?: string): Promise<string> => {
+  try {
+    const tournamentId = await createTournament(tournamentData);
+    
+    // Log the tournament creation
+    await createAdminLog({
+      type: 'tournament',
+      action: 'tournament_created',
+      details: `Tournament created: ${tournamentData.name}`,
+      adminId,
+      adminUsername,
+      metadata: {
+        tournamentName: tournamentData.name,
+        format: tournamentData.format,
+        prizePool: tournamentData.prizePool
+      }
+    });
+    
+    return tournamentId;
+  } catch (error) {
+    await createAdminLog({
+      type: 'tournament',
+      action: 'tournament_creation_failed',
+      details: `Failed to create tournament: ${tournamentData.name} - ${error instanceof Error ? error.message : String(error)}`,
+      adminId,
+      adminUsername,
+      metadata: {
+        tournamentName: tournamentData.name,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    });
+    throw error;
+  }
+};
+
+// General admin action logging
+export const logAdminAction = async (
+  action: string,
+  details: string,
+  adminId?: string,
+  adminUsername?: string,
+  metadata?: Record<string, any>
+): Promise<void> => {
+  await createAdminLog({
+    type: 'general',
+    action,
+    details,
+    adminId,
+    adminUsername,
+    metadata
+  });
+};

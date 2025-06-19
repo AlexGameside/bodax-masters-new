@@ -205,7 +205,6 @@ const TournamentManagement = () => {
           <div className="text-center py-12">
             <Trophy className="w-16 h-16 text-gray-500 mx-auto mb-4" />
             <h3 className="text-xl font-medium mb-2">No tournaments found</h3>
-            <p className="text-gray-400 mb-6">Create your first tournament to get started</p>
             <Link
               to="/admin/tournaments/create"
               className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg transition-colors"

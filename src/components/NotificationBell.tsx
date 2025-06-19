@@ -6,11 +6,10 @@ import type { Notification } from '../types/tournament';
 
 interface NotificationBellProps {
   userId: string;
-  onTeamUpdate?: () => void; // Callback to notify parent component of team changes
   onNavigate?: (path: string) => void; // Callback for navigation
 }
 
-const NotificationBell: React.FC<NotificationBellProps> = ({ userId, onTeamUpdate, onNavigate }) => {
+const NotificationBell: React.FC<NotificationBellProps> = ({ userId, onNavigate }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -77,12 +76,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ userId, onTeamUpdat
         await acceptTeamInvitation(notification.data.invitationId);
         await handleDeleteNotification(notification.id);
         
-        // Notify parent component that team data has changed
-        if (onTeamUpdate) {
-          console.log('Calling onTeamUpdate');
-          onTeamUpdate();
-        }
-
+        // Show success message
+        toast.success('Invitation accepted! You have joined the team.');
+        
         // Navigate to team management page
         if (onNavigate) {
           console.log('Navigating to /team-management');

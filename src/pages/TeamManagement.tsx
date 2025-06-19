@@ -21,7 +21,9 @@ import {
   updateTeamMemberRole,
   removeTeamMember,
   addTeam,
-  fillTeamWithDemoMembers
+  fillTeamWithDemoMembers,
+  deleteTeam,
+  onUserTeamsChange
 } from '../services/firebaseService';
 import type { Team, User as UserType, TeamMember } from '../types/tournament';
 
@@ -38,34 +40,45 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
   const [inviteUsername, setInviteUsername] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
     if (currentUser) {
-      loadData();
+      loadInitialData();
+      setupRealTimeListeners();
     }
   }, [currentUser]);
 
-  const loadData = async () => {
+  const loadInitialData = async () => {
     try {
       setLoading(true);
       setError('');
-      const [userTeams, allUsersData] = await Promise.all([
-        getUserTeams(currentUser!.id),
-        getAllUsers()
-      ]);
-      setTeams(userTeams);
+      const allUsersData = await getAllUsers();
       setAllUsers(allUsersData);
     } catch (error) {
-      console.error('Error loading data:', error);
-      setError('Failed to load teams. Please try again.');
-      // Set empty arrays to prevent further errors
-      setTeams([]);
+      console.error('Error loading initial data:', error);
+      setError('Failed to load data. Please try again.');
       setAllUsers([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const setupRealTimeListeners = () => {
+    if (!currentUser) return;
+
+    // Set up real-time listener for user's teams
+    const unsubscribe = onUserTeamsChange(currentUser.id, (updatedTeams) => {
+      console.log('Teams updated in real-time:', updatedTeams);
+      setTeams(updatedTeams);
+    });
+
+    // Cleanup function
+    return () => {
+      unsubscribe();
+    };
   };
 
   const handleCreateTeam = async () => {
@@ -105,7 +118,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
   const handleRoleChange = async (teamId: string, userId: string, newRole: 'owner' | 'captain' | 'member') => {
     try {
       await updateTeamMemberRole(teamId, userId, newRole);
-      await loadData(); // Reload to get updated data
+      await loadInitialData(); // Reload to get updated data
       setSuccess('Role updated successfully');
     } catch (error: any) {
       setError(error.message);
@@ -117,7 +130,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
     try {
       await removeTeamMember(teamId, userId);
-      await loadData(); // Reload to get updated data
+      await loadInitialData(); // Reload to get updated data
       setSuccess('Member removed successfully');
     } catch (error: any) {
       setError(error.message);
@@ -129,8 +142,20 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
     try {
       await fillTeamWithDemoMembers(teamId);
-      await loadData(); // Reload to get updated data
+      await loadInitialData(); // Reload to get updated data
       setSuccess('Team filled with demo members successfully');
+    } catch (error: any) {
+      setError(error.message);
+    }
+  };
+
+  const handleDeleteTeam = async (teamId: string) => {
+    if (!confirm('Are you sure you want to delete this team? This action cannot be undone and will remove all team members.')) return;
+
+    try {
+      await deleteTeam(teamId);
+      await loadInitialData(); // Reload to get updated data
+      setSuccess('Team deleted successfully');
     } catch (error: any) {
       setError(error.message);
     }
@@ -238,7 +263,10 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                 </div>
                 {canManageTeam(team) && (
                   <button
-                    onClick={() => setSelectedTeam(team)}
+                    onClick={() => {
+                      setSelectedTeam(team);
+                      setShowSettingsModal(true);
+                    }}
                     className="p-2 text-gray-400 hover:text-white transition-colors"
                   >
                     <Settings className="w-5 h-5" />
@@ -319,8 +347,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                     <span>Invite Member</span>
                   </button>
                   
-                  {/* Fill Team Button - Only show if team has less than 5 members */}
-                  {team.members.length < 5 && (
+                  {/* Fill Team Button - Only show if team has less than 5 members and user is admin */}
+                  {currentUser?.isAdmin && team.members.length < 5 && (
                     <button
                       onClick={() => handleFillTeam(team.id)}
                       className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2 border border-orange-800"
@@ -339,7 +367,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
           <div className="text-center py-12">
             <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-white mb-2">No Teams Yet</h3>
-            <p className="text-gray-400 mb-6">Create your first team to get started</p>
             <button
               onClick={handleCreateTeam}
               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 mx-auto transition-colors border border-red-800"
@@ -405,6 +432,124 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Modal */}
+        {showSettingsModal && selectedTeam && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-black/90 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-white">Team Settings - {selectedTeam.name}</h3>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Team Info */}
+                <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-white mb-2">Team Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Name:</span>
+                      <span className="text-white">{selectedTeam.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Tag:</span>
+                      <span className="text-white">[{selectedTeam.teamTag}]</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Members:</span>
+                      <span className="text-white">{selectedTeam.members.length}/{selectedTeam.maxMembers}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Your Role:</span>
+                      <div className="flex items-center space-x-1">
+                        {getRoleIcon(getUserRole(selectedTeam, currentUser!.id))}
+                        <span className={getRoleColor(getUserRole(selectedTeam, currentUser!.id))}>
+                          {getUserRole(selectedTeam, currentUser!.id)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Role Permissions */}
+                <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-white mb-2">Role Permissions</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center space-x-2">
+                      <Crown className="w-4 h-4 text-yellow-400" />
+                      <span className="text-gray-300">Owner: Can delete team, transfer ownership, manage all members</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Shield className="w-4 h-4 text-blue-400" />
+                      <span className="text-gray-300">Captain: Can invite members, manage roles, remove members</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <User className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-300">Member: Can view team info and participate in tournaments</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="space-y-2">
+                  {/* Invite Member Button */}
+                  {canManageTeam(selectedTeam) && selectedTeam.members.length < selectedTeam.maxMembers && (
+                    <button
+                      onClick={() => {
+                        setShowSettingsModal(false);
+                        setShowInviteForm(true);
+                      }}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border border-blue-800"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      <span>Invite Member</span>
+                    </button>
+                  )}
+
+                  {/* Fill Team Button - Admin only */}
+                  {currentUser?.isAdmin && selectedTeam.members.length < 5 && (
+                    <button
+                      onClick={() => {
+                        setShowSettingsModal(false);
+                        handleFillTeam(selectedTeam.id);
+                      }}
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border border-orange-800"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>Fill Team (Demo Players)</span>
+                    </button>
+                  )}
+
+                  {/* Delete Team Button - Only for owners */}
+                  {canTransferOwnership(selectedTeam) && (
+                    <button
+                      onClick={() => {
+                        setShowSettingsModal(false);
+                        handleDeleteTeam(selectedTeam.id);
+                      }}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border border-red-800"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete Team</span>
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors border border-gray-600"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}

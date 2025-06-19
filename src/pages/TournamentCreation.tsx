@@ -41,7 +41,7 @@ const TournamentCreation = () => {
   const [currency, setCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD');
 
   // Registration
-  const [maxTeams, setMaxTeams] = useState<number>(16);
+  const [maxTeams, setMaxTeams] = useState<number>(4);
   const [requireRiotId, setRequireRiotId] = useState<boolean>(true);
   const [requireRankVerification, setRequireRankVerification] = useState<boolean>(false);
   const [minimumRank, setMinimumRank] = useState<string>('');

@@ -8,11 +8,13 @@ import {
   deleteTeam, 
   inviteTeamMember, 
   getUserTeams, 
-  getUserMatches 
+  getUserMatches,
+  getAllUsers,
+  onUserTeamsChange
 } from '../services/firebaseService';
 import { resetPassword } from '../services/authService';
 import type { User, Match, Team } from '../types/tournament';
-import { Shield, Users, Trophy, Settings, UserPlus, LogOut, Edit3, Save, X, Trash2, ExternalLink, MessageCircle } from 'lucide-react';
+import { Shield, Users, Trophy, Settings, UserPlus, LogOut, Edit3, Save, X, Trash2, ExternalLink, MessageCircle, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getDiscordAuthUrl } from '../services/discordService';
 
@@ -22,6 +24,7 @@ const Profile = () => {
   
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [editForm, setEditForm] = useState({
     displayName: '',
     riotName: '',
@@ -29,13 +32,12 @@ const Profile = () => {
   });
   const [userMatches, setUserMatches] = useState<Match[]>([]);
   const [userTeams, setUserTeams] = useState<Team[]>([]);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteTeamId, setInviteTeamId] = useState('');
-  const [isInviting, setIsInviting] = useState(false);
   const [message, setMessage] = useState('');
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState('');
+  const [allUsers, setAllUsers] = useState<User[]>([]);
 
   useEffect(() => {
     if (currentUser) {
@@ -45,6 +47,7 @@ const Profile = () => {
         email: currentUser.email || ''
       });
       loadUserData();
+      setupRealTimeListeners();
     }
   }, [currentUser]);
 
@@ -52,20 +55,38 @@ const Profile = () => {
     if (!currentUser) return;
     
     try {
-      const [matches, teams] = await Promise.all([
-        getUserMatches(currentUser.id),
-        getUserTeams(currentUser.id)
+      const [matches] = await Promise.all([
+        getUserMatches(currentUser.id)
       ]);
       setUserMatches(matches);
-      setUserTeams(teams);
+      
+      // Load all users for team member display
+      const users = await getAllUsers();
+      setAllUsers(users);
     } catch (error) {
       console.error('Error loading user data:', error);
     }
   };
 
+  const setupRealTimeListeners = () => {
+    if (!currentUser) return;
+
+    // Set up real-time listener for user's teams
+    const unsubscribe = onUserTeamsChange(currentUser.id, (updatedTeams) => {
+      console.log('Teams updated in real-time on Profile:', updatedTeams);
+      setUserTeams(updatedTeams);
+    });
+
+    // Cleanup function
+    return () => {
+      unsubscribe();
+    };
+  };
+
   const handleProfileUpdate = async () => {
     if (!currentUser) return;
-    
+
+    setIsUpdating(true);
     try {
       await updateUserProfile(currentUser.id, {
         displayName: editForm.displayName,
@@ -74,76 +95,28 @@ const Profile = () => {
       setIsEditing(false);
       setMessage('Profile updated successfully!');
       setTimeout(() => setMessage(''), 3000);
-    } catch (error) {
-      setMessage('Error updating profile');
-      setTimeout(() => setMessage(''), 3000);
-    }
-  };
-
-  const handleInviteMember = async () => {
-    if (!inviteEmail || !inviteTeamId) return;
-    
-    setIsInviting(true);
-    try {
-      await inviteTeamMember(inviteTeamId, inviteEmail);
-      setInviteEmail('');
-      setInviteTeamId('');
-      setMessage('Invitation sent successfully!');
-      setTimeout(() => setMessage(''), 3000);
-    } catch (error) {
-      setMessage('Error sending invitation');
-      setTimeout(() => setMessage(''), 3000);
+    } catch (error: any) {
+      setError(error.message);
+      setTimeout(() => setError(''), 5000);
     } finally {
-      setIsInviting(false);
-    }
-  };
-
-  const handleLeaveTeam = async (teamId: string) => {
-    if (!confirm('Are you sure you want to leave this team?')) return;
-    
-    try {
-      await leaveTeam(teamId, currentUser!.id);
-      await loadUserData();
-      setMessage('Left team successfully');
-      setTimeout(() => setMessage(''), 3000);
-    } catch (error) {
-      setMessage('Error leaving team');
-      setTimeout(() => setMessage(''), 3000);
-    }
-  };
-
-  const handleDeleteTeam = async (teamId: string) => {
-    if (!confirm('Are you sure you want to delete this team? This action cannot be undone.')) return;
-    
-    try {
-      await deleteTeam(teamId);
-      await loadUserData();
-      setMessage('Team deleted successfully');
-      setTimeout(() => setMessage(''), 3000);
-    } catch (error) {
-      setMessage('Error deleting team');
-      setTimeout(() => setMessage(''), 3000);
+      setIsUpdating(false);
     }
   };
 
   const handleResetPassword = async () => {
-    if (!currentUser?.email) {
-      setMessage('No email address found for this account');
-      setTimeout(() => setMessage(''), 3000);
-      return;
-    }
+    if (!currentUser) return;
 
-    setIsResettingPassword(true);
+    setIsResetting(true);
     try {
       await resetPassword(currentUser.email);
-      setShowResetPassword(false);
       setMessage('Password reset email sent! Check your inbox.');
       setTimeout(() => setMessage(''), 5000);
+      setShowResetPassword(false);
     } catch (error: any) {
-      setError(error.message || 'Error sending password reset email');
+      setError(error.message);
       setTimeout(() => setError(''), 5000);
     } finally {
-      setIsResettingPassword(false);
+      setIsResetting(false);
     }
   };
 
@@ -404,7 +377,6 @@ const Profile = () => {
                   <div className="text-center py-12">
                     <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-white mb-2">No teams yet</h3>
-                    <p className="text-gray-400 mb-4">Create a team to get started!</p>
                     <button
                       onClick={() => navigate('/create-team')}
                       className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors border border-red-800"
@@ -415,89 +387,44 @@ const Profile = () => {
                 ) : (
                   <div className="space-y-4">
                     {userTeams.map((team) => (
-                      <div key={team.id} className="border border-gray-700 rounded-lg p-4 bg-black/40">
+                      <div key={team.id} className="border border-gray-700 rounded-lg p-4 bg-black/40 hover:bg-black/60 transition-colors cursor-pointer" onClick={() => navigate('/team-management')}>
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="text-lg font-medium text-white">{team.name}</h3>
                             <p className="text-gray-400">{team.members.length} members</p>
                           </div>
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => {
-                                setInviteTeamId(team.id);
-                                setInviteEmail('');
-                              }}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-blue-800"
-                            >
-                              Invite Member
-                            </button>
-                            {team.ownerId === currentUser.id ? (
-                              <button
-                                onClick={() => handleDeleteTeam(team.id)}
-                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-red-800"
-                              >
-                                Delete Team
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleLeaveTeam(team.id)}
-                                className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-gray-700"
-                              >
-                                Leave Team
-                              </button>
-                            )}
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm text-gray-400">Click to manage</span>
+                            <ArrowRight className="w-4 h-4 text-gray-400" />
                           </div>
                         </div>
 
-                        {/* Team Members */}
+                        {/* Team Members Preview */}
                         <div className="mt-4">
                           <h4 className="text-sm font-medium text-gray-300 mb-2">Members:</h4>
                           <div className="flex flex-wrap gap-2">
-                            {team.members.map((member) => (
-                              <span
-                                key={member.userId}
-                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-700 text-gray-200 border border-gray-600"
-                              >
-                                {member.userId === currentUser.id ? 'You' : `Member ${member.userId.slice(0, 8)}`}
-                                {member.userId === team.ownerId && (
-                                  <span className="ml-1 text-red-400">(Owner)</span>
-                                )}
+                            {team.members.slice(0, 3).map((member) => {
+                              // Get user info for display
+                              const user = allUsers.find(u => u.id === member.userId);
+                              return (
+                                <span
+                                  key={member.userId}
+                                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-700 text-gray-200 border border-gray-600"
+                                >
+                                  {member.userId === currentUser.id ? 'You' : (user?.username || 'Unknown User')}
+                                  {member.userId === team.ownerId && (
+                                    <span className="ml-1 text-red-400">(Owner)</span>
+                                  )}
+                                </span>
+                              );
+                            })}
+                            {team.members.length > 3 && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-600 text-gray-300 border border-gray-500">
+                                +{team.members.length - 3} more
                               </span>
-                            ))}
+                            )}
                           </div>
                         </div>
-
-                        {/* Invite Form */}
-                        {inviteTeamId === team.id && (
-                          <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-                            <h4 className="text-sm font-medium text-gray-300 mb-2">Invite Team Member</h4>
-                            <div className="flex space-x-2">
-                              <input
-                                type="email"
-                                value={inviteEmail}
-                                onChange={(e) => setInviteEmail(e.target.value)}
-                                placeholder="Enter email address"
-                                className="flex-1 px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent bg-black/60 text-white"
-                              />
-                              <button
-                                onClick={handleInviteMember}
-                                disabled={isInviting || !inviteEmail}
-                                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors border border-green-800"
-                              >
-                                {isInviting ? 'Sending...' : 'Send Invite'}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setInviteTeamId('');
-                                  setInviteEmail('');
-                                }}
-                                className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg transition-colors border border-gray-700"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -513,46 +440,52 @@ const Profile = () => {
                   <div className="text-center py-12">
                     <Trophy className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-white mb-2">No matches played yet</h3>
-                    <p className="text-gray-400">Join a tournament to start playing!</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {userMatches.map((match) => (
-                      <div key={match.id} className="border border-gray-700 rounded-lg p-4 bg-black/40">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-lg font-medium text-white">
-                              {match.team1Id} vs {match.team2Id}
-                            </h3>
-                            <p className="text-gray-400">
-                              {new Date(match.createdAt).toLocaleDateString()}
-                            </p>
-                            <div className="flex items-center space-x-4 mt-2">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                match.isComplete ? 'bg-green-900/50 text-green-300 border border-green-700' :
-                                match.matchState === 'playing' ? 'bg-blue-900/50 text-blue-300 border border-blue-700' :
-                                match.matchState === 'disputed' ? 'bg-red-900/50 text-red-300 border border-red-700' :
-                                'bg-gray-700 text-gray-200 border border-gray-600'
-                              }`}>
-                                {match.matchState.charAt(0).toUpperCase() + match.matchState.slice(1)}
-                              </span>
-                              {match.isComplete && match.winnerId && (
-                                <span className="text-sm font-medium text-white">
-                                  Winner: {match.winnerId}
+                    {userMatches.map((match) => {
+                      // Get team names for display
+                      const team1 = userTeams.find(t => t.id === match.team1Id);
+                      const team2 = userTeams.find(t => t.id === match.team2Id);
+                      const winner = userTeams.find(t => t.id === match.winnerId);
+                      
+                      return (
+                        <div key={match.id} className="border border-gray-700 rounded-lg p-4 bg-black/40">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="text-lg font-medium text-white">
+                                {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
+                              </h3>
+                              <p className="text-gray-400">
+                                {new Date(match.createdAt).toLocaleDateString()}
+                              </p>
+                              <div className="flex items-center space-x-4 mt-2">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  match.isComplete ? 'bg-green-900/50 text-green-300 border border-green-700' :
+                                  match.matchState === 'playing' ? 'bg-blue-900/50 text-blue-300 border border-blue-700' :
+                                  match.matchState === 'disputed' ? 'bg-red-900/50 text-red-300 border border-red-700' :
+                                  'bg-gray-700 text-gray-200 border border-gray-600'
+                                }`}>
+                                  {match.matchState.charAt(0).toUpperCase() + match.matchState.slice(1)}
                                 </span>
-                              )}
+                                {match.isComplete && match.winnerId && (
+                                  <span className="text-sm font-medium text-white">
+                                    Winner: {winner?.name || 'Unknown'}
+                                  </span>
+                                )}
+                              </div>
                             </div>
+                            <button
+                              onClick={() => navigate(`/match/${match.id}`)}
+                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-sm transition-colors flex items-center space-x-1 border border-red-800"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>View Match</span>
+                            </button>
                           </div>
-                          <button
-                            onClick={() => navigate(`/match/${match.id}`)}
-                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-sm transition-colors flex items-center space-x-1 border border-red-800"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            <span>View Match</span>
-                          </button>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -605,14 +538,14 @@ const Profile = () => {
               <div className="flex space-x-3">
                 <button
                   onClick={handleResetPassword}
-                  disabled={isResettingPassword}
+                  disabled={isResetting}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors border border-blue-800"
                 >
-                  {isResettingPassword ? 'Sending...' : 'Send Reset Email'}
+                  {isResetting ? 'Sending...' : 'Send Reset Email'}
                 </button>
                 <button
                   onClick={() => setShowResetPassword(false)}
-                  disabled={isResettingPassword}
+                  disabled={isResetting}
                   className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors border border-gray-700"
                 >
                   Cancel

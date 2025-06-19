@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import CountdownPage from './pages/CountdownPage';
 import LandingPage from './pages/LandingPage';
 import UserRegistration from './pages/UserRegistration';
 import UserLogin from './pages/UserLogin';
@@ -62,6 +61,7 @@ import {
 } from './services/authService';
 import { getDoc, doc } from 'firebase/firestore';
 import { db } from './config/firebase';
+import { toast } from 'react-hot-toast';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -76,19 +76,7 @@ function App() {
 
   // Check if launch date has passed or if user is admin
   const isLaunched = () => {
-    const launchDate = new Date('2025-06-21T15:00:00+02:00');
-    const dateLaunched = new Date() >= launchDate;
-    
-    // If still loading, don't make any routing decisions
-    // This prevents premature redirects during auth loading
-    if (loading) {
-      return dateLaunched; // Only use date check during loading
-    }
-    
-    // Only check admin status if not loading and user is authenticated
-    // and admin status has been determined (not null)
-    const adminLaunched = currentUser && isAdmin === true;
-    return dateLaunched || adminLaunched;
+    return true; // Always show landing page for live tournament
   };
 
   // Load initial data
@@ -203,34 +191,36 @@ function App() {
   };
 
   const handleCreateTeam = async (teamData: Omit<Team, 'id' | 'createdAt'>) => {
-    const teamWithCreatedAt = { ...teamData, createdAt: new Date() };
-    const teamId = await addTeamFirebase(teamWithCreatedAt);
-    const newTeam = { ...teamWithCreatedAt, id: teamId };
-    setTeams(prev => [...prev, newTeam]);
-    return newTeam;
+    try {
+      const teamWithCreatedAt = { ...teamData, createdAt: new Date() };
+      const newTeam = await addTeam(teamWithCreatedAt);
+      toast.success('Team created successfully!');
+      return newTeam;
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create team');
+      throw error;
+    }
   };
 
   const handleInvitePlayer = async (teamId: string, username: string) => {
-    if (!currentUser) return '';
-    return await createTeamInvitation(teamId, username, currentUser.id);
+    try {
+      const invitationId = await createTeamInvitation(teamId, username, currentUser!.id, '');
+      toast.success(`Invitation sent to ${username}`);
+      return invitationId;
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send invitation');
+      throw error;
+    }
   };
 
   const handleAcceptInvitation = async (invitationId: string) => {
     await acceptTeamInvitation(invitationId);
-    // Refresh user data
-    if (currentUser) {
-      const userTeamData = await getUserTeam(currentUser.id);
-      setUserTeam(userTeamData);
-    }
+    // Real-time listeners will automatically update the UI
   };
 
   const handleDeclineInvitation = async (invitationId: string) => {
     await declineTeamInvitation(invitationId);
-    // Refresh invitations
-    if (currentUser) {
-      const invitationsData = await getTeamInvitations(currentUser.id);
-      setTeamInvitations(invitationsData);
-    }
+    // Real-time listeners will automatically update the UI
   };
 
   const handleRegisterForTournament = async (teamId: string) => {
@@ -291,10 +281,6 @@ function App() {
     await generateFinalBracket(teams);
   };
 
-  const handleTeamUpdate = () => {
-    // This will trigger a re-render when team data changes
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden flex items-center justify-center">
@@ -321,7 +307,7 @@ function App() {
         <main className="flex-grow">
           <Routes>
             {/* Public routes */}
-            <Route path="/" element={isLaunched() ? <LandingPage /> : <CountdownPage />} />
+            <Route path="/" element={<LandingPage />} />
             <Route path="/register" element={<UserRegistration onRegister={handleUserRegister} />} />
             <Route path="/login" element={<UserLogin onLogin={handleUserLogin} />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -343,6 +329,7 @@ function App() {
                   teamInvitations={teamInvitations}
                   userMatches={userMatches}
                   teamPlayers={teamPlayers}
+                  teams={teams}
                   onCreateTeam={handleCreateTeam}
                   onInvitePlayer={handleInvitePlayer}
                   onAcceptInvitation={handleAcceptInvitation}
@@ -351,7 +338,7 @@ function App() {
                 />
               ) : <Navigate to="/login" />
             } />
-            <Route path="/profile" element={currentUser ? <Profile currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/profile" element={currentUser ? <Profile /> : <Navigate to="/login" />} />
             <Route path="/team/register" element={
               currentUser ? (
                 <TeamRegistration 
@@ -360,12 +347,12 @@ function App() {
                 />
               ) : <Navigate to="/login" />
             } />
-            <Route path="/team/manage" element={currentUser ? <TeamManagement currentUser={currentUser} /> : <Navigate to="/login" />} />
-            <Route path="/team/create" element={currentUser ? <CreateTeam currentUser={currentUser} /> : <Navigate to="/login" />} />
-            <Route path="/match/:matchId" element={currentUser ? <MatchPage currentUser={currentUser} /> : <Navigate to="/login" />} />
-            <Route path="/tournaments" element={currentUser ? <TournamentList currentUser={currentUser} /> : <Navigate to="/login" />} />
-            <Route path="/tournaments/:id" element={currentUser ? <TournamentDetail currentUser={currentUser} /> : <Navigate to="/login" />} />
-            <Route path="/tournament/:id" element={currentUser ? <TournamentDetail currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/team-management" element={currentUser ? <TeamManagement currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/create-team" element={currentUser ? <CreateTeam currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/match/:matchId" element={currentUser ? <MatchPage /> : <Navigate to="/login" />} />
+            <Route path="/tournaments" element={<TournamentList currentUser={currentUser} />} />
+            <Route path="/tournaments/:id" element={<TournamentDetail currentUser={currentUser} />} />
+            <Route path="/tournament/:id" element={<TournamentDetail currentUser={currentUser} />} />
 
             {/* Admin routes */}
             <Route path="/admin" element={

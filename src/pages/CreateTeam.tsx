@@ -186,41 +186,6 @@ const CreateTeam: React.FC<CreateTeamProps> = ({ currentUser }) => {
               </p>
             </div>
 
-            <div>
-              <label className="block text-gray-300 font-medium mb-2">
-                Maximum Members
-              </label>
-              <select
-                name="maxMembers"
-                value={formData.maxMembers}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 bg-black/60 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
-              >
-                <option value={5}>5 Members (Minimum)</option>
-                <option value={6}>6 Members</option>
-                <option value={7}>7 Members</option>
-                <option value={8}>8 Members</option>
-                <option value={9}>9 Members</option>
-                <option value={10}>10 Members (Recommended)</option>
-                <option value={12}>12 Members</option>
-                <option value={15}>15 Members (Maximum)</option>
-              </select>
-              <p className="text-xs text-gray-400 mt-1">
-                Choose how many members your team can have
-              </p>
-            </div>
-
-            <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
-              <h3 className="text-white font-medium mb-2">Team Setup Information</h3>
-              <ul className="text-sm text-gray-300 space-y-1">
-                <li>• You will be the team owner and captain</li>
-                <li>• You can invite other players to join your team</li>
-                <li>• You can promote members to captain or transfer ownership</li>
-                <li>• You can remove members from the team</li>
-                <li>• Team name and tag must be unique</li>
-              </ul>
-            </div>
-
             <div className="flex space-x-4">
               <button
                 type="button"

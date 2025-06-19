@@ -86,7 +86,6 @@ import GroupStageBracket from '../components/GroupStageBracket';
 import TournamentSchedule from '../components/TournamentSchedule';
 import TournamentLeaderboard from '../components/TournamentLeaderboard';
 import TeamMemberSelection from '../components/TeamMemberSelection';
-import DiscordRequirementWrapper from '../components/DiscordRequirementWrapper';
 import { useAuth } from '../hooks/useAuth';
 
 interface TournamentDetailProps {
@@ -1173,30 +1172,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                 {signingUp ? 'Signing Up...' : 'Sign Up Team'}
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Debug Section - Show why signup button isn't appearing */}
-        {!canSignupForUser && authUser && (
-          <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4 mb-8">
-            <div className="text-yellow-400 font-bold text-sm mb-3">SIGNUP STATUS</div>
-            <div className="text-gray-300 text-sm space-y-1">
-              <div>• User logged in: {authUser ? '✅' : '❌'}</div>
-              <div>• User has teams: {userTeams.length > 0 ? '✅' : '❌'} ({userTeams.length} teams)</div>
-              <div>• User team already signed up: {isUserTeamSignedUp ? '❌' : '✅'}</div>
-              <div>• Tournament exists: {tournament ? '✅' : '❌'}</div>
-              <div>• Tournament status: {tournament?.status || 'N/A'} {tournament?.status === 'registration-open' ? '✅' : '❌'}</div>
-            </div>
-            {userTeams.length === 0 && (
-              <div className="mt-3 text-yellow-300 text-sm">
-                💡 You need to create or join a team first. Go to your dashboard to create a team.
-              </div>
-            )}
-            {tournament?.status !== 'registration-open' && (
-              <div className="mt-3 text-yellow-300 text-sm">
-                💡 Tournament registration is not currently open.
-              </div>
-            )}
           </div>
         )}
 
