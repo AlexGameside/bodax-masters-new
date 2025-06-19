@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Trophy, 
@@ -51,7 +51,19 @@ import {
   approveTeamForTournament,
   rejectTeamFromTournament,
   updateTournamentStatus,
-  startSingleElimination
+  startSingleElimination,
+  startDoubleElimination,
+  onUserTeamsChange,
+  revertTeamRegistration,
+  revertTeamApproval,
+  revertTeamRejection,
+  getTeamTournamentStatus,
+  revertMatchResult,
+  revertTeamAdvancement,
+  revertRound,
+  revertRoundComprehensive,
+  getMatchProgressionInfo,
+  debugBracketState
 } from '../services/firebaseService';
 import { 
   getTournament,
@@ -92,6 +104,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingUserTeams, setLoadingUserTeams] = useState(false);
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [signingUp, setSigningUp] = useState<string | null>(null);
@@ -101,14 +114,38 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const [approvedTeams, setApprovedTeams] = useState<Team[]>([]);
   const [showTeamMemberSelection, setShowTeamMemberSelection] = useState(false);
   const [selectedTeamForRegistration, setSelectedTeamForRegistration] = useState<Team | null>(null);
-
-  // Debug output for authentication
-  console.log('DEBUG: authUser', authUser);
-  console.log('DEBUG: currentUser (prop)', currentUser);
+  const [selectedSignupTeamId, setSelectedSignupTeamId] = useState<string | null>(null);
+  const [justStartedTournament, setJustStartedTournament] = useState(false);
+  const [showRevertConfirmation, setShowRevertConfirmation] = useState(false);
+  const [revertAction, setRevertAction] = useState<{
+    type: 'registration' | 'approval' | 'rejection';
+    teamId: string;
+    teamName: string;
+  } | null>(null);
+  const [showBracketRevertConfirmation, setShowBracketRevertConfirmation] = useState(false);
+  const [bracketRevertAction, setBracketRevertAction] = useState<{
+    type: 'match' | 'team-advancement' | 'round';
+    matchId?: string;
+    teamId?: string;
+    round?: number;
+    description: string;
+  } | null>(null);
 
   // Check Discord requirements
   const discordLinked = !!(authUser?.discordId && authUser?.discordLinked);
   const inDiscordServer = discordLinked ? authUser?.inDiscordServer ?? false : false;
+
+  // Ref to ensure we only auto-navigate to match ONCE after tournament start
+  const hasAutoNavigatedToMatch = useRef(false);
+
+  // Auto-navigate to match page only if justStartedTournament is true
+  useEffect(() => {
+    if (justStartedTournament && userActiveMatches.length > 0 && !hasAutoNavigatedToMatch.current) {
+      hasAutoNavigatedToMatch.current = true;
+      setJustStartedTournament(false);
+      navigate(`/match/${userActiveMatches[0].id}`);
+    }
+  }, [userActiveMatches, justStartedTournament, navigate]);
 
   // Helper function to reload all tournament data
   const reloadTournamentData = async () => {
@@ -136,9 +173,17 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         setTeams(validTeams);
         
         // Load user teams if user is logged in
-        if (authUser?.uid) {
-          const userTeamsData = await getUserTeams(authUser.uid);
-          setUserTeams(userTeamsData);
+        if (authUser?.uid || authUser?.id) {
+          try {
+            const userId = authUser.id || authUser.uid;
+            if (userId) {
+              const userTeamsData = await getUserTeams(userId);
+              setUserTeams(userTeamsData);
+            }
+          } catch (error) {
+            console.warn('Failed to load user teams:', error);
+            setUserTeams([]);
+          }
         }
         
         // Load matches if tournament is in progress or completed
@@ -155,9 +200,14 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
   useEffect(() => {
     const loadTournamentData = async () => {
-      if (!id) return;
+      if (!id) {
+        console.log('No tournament ID provided');
+        setLoading(false);
+        return;
+      }
       
       setLoading(true);
+      setError('');
       try {
         console.log('Loading tournament data for ID:', id);
         
@@ -184,19 +234,34 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           setTeams(validTeams);
           
           // Load user teams if user is logged in
-          if (authUser?.uid) {
-            const userTeamsData = await getUserTeams(authUser.uid);
-            setUserTeams(userTeamsData);
+          if (authUser?.uid || authUser?.id) {
+            try {
+              const userId = authUser.id || authUser.uid;
+              if (userId) {
+                const userTeamsData = await getUserTeams(userId);
+                setUserTeams(userTeamsData);
+              }
+            } catch (error) {
+              console.warn('Failed to load user teams:', error);
+              setUserTeams([]);
+            }
           }
           
           // Load matches if tournament is in progress or completed
           if (foundTournament.status === 'in-progress' || foundTournament.status === 'completed' || foundTournament.status === 'group-stage' || foundTournament.status === 'knockout-stage') {
-            const matchesData = await getMatches();
-            const tournamentMatches = matchesData.filter(match => match.tournamentId === id);
-            setMatches(tournamentMatches);
+            try {
+              const matchesData = await getMatches();
+              const tournamentMatches = matchesData.filter(match => match.tournamentId === id);
+              setMatches(tournamentMatches);
+            } catch (error) {
+              console.warn('Failed to load matches:', error);
+              setMatches([]);
+            }
           }
         } else {
+          console.log('Tournament not found');
           setTournament(null);
+          setError('Tournament not found');
         }
       } catch (error) {
         console.error('Error loading tournament data:', error);
@@ -207,7 +272,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     };
 
     loadTournamentData();
-  }, [id, authUser]);
+  }, [id]); // Remove authUser from dependencies to prevent infinite loops
 
   // Separate pending and approved teams - MUST be called before any early returns
   useEffect(() => {
@@ -249,13 +314,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   // Check if user is admin - use authUser from useAuth() instead of currentUser prop
   const isAdmin = authUser?.isAdmin || false;
   
-  // Debug admin check
-  console.log('TournamentDetail - authUser:', authUser);
-  console.log('TournamentDetail - currentUser prop:', currentUser);
-  console.log('TournamentDetail - isAdmin:', isAdmin);
-  console.log('TournamentDetail - authUser?.isAdmin:', authUser?.isAdmin);
-  console.log('TournamentDetail - tournament:', tournament);
-
   const handleStartTournament = async () => {
     if (!tournament || starting) return;
     
@@ -321,20 +379,51 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   };
 
   const handleStartSingleElimination = async () => {
-    if (!tournament || !authUser) return;
+    if (!tournament?.id) return;
     
     setStarting(true);
     try {
-      await startSingleElimination(tournament.id);
+      // Use the correct start function based on tournament type
+      if (tournament.format?.type === 'double-elimination') {
+        await startDoubleElimination(tournament.id);
+      } else {
+        await startSingleElimination(tournament.id);
+      }
+      
       await reloadTournamentData();
-      toast.success('Single elimination tournament started!');
+      toast.success(`${tournament.format?.type === 'double-elimination' ? 'Double elimination' : 'Single elimination'} tournament started!`);
+      setJustStartedTournament(true);
+      // Fetch latest matches and update userActiveMatches
+      const matchesData = await getMatches();
+      const tournamentMatches = matchesData.filter(match => match.tournamentId === tournament.id);
+      const userTeamIds = userTeams.map(t => t.id);
+      const activeMatch = tournamentMatches.find(match =>
+        (match.team1Id && userTeamIds.includes(match.team1Id)) || (match.team2Id && userTeamIds.includes(match.team2Id))
+      );
+      if (activeMatch) {
+        setUserActiveMatches([activeMatch]);
+      }
     } catch (error) {
-      console.error('Error starting single elimination:', error);
-      toast.error('Failed to start single elimination tournament');
+      console.error('Error starting tournament:', error);
+      toast.error(`Failed to start ${tournament.format?.type === 'double-elimination' ? 'double elimination' : 'single elimination'} tournament`);
     } finally {
       setStarting(false);
     }
   };
+
+  // Update userActiveMatches whenever matches or userTeams change
+  useEffect(() => {
+    if (!matches.length || !userTeams.length) {
+      setUserActiveMatches([]);
+      return;
+    }
+    const userTeamIds = userTeams.map(t => t.id);
+    const activeMatches = matches.filter(match =>
+      !match.isComplete &&
+      ((match.team1Id && userTeamIds.includes(match.team1Id)) || (match.team2Id && userTeamIds.includes(match.team2Id)))
+    );
+    setUserActiveMatches(activeMatches);
+  }, [matches, userTeams]);
 
   const handleReopenRegistration = async () => {
     if (!tournament || !authUser) return;
@@ -544,11 +633,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         if (result.errors && result.errors.length > 0) {
           const errorMessage = result.errors.join('\n');
           toast.error(`Registration failed:\n${errorMessage}`);
-          
-          // If Discord requirements not met, show specific guidance
-          if (result.errors.some(error => error.includes('Discord'))) {
-            toast.error('Please link your Discord account in your profile and join our Discord server to register for this tournament.');
-          }
         } else {
           toast.error(result.message || 'Failed to register team');
         }
@@ -617,8 +701,19 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     return userTeams.filter(team => canSignup(team));
   };
 
-  const isUserTeamSignedUp = userTeams.some(team => team.id === userTeams[0]?.id);
+  // Correct logic: check if any user team is already signed up for this tournament
+  const isUserTeamSignedUp = userTeams.some(team => (tournament?.teams || []).includes(team.id));
   const canSignupForUser = authUser && userTeams.length > 0 && !isUserTeamSignedUp && tournament && tournament.status === 'registration-open';
+
+  // Debug information
+  console.log('🔍 DEBUG: Signup conditions:', {
+    authUser: !!authUser,
+    userTeamsLength: userTeams.length,
+    isUserTeamSignedUp,
+    tournamentExists: !!tournament,
+    tournamentStatus: tournament?.status,
+    canSignupForUser
+  });
 
   const handleAutoCompleteCurrentRound = async () => {
     if (!tournament || starting) return;
@@ -702,15 +797,46 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   };
 
   const loadUserTeams = async () => {
-    if (authUser?.uid) {
-      try {
-        const userTeamsData = await getUserTeams(authUser.uid);
+    if (!authUser?.uid && !authUser?.id) return;
+    
+    setLoadingUserTeams(true);
+    try {
+      const userId = authUser.id || authUser.uid;
+      if (userId) {
+        const userTeamsData = await getUserTeams(userId);
         setUserTeams(userTeamsData);
-      } catch (error) {
-        console.error('Error loading user teams:', error);
       }
+    } catch (error) {
+      console.error('Error loading user teams:', error);
+      setUserTeams([]);
+    } finally {
+      setLoadingUserTeams(false);
     }
   };
+
+  // Load user teams when component mounts or authUser changes
+  useEffect(() => {
+    // Only load if we don't already have teams loaded
+    if (userTeams.length === 0) {
+      loadUserTeams();
+    }
+  }, [authUser]);
+
+  // Add real-time listener for user teams
+  useEffect(() => {
+    if (!authUser?.uid && !authUser?.id) return;
+    
+    const userId = authUser.id || authUser.uid;
+    if (!userId) return;
+    
+    // Set up real-time listener for user teams
+    const unsubscribe = onUserTeamsChange(userId, (teams) => {
+      console.log('🔍 DEBUG: Real-time user teams update:', teams);
+      setUserTeams(teams);
+    });
+    
+    return () => unsubscribe();
+  }, [authUser]);
 
   // Add a function to withdraw the user's team from the tournament
   const handleWithdraw = async (teamId: string) => {
@@ -727,6 +853,176 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     } catch (error) {
       toast.error('Failed to withdraw from tournament.');
     }
+  };
+
+  const handleRevertTeamRegistration = async (teamId: string) => {
+    if (!tournament?.id) return;
+    
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+    
+    setRevertAction({
+      type: 'registration',
+      teamId,
+      teamName: team.name
+    });
+    setShowRevertConfirmation(true);
+  };
+
+  const handleRevertTeamApproval = async (teamId: string) => {
+    if (!tournament?.id) return;
+    
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+    
+    setRevertAction({
+      type: 'approval',
+      teamId,
+      teamName: team.name
+    });
+    setShowRevertConfirmation(true);
+  };
+
+  const handleRevertTeamRejection = async (teamId: string) => {
+    if (!tournament?.id) return;
+    
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+    
+    setRevertAction({
+      type: 'rejection',
+      teamId,
+      teamName: team.name
+    });
+    setShowRevertConfirmation(true);
+  };
+
+  const confirmRevertAction = async () => {
+    if (!revertAction || !tournament?.id) return;
+    
+    try {
+      switch (revertAction.type) {
+        case 'registration':
+          await revertTeamRegistration(tournament.id, revertAction.teamId);
+          toast.success('Team registration reverted successfully!');
+          break;
+        case 'approval':
+          await revertTeamApproval(tournament.id, revertAction.teamId);
+          toast.success('Team approval reverted successfully!');
+          break;
+        case 'rejection':
+          await revertTeamRejection(tournament.id, revertAction.teamId);
+          toast.success('Team rejection reverted successfully!');
+          break;
+      }
+      
+      await reloadTournamentData();
+    } catch (error) {
+      console.error('Error reverting team action:', error);
+      toast.error('Failed to revert team action');
+    } finally {
+      setShowRevertConfirmation(false);
+      setRevertAction(null);
+    }
+  };
+
+  const cancelRevertAction = () => {
+    setShowRevertConfirmation(false);
+    setRevertAction(null);
+  };
+
+  const handleRevertMatchResult = async (matchId: string) => {
+    const match = matches.find(m => m.id === matchId);
+    if (!match) return;
+    
+    const team1 = teams.find(t => t.id === match.team1Id);
+    const team2 = teams.find(t => t.id === match.team2Id);
+    
+    setBracketRevertAction({
+      type: 'match',
+      matchId,
+      description: `Revert match result between ${team1?.name || 'Team 1'} and ${team2?.name || 'Team 2'}`
+    });
+    setShowBracketRevertConfirmation(true);
+  };
+
+  const handleRevertTeamAdvancement = async (matchId: string, teamId: string) => {
+    const match = matches.find(m => m.id === matchId);
+    const team = teams.find(t => t.id === teamId);
+    if (!match || !team) return;
+    
+    setBracketRevertAction({
+      type: 'team-advancement',
+      matchId,
+      teamId,
+      description: `Revert ${team.name}'s advancement from match #${match.matchNumber}`
+    });
+    setShowBracketRevertConfirmation(true);
+  };
+
+  const handleRevertRound = async (round: number) => {
+    if (!tournament?.id) return;
+    
+    setBracketRevertAction({
+      type: 'round',
+      round,
+      description: `Revert round ${round} and remove teams that advanced from this round from all subsequent rounds`
+    });
+    setShowBracketRevertConfirmation(true);
+  };
+
+  const confirmBracketRevertAction = async () => {
+    if (!bracketRevertAction) return;
+    
+    try {
+      switch (bracketRevertAction.type) {
+        case 'match':
+          if (bracketRevertAction.matchId) {
+            await revertMatchResult(bracketRevertAction.matchId);
+            toast.success('Match result reverted successfully!');
+          }
+          break;
+        case 'team-advancement':
+          if (bracketRevertAction.matchId && bracketRevertAction.teamId) {
+            await revertTeamAdvancement(bracketRevertAction.matchId, bracketRevertAction.teamId);
+            toast.success('Team advancement reverted successfully!');
+          }
+          break;
+        case 'round':
+          if (bracketRevertAction.round && tournament?.id) {
+            console.log('Before revert - Bracket state:');
+            await debugBracketState(tournament.id);
+            
+            await revertRoundComprehensive(tournament.id, bracketRevertAction.round);
+            
+            console.log('After revert - Bracket state:');
+            await debugBracketState(tournament.id);
+            
+            toast.success(`Round ${bracketRevertAction.round} reverted successfully!`);
+          }
+          break;
+      }
+      
+      // Force refresh all data to ensure visual updates
+      await reloadTournamentData();
+      
+      // Additional delay to ensure Firebase updates are propagated
+      setTimeout(async () => {
+        await reloadTournamentData();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error reverting bracket action:', error);
+      toast.error('Failed to revert bracket action');
+    } finally {
+      setShowBracketRevertConfirmation(false);
+      setBracketRevertAction(null);
+    }
+  };
+
+  const cancelBracketRevertAction = () => {
+    setShowBracketRevertConfirmation(false);
+    setBracketRevertAction(null);
   };
 
   // Loading state
@@ -762,6 +1058,19 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
   return (
     <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden">
+      {/* Active Match Button (always at the top) */}
+      {userActiveMatches.length > 0 && (
+        <div className="fixed top-0 left-0 w-full z-50 flex justify-center bg-blue-900/90 py-2 shadow-lg">
+          <button
+            onClick={() => navigate(`/match/${userActiveMatches[0].id}`)}
+            className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-6 rounded-lg shadow-lg border border-blue-900 transition-all duration-200"
+          >
+            <Gamepad2 className="w-5 h-5" />
+            Active Match
+          </button>
+        </div>
+      )}
+
       {/* Code/terminal style header overlay */}
       <div className="absolute top-0 left-0 w-full px-4 pt-8 z-10 select-none pointer-events-none">
         <div className="text-sm md:text-lg lg:text-2xl text-gray-400 tracking-tight">
@@ -774,13 +1083,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
       {/* Main Content */}
       <div className="relative z-20 container mx-auto px-4 pt-24 pb-8">
-        {/* Show warning if not logged in */}
-        {(!authUser || !authUser.uid) && (
-          <div className="bg-yellow-900 text-yellow-200 border border-yellow-700 rounded-lg p-4 mb-4 text-center font-bold">
-            Warning: No user detected. Please log in to manage your team.
-          </div>
-        )}
-
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-center mb-2 tracking-tight bg-gradient-to-r from-red-500 to-white bg-clip-text text-transparent uppercase">
@@ -809,10 +1111,10 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
             <div className="text-red-400 font-bold text-sm mb-2">TEAMS</div>
             <div className="text-gray-200 text-lg font-bold">
-              {tournament.teams?.length || 0} / {tournament.requirements?.maxTeams || 8}
+              {tournament.teams?.length || 0} / {tournament.format?.teamCount || 8}
             </div>
             <div className="text-gray-400 text-xs mt-1">
-              {tournament.requirements?.maxTeams || 8} teams maximum
+              {tournament.format?.teamCount || 8} teams maximum
             </div>
           </div>
 
@@ -831,7 +1133,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-gray-400">Format:</span>
-              <span className="text-gray-200 ml-2 capitalize">{tournament.requirements?.format || 'Single Elimination'}</span>
+              <span className="text-gray-200 ml-2 capitalize">{tournament.format?.type?.replace(/-/g, ' ') || 'Single Elimination'}</span>
             </div>
             <div>
               <span className="text-gray-400">Team Size:</span>
@@ -839,11 +1141,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
             </div>
             <div>
               <span className="text-gray-400">Max Teams:</span>
-              <span className="text-gray-200 ml-2">{tournament.requirements?.maxTeams || 8}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Skill Level:</span>
-              <span className="text-gray-200 ml-2 capitalize">{tournament.requirements?.skillLevel || 'All Levels'}</span>
+              <span className="text-gray-200 ml-2">{tournament.format?.teamCount || 8}</span>
             </div>
           </div>
         </div>
@@ -852,32 +1150,24 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         {canSignupForUser && (
           <div className="bg-black/60 border border-gray-700 rounded-lg p-4 mb-8">
             <div className="text-red-400 font-bold text-sm mb-3">TEAM REGISTRATION</div>
-            
-            {/* Discord Requirement Notice */}
-            {tournament.requirements?.requireDiscord && (
-              <div className="bg-blue-900/20 border border-blue-500 rounded-lg p-3 mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <MessageCircle className="w-4 h-4 text-blue-400" />
-                  <span className="text-blue-400 font-bold text-sm">DISCORD REQUIRED</span>
-                </div>
-                <div className="text-blue-200 text-sm">
-                  All team members must have their Discord accounts linked and be members of our Discord server to register for this tournament.
-                </div>
-                <div className="text-blue-300 text-xs mt-2">
-                  • Link your Discord account in your profile<br/>
-                  • Join our Discord server: <a href="https://discord.gg/MZzEyX3peN" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-100">https://discord.gg/MZzEyX3peN</a>
-                </div>
-              </div>
-            )}
-            
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
-                <div className="text-gray-200 mb-1">Your Team: {userTeams[0].name}</div>
-                <div className="text-gray-400 text-sm">Click below to register your team for this tournament</div>
+                <div className="text-gray-200 mb-1">Select Your Team:</div>
+                <select
+                  className="bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 mb-2"
+                  value={selectedSignupTeamId || ''}
+                  onChange={e => setSelectedSignupTeamId(e.target.value)}
+                >
+                  <option value="" disabled>Select a team</option>
+                  {getAvailableUserTeams().map(team => (
+                    <option key={team.id} value={team.id}>{team.name}</option>
+                  ))}
+                </select>
+                <div className="text-gray-400 text-sm">Choose a team to register for this tournament</div>
               </div>
               <button
-                onClick={() => handleSignup(userTeams[0].id)}
-                disabled={!!signingUp}
+                onClick={() => { if (selectedSignupTeamId) handleSignup(selectedSignupTeamId); }}
+                disabled={!selectedSignupTeamId || !!signingUp}
                 className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg border border-red-800 transition-all duration-200"
               >
                 {signingUp ? 'Signing Up...' : 'Sign Up Team'}
@@ -886,164 +1176,142 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           </div>
         )}
 
-        {/* Admin Controls */}
-        {(() => {
-          console.log('Admin Controls Debug - isAdmin:', isAdmin);
-          console.log('Admin Controls Debug - tournament.status:', tournament.status);
-          console.log('Admin Controls Debug - tournament.type:', tournament.type);
-          return isAdmin;
-        })() && (
-          <div className="bg-black/60 border border-gray-700 rounded-lg p-4 mb-8">
-            <div className="text-red-400 font-bold text-sm mb-3">ADMIN CONTROLS</div>
-            
-            {/* Debug Info - Show on screen */}
-            <div className="bg-red-900/20 border border-red-500 rounded-lg p-3 mb-4">
-              <div className="text-red-400 font-bold text-xs mb-2">DEBUG INFO</div>
-              <div className="text-gray-300 text-xs space-y-1">
-                <div>isAdmin: {isAdmin ? 'true' : 'false'}</div>
-                <div>tournament.status: {tournament.status}</div>
-                <div>tournament.type: {tournament.type || 'undefined'}</div>
-                <div>registration-open: {tournament.status === 'registration-open' ? 'true' : 'false'}</div>
-                <div>group-stage: {tournament.status === 'group-stage' ? 'true' : 'false'}</div>
-                <div>in-progress/knockout: {(tournament.status === 'in-progress' || tournament.status === 'knockout-stage') ? 'true' : 'false'}</div>
-                <div>Total matches: {matches.length}</div>
-                <div>Completed matches: {matches.filter(m => m.isComplete).length}</div>
-                <div>Incomplete matches: {matches.filter(m => !m.isComplete).length}</div>
-                <div>Matches with teams: {matches.filter(m => m.team1Id && m.team2Id).length}</div>
-                <div>Current round: {matches.length > 0 ? Math.min(...matches.filter(m => !m.isComplete).map(m => m.round)) : 'N/A'}</div>
-              </div>
+        {/* Debug Section - Show why signup button isn't appearing */}
+        {!canSignupForUser && authUser && (
+          <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4 mb-8">
+            <div className="text-yellow-400 font-bold text-sm mb-3">SIGNUP STATUS</div>
+            <div className="text-gray-300 text-sm space-y-1">
+              <div>• User logged in: {authUser ? '✅' : '❌'}</div>
+              <div>• User has teams: {userTeams.length > 0 ? '✅' : '❌'} ({userTeams.length} teams)</div>
+              <div>• User team already signed up: {isUserTeamSignedUp ? '❌' : '✅'}</div>
+              <div>• Tournament exists: {tournament ? '✅' : '❌'}</div>
+              <div>• Tournament status: {tournament?.status || 'N/A'} {tournament?.status === 'registration-open' ? '✅' : '❌'}</div>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {/* Registration Controls */}
+            {userTeams.length === 0 && (
+              <div className="mt-3 text-yellow-300 text-sm">
+                💡 You need to create or join a team first. Go to your dashboard to create a team.
+              </div>
+            )}
+            {tournament?.status !== 'registration-open' && (
+              <div className="mt-3 text-yellow-300 text-sm">
+                💡 Tournament registration is not currently open.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Leave Tournament Button (formerly Withdraw) */}
+        {tournament && userTeams && userTeams.length > 0 && userTeams.some(team => (tournament.teams || []).includes(team.id)) && (
+          userTeams.map(team => {
+            // Use both authUser.id and authUser.uid for compatibility
+            const userId = authUser?.uid || authUser?.id;
+            const isCaptainOrOwner = team.captainId === userId || team.ownerId === userId;
+            return (tournament.teams || []).includes(team.id) && isCaptainOrOwner ? (
+              <button
+                key={team.id}
+                onClick={() => handleWithdraw(team.id)}
+                className="bg-yellow-700 hover:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg shadow-lg border border-yellow-900 transition-all duration-200 mt-4 mb-8"
+              >
+                Leave Tournament
+              </button>
+            ) : null;
+          })
+        )}
+
+        {/* Admin Tools (smaller, top-right) */}
+        {isAdmin && (
+          <div className="fixed top-28 right-8 z-40 bg-black/80 border border-yellow-700 rounded-lg p-3 w-64 shadow-lg">
+            <div className="text-yellow-400 font-bold text-xs mb-2 text-center">ADMIN TOOLS</div>
+            <div className="grid grid-cols-1 gap-2">
               {tournament.status === 'registration-open' && (
                 <>
                   <button
                     onClick={handleFillDemoTeams}
                     disabled={starting}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-purple-800 transition-all duration-200 text-sm"
+                    className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-1 px-2 rounded text-xs border border-purple-900 transition-all duration-200"
                   >
-                    <Zap className="w-4 h-4 inline mr-2" />
+                    Fill Demo Teams
                   </button>
-                
                   <button
                     onClick={handleStartGroupStage}
                     disabled={starting}
-                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-800 transition-all duration-200 text-sm"
+                    className="bg-green-700 hover:bg-green-800 text-white font-bold py-1 px-2 rounded text-xs border border-green-900 transition-all duration-200"
                   >
-                    <Grid3X3 className="w-4 h-4 inline mr-2" />
+                    Start Group Stage
                   </button>
-                
                   <button
                     onClick={handleStartSingleElimination}
                     disabled={starting}
-                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-800 transition-all duration-200 text-sm"
+                    className="bg-green-700 hover:bg-green-800 text-white font-bold py-1 px-2 rounded text-xs border border-green-900 transition-all duration-200"
                   >
-                    <Play className="w-4 h-4 inline mr-2" />
+                    Start {tournament.format?.type === 'double-elimination' ? 'Double Elim' : 'Single Elim'}
                   </button>
                 </>
               )}
-              
-              {/* Registration-Closed Controls */}
               {tournament.status === 'registration-closed' && (
                 <>
                   <button
                     onClick={handleReopenRegistration}
                     disabled={starting}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-blue-800 transition-all duration-200 text-sm"
+                    className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-1 px-2 rounded text-xs border border-blue-900 transition-all duration-200"
                   >
-                    <RotateCcw className="w-4 h-4 inline mr-2" />
+                    Reopen Registration
                   </button>
                   <button
                     onClick={handleStartGroupStage}
                     disabled={starting}
-                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-800 transition-all duration-200 text-sm"
+                    className="bg-green-700 hover:bg-green-800 text-white font-bold py-1 px-2 rounded text-xs border border-green-900 transition-all duration-200"
                   >
-                    <Grid3X3 className="w-4 h-4 inline mr-2" />
+                    Start Group Stage
                   </button>
                   <button
                     onClick={handleStartSingleElimination}
                     disabled={starting}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-purple-800 transition-all duration-200 text-sm"
+                    className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-1 px-2 rounded text-xs border border-purple-900 transition-all duration-200"
                   >
-                    <Play className="w-4 h-4 inline mr-2" />
+                    Start {tournament.format?.type === 'double-elimination' ? 'Double Elim' : 'Single Elim'}
                   </button>
                 </>
               )}
-              
-              {/* Group Stage Controls */}
               {tournament.status === 'group-stage' && (
-                <>
-                  <button
-                    onClick={handleStartKnockoutStage}
-                    disabled={starting}
-                    className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-orange-800 transition-all duration-200 text-sm"
-                  >
-                    <TrendingUp className="w-4 h-4 inline mr-2" />
-                      Start Knockout Stage
-                  </button>
-                </>
+                <button
+                  onClick={handleStartKnockoutStage}
+                  disabled={starting}
+                  className="bg-orange-700 hover:bg-orange-800 text-white font-bold py-1 px-2 rounded text-xs border border-orange-900 transition-all duration-200"
+                >
+                  Start Knockout Stage
+                </button>
               )}
-              
-              {/* Tournament Progress Controls */}
               {(tournament.status === 'in-progress' || tournament.status === 'knockout-stage') && (
                 <>
                   <button
                     onClick={handleRegenerateBracket}
                     disabled={starting}
-                    className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-yellow-800 transition-all duration-200 text-sm"
+                    className="bg-yellow-700 hover:bg-yellow-800 text-white font-bold py-1 px-2 rounded text-xs border border-yellow-900 transition-all duration-200"
                   >
-                    <RotateCcw className="w-4 h-4 inline mr-2" />
+                    Regenerate Bracket
                   </button>
-                
                   <button
                     onClick={handleAutoCompleteCurrentRound}
                     disabled={starting}
-                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-800 transition-all duration-200 text-sm"
+                    className="bg-red-700 hover:bg-red-800 text-white font-bold py-1 px-2 rounded text-xs border border-red-900 transition-all duration-200"
                   >
-                    <FastForward className="w-4 h-4 inline mr-2" />
+                    Auto-Complete Round
                   </button>
                 </>
-              )}
-              {/* Withdraw Button for Registered Teams */}
-              <div className="bg-black/60 border border-yellow-700 rounded-lg p-4 mb-4">
-                <div className="text-yellow-400 font-bold text-xs mb-2">WITHDRAW BUTTON DEBUG</div>
-                <div className="text-gray-300 text-xs space-y-1">
-                  <div>authUser: {JSON.stringify(authUser)}</div>
-                  <div>userTeams: {JSON.stringify(userTeams)}</div>
-                  <div>tournament.teams: {JSON.stringify(tournament.teams)}</div>
-                  <div>tournament.status: {tournament.status}</div>
-                  <div>userTeams.length: {userTeams.length}</div>
-                  <div>Any user team in tournament: {userTeams.some(team => (tournament.teams || []).includes(team.id)) ? 'true' : 'false'}</div>
-                  <div>Teams with withdraw rights: {JSON.stringify(userTeams.map(team => (tournament.teams || []).includes(team.id) && (team.captainId === authUser?.uid || team.ownerId === authUser?.uid)))}</div>
-                </div>
-              </div>
-              {tournament.status === 'registration-open' && userTeams && userTeams.length > 0 && userTeams.some(team => (tournament.teams || []).includes(team.id)) && (
-                userTeams.map(team => (
-                  (tournament.teams || []).includes(team.id) && (team.captainId === authUser?.uid || team.ownerId === authUser?.uid) ? (
-                    <button
-                      key={team.id}
-                      onClick={() => handleWithdraw(team.id)}
-                      className="border border-red-500 text-red-500 hover:bg-red-500 hover:text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-all duration-200 text-sm mt-2"
-                    >
-                      Withdraw Team
-                    </button>
-                  ) : null
-                ))
               )}
             </div>
           </div>
         )}
 
-        {/* Team Approval Section (for admins) */}
+        {/* Tournament Teams Debug */}
         {/* Removed for now */}
 
         {/* Navigation Tabs */}
         <div className="flex border-b border-gray-700 mb-6">
           {[
             { key: 'overview', label: 'OVERVIEW' },
-            { key: 'bracket', label: 'BRACKET' },
-            { key: 'schedule', label: 'SCHEDULE' }
+            { key: 'bracket', label: 'BRACKET' }
           ].map((tab) => (
             <button
               key={tab.key}
@@ -1069,10 +1337,61 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {tournament.teams?.map(teamId => {
                     const team = teams.find(t => t.id === teamId);
+                    const isApproved = tournament.approvedTeams?.includes(teamId);
+                    const isRejected = tournament.rejectedTeams?.includes(teamId);
+                    const isPending = false; // pendingTeams doesn't exist in Tournament type
+                    
                     return team ? (
                       <div key={teamId} className="bg-black/40 border border-gray-600 rounded-lg p-3">
                         <div className="text-gray-200 font-bold">{team.name}</div>
-                        <div className="text-gray-400 text-xs">{team.members?.length || 0} members</div>
+                        <div className="text-gray-400 text-xs mb-2">{team.members?.length || 0} members</div>
+                        
+                        {/* Status Badge */}
+                        <div className="mb-2">
+                          {isApproved && (
+                            <span className="bg-green-900/50 text-green-400 px-2 py-1 rounded text-xs">Approved</span>
+                          )}
+                          {isRejected && (
+                            <span className="bg-red-900/50 text-red-400 px-2 py-1 rounded text-xs">Rejected</span>
+                          )}
+                          {isPending && (
+                            <span className="bg-yellow-900/50 text-yellow-400 px-2 py-1 rounded text-xs">Pending</span>
+                          )}
+                          {!isApproved && !isRejected && !isPending && (
+                            <span className="bg-blue-900/50 text-blue-400 px-2 py-1 rounded text-xs">Registered</span>
+                          )}
+                        </div>
+                        
+                        {/* Revert Actions */}
+                        {isAdmin && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {isApproved && (
+                              <button
+                                onClick={() => handleRevertTeamApproval(teamId)}
+                                className="bg-yellow-700 hover:bg-yellow-800 text-white px-2 py-1 rounded text-xs border border-yellow-900 transition-all duration-200"
+                                title="Revert Approval"
+                              >
+                                Revert Approval
+                              </button>
+                            )}
+                            {isRejected && (
+                              <button
+                                onClick={() => handleRevertTeamRejection(teamId)}
+                                className="bg-blue-700 hover:bg-blue-800 text-white px-2 py-1 rounded text-xs border border-blue-900 transition-all duration-200"
+                                title="Revert Rejection"
+                              >
+                                Revert Rejection
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleRevertTeamRegistration(teamId)}
+                              className="bg-red-700 hover:bg-red-800 text-white px-2 py-1 rounded text-xs border border-red-900 transition-all duration-200"
+                              title="Remove Team"
+                            >
+                              Remove Team
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ) : null;
                   })}
@@ -1081,6 +1400,84 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   <div className="text-gray-400 text-sm">No teams registered yet</div>
                 )}
               </div>
+              
+              {/* Pending Teams (if any) */}
+              {tournament.approvedTeams && tournament.approvedTeams.length > 0 && (
+                <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
+                  <div className="text-yellow-400 font-bold text-sm mb-3">APPROVED TEAMS</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {tournament.approvedTeams.map(teamId => {
+                      const team = teams.find(t => t.id === teamId);
+                      return team ? (
+                        <div key={teamId} className="bg-black/40 border border-green-600 rounded-lg p-3">
+                          <div className="text-gray-200 font-bold">{team.name}</div>
+                          <div className="text-gray-400 text-xs mb-2">{team.members?.length || 0} members</div>
+                          <span className="bg-green-900/50 text-green-400 px-2 py-1 rounded text-xs">Approved</span>
+                          
+                          {/* Revert Actions */}
+                          {isAdmin && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              <button
+                                onClick={() => handleRevertTeamApproval(teamId)}
+                                className="bg-yellow-700 hover:bg-yellow-800 text-white px-2 py-1 rounded text-xs border border-yellow-900 transition-all duration-200"
+                                title="Revert Approval"
+                              >
+                                Revert Approval
+                              </button>
+                              <button
+                                onClick={() => handleRevertTeamRegistration(teamId)}
+                                className="bg-red-700 hover:bg-red-800 text-white px-2 py-1 rounded text-xs border border-red-900 transition-all duration-200"
+                                title="Remove Team"
+                              >
+                                Remove Team
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {/* Rejected Teams (if any) */}
+              {tournament.rejectedTeams && tournament.rejectedTeams.length > 0 && (
+                <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
+                  <div className="text-red-400 font-bold text-sm mb-3">REJECTED TEAMS</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {tournament.rejectedTeams.map(teamId => {
+                      const team = teams.find(t => t.id === teamId);
+                      return team ? (
+                        <div key={teamId} className="bg-black/40 border border-red-600 rounded-lg p-3">
+                          <div className="text-gray-200 font-bold">{team.name}</div>
+                          <div className="text-gray-400 text-xs mb-2">{team.members?.length || 0} members</div>
+                          <span className="bg-red-900/50 text-red-400 px-2 py-1 rounded text-xs">Rejected</span>
+                          
+                          {/* Revert Actions */}
+                          {isAdmin && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              <button
+                                onClick={() => handleRevertTeamRejection(teamId)}
+                                className="bg-blue-700 hover:bg-blue-800 text-white px-2 py-1 rounded text-xs border border-blue-900 transition-all duration-200"
+                                title="Revert Rejection"
+                              >
+                                Revert Rejection
+                              </button>
+                              <button
+                                onClick={() => handleRevertTeamRegistration(teamId)}
+                                className="bg-red-700 hover:bg-red-800 text-white px-2 py-1 rounded text-xs border border-red-900 transition-all duration-200"
+                                title="Remove Team"
+                              >
+                                Remove Team
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
               
               {/* Tournament Progress */}
               {matches.length > 0 && (
@@ -1119,6 +1516,9 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   isAdmin={isAdmin}
                   onCompleteMatch={handleCompleteSingleMatch}
                   onRefresh={reloadTournamentData}
+                  onRevertMatchResult={handleRevertMatchResult}
+                  onRevertTeamAdvancement={handleRevertTeamAdvancement}
+                  onRevertRound={handleRevertRound}
                 />
               )}
             </div>
@@ -1148,8 +1548,73 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           onMembersSelected={handleTeamMembersSelected}
           onCancel={handleCancelTeamMemberSelection}
           tournamentId={tournament.id}
-          maxPlayers={tournament.maxPlayers || 5}
+          maxPlayers={tournament.requirements?.maxPlayers || 5}
         />
+      )}
+
+      {/* Revert Confirmation Modal */}
+      {showRevertConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="text-red-400 font-bold text-lg mb-4">CONFIRM REVERT ACTION</div>
+            
+            <div className="text-gray-300 mb-6">
+              <p>Are you sure you want to revert the {revertAction?.type} for team:</p>
+              <p className="font-bold text-white mt-2">{revertAction?.teamName}?</p>
+              
+              <div className="mt-4 p-3 bg-red-900/20 border border-red-500 rounded">
+                <p className="text-red-400 text-sm">
+                  {revertAction?.type === 'registration' ? 'This will completely remove the team from the tournament.' : ''}
+                  {revertAction?.type === 'approval' ? 'This will move the team back to pending status.' : ''}
+                  {revertAction?.type === 'rejection' ? 'This will move the team back to pending status.' : ''}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={cancelRevertAction}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRevertAction}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors"
+              >
+                Confirm Revert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bracket Revert Confirmation Modal */}
+      {showBracketRevertConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="text-red-400 font-bold text-lg mb-4">CONFIRM REVERT ACTION</div>
+            
+            <div className="text-gray-300 mb-6">
+              <p>{bracketRevertAction?.description}</p>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={cancelBracketRevertAction}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmBracketRevertAction}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors"
+              >
+                Confirm Revert
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

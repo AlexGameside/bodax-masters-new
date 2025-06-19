@@ -73,7 +73,7 @@ export interface Match {
   matchNumber: number;
   nextMatchId?: string;
   tournamentId?: string; // ID of the tournament this match belongs to
-  tournamentType: 'qualifier' | 'final' | 'single-elim' | 'group-stage' | 'knockout-stage';
+  tournamentType: 'qualifier' | 'final' | 'single-elim' | 'double-elim' | 'group-stage' | 'knockout-stage';
   bracketType?: 'winners' | 'losers' | 'grand_final';
   createdAt: Date;
   // Map banning system

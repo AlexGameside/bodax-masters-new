@@ -199,18 +199,14 @@ app.use((req, res) => {
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Discord bot API server running on port ${PORT}`);
-  console.log(`Health check available at: http://localhost:${PORT}/`);
-  console.log(`API health check at: http://localhost:${PORT}/api/health`);
+  process.exit(0);
 });
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
   process.exit(0); 
 }); 

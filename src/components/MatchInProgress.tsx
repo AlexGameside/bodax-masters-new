@@ -153,7 +153,6 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
               <p className="text-gray-300">Submit your results when the match is complete</p>
             </div>
           </div>
-          
           {/* Need Help Button */}
           <button
             onClick={handleCreateDispute}
@@ -164,6 +163,16 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
             <span>{isCreatingDispute ? 'Creating...' : 'Need Help?'}</span>
           </button>
         </div>
+        {/* Sides Display */}
+        {match.team1Side && match.team2Side && (
+          <div className="mt-4">
+            <h4 className="text-sm font-medium text-gray-300 mb-1">Sides</h4>
+            <div className="text-sm">
+              <div className="text-red-400">{team1?.name}: {match.team1Side === 'attack' ? 'Attack' : 'Defense'}</div>
+              <div className="text-blue-400">{team2?.name}: {match.team2Side === 'attack' ? 'Attack' : 'Defense'}</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Result Submission */}

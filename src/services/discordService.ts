@@ -114,7 +114,14 @@ export const addUserToDiscordServer = async (userId: string, guildId: string, bo
 export const checkUserInDiscordServer = async (discordId: string): Promise<boolean> => {
   try {
     const discordApiUrl = import.meta.env.VITE_DISCORD_API_URL || 'https://bodax-masters.onrender.com';
-    const response = await fetch(`${discordApiUrl}/api/check-server-membership`, {
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise<Response>((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 5000); // 5 second timeout
+    });
+    
+    // Create the fetch promise
+    const fetchPromise = fetch(`${discordApiUrl}/api/check-server-membership`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -124,6 +131,9 @@ export const checkUserInDiscordServer = async (discordId: string): Promise<boole
         serverId: DISCORD_SERVER_ID,
       }),
     });
+    
+    // Race between fetch and timeout
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (!response.ok) {
       return false;
@@ -228,4 +238,42 @@ export const sendTournamentNotification = async (
   });
 
   return { success, failed };
+};
+
+// Send Discord notification to specific users
+export const sendDiscordNotification = async (userIds: string[], title: string, message: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const discordApiUrl = import.meta.env.VITE_DISCORD_API_URL || 'https://bodax-masters.onrender.com';
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise<Response>((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
+    });
+    
+    // Create the fetch promise
+    const fetchPromise = fetch(`${discordApiUrl}/api/send-discord-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userIds,
+        title,
+        message,
+      }),
+    });
+    
+    // Race between fetch and timeout
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (response.ok) {
+      return { success: true };
+    } else {
+      const errorData = await response.json();
+      return { success: false, error: errorData.error || 'Failed to send notification' };
+    }
+  } catch (error) {
+    console.error('Error sending Discord notification:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }; 

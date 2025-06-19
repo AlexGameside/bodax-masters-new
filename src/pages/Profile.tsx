@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { updateUserProfile, getUserMatches, getUserTeams, inviteTeamMember, leaveTeam, deleteTeam } from '../services/firebaseService';
+import { 
+  updateUserProfile, 
+  updateUserDiscordInfo, 
+  unlinkDiscordAccount,
+  leaveTeam, 
+  deleteTeam, 
+  inviteTeamMember, 
+  getUserTeams, 
+  getUserMatches 
+} from '../services/firebaseService';
 import { resetPassword } from '../services/authService';
 import type { User, Match, Team } from '../types/tournament';
 import { Shield, Users, Trophy, Settings, UserPlus, LogOut, Edit3, Save, X, Trash2, ExternalLink, MessageCircle } from 'lucide-react';
@@ -8,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { getDiscordAuthUrl } from '../services/discordService';
 
 const Profile = () => {
-  const { currentUser, loading } = useAuth();
+  const { currentUser, loading, refreshUser } = useAuth();
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('profile');
@@ -26,6 +35,7 @@ const Profile = () => {
   const [message, setMessage] = useState('');
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (currentUser) {
@@ -130,10 +140,25 @@ const Profile = () => {
       setMessage('Password reset email sent! Check your inbox.');
       setTimeout(() => setMessage(''), 5000);
     } catch (error: any) {
-      setMessage(error.message || 'Error sending password reset email');
-      setTimeout(() => setMessage(''), 5000);
+      setError(error.message || 'Error sending password reset email');
+      setTimeout(() => setError(''), 5000);
     } finally {
       setIsResettingPassword(false);
+    }
+  };
+
+  const handleUnlinkDiscord = async () => {
+    if (!currentUser) return;
+    
+    try {
+      await unlinkDiscordAccount(currentUser.id);
+      // Refresh user data to reflect the unlink
+      await refreshUser();
+      setMessage('Discord account unlinked successfully!');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setError('Failed to unlink Discord account');
+      setTimeout(() => setError(''), 5000);
     }
   };
 
@@ -202,6 +227,13 @@ const Profile = () => {
         {message && (
           <div className="mb-6 p-4 bg-green-900/50 border border-green-700 text-green-300 rounded-lg">
             {message}
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-900/50 border border-red-700 text-red-300 rounded-lg">
+            {error}
           </div>
         )}
 
@@ -334,11 +366,7 @@ const Profile = () => {
                           {currentUser.discordUsername || 'Discord User'}
                         </span>
                         <button
-                          onClick={() => {
-                            // TODO: Implement unlink functionality
-                            setMessage('Discord unlink functionality coming soon');
-                            setTimeout(() => setMessage(''), 3000);
-                          }}
+                          onClick={handleUnlinkDiscord}
                           className="text-red-400 hover:text-red-300 text-sm transition-colors"
                         >
                           Unlink

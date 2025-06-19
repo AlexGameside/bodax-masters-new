@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { toast } from 'react-hot-toast';
-import { handleTeamReadyUp, getMatch, getTeams, getUserTeamForMatch, selectMap, getTeamPlayers, updateTeamActivePlayers } from '../services/firebaseService';
+import { handleTeamReadyUp, getMatch, getTeams, getUserTeamForMatch, selectMap, getTeamPlayers, updateTeamActivePlayers, getTeamById } from '../services/firebaseService';
 import { useAuth } from '../hooks/useAuth';
 import type { Match, Team, User } from '../types/tournament';
 import ReadyUpModal from '../components/ReadyUpModal';
@@ -14,7 +14,8 @@ import MatchChat from '../components/MatchChat';
 import { ArrowLeft, Trophy, Clock, CheckCircle, User as UserIcon, BarChart3 } from 'lucide-react';
 
 const MatchPage = () => {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ matchId: string }>();
+  const { matchId: id } = params;
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   
@@ -26,50 +27,77 @@ const MatchPage = () => {
   const [showReadyUpModal, setShowReadyUpModal] = useState(false);
   const [teamPlayers, setTeamPlayers] = useState<User[]>([]);
   const [activePlayers, setActivePlayers] = useState<string[]>([]);
+  const [adminReadyUpTeam, setAdminReadyUpTeam] = useState<Team | null>(null);
+  const [showTeamSelectionModal, setShowTeamSelectionModal] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      return;
+    }
 
     const loadMatchData = async () => {
+      const timeoutId = setTimeout(() => {
+        toast.error('Loading timeout - please refresh the page');
+      }, 10000);
+
       try {
         setLoading(true);
         
-        // Get match data
         const matchData = await getMatch(id);
+        
         if (!matchData) {
           toast.error('Match not found');
           navigate('/tournaments');
           return;
         }
+        
         setMatch(matchData);
 
-        // Get all teams
-        const allTeams = await getTeams();
-        setTeams(allTeams);
+        const matchTeams: Team[] = [];
+        
+        if (matchData.team1Id) {
+          const team1 = await getTeamById(matchData.team1Id);
+          if (team1) matchTeams.push(team1);
+        }
+        
+        if (matchData.team2Id) {
+          const team2 = await getTeamById(matchData.team2Id);
+          if (team2) matchTeams.push(team2);
+        }
+        
+        setTeams(matchTeams);
 
-        // Get user's team for this match
         if (currentUser) {
-          const userTeamData = await getUserTeamForMatch(currentUser.id, matchData);
-          setUserTeam(userTeamData);
+          if (currentUser.isAdmin) {
+            setUserTeam(null);
+          } else {
+            const userTeamData = await getUserTeamForMatch(currentUser.id, matchData);
+            console.log('MatchPage Debug - getUserTeamForMatch result:', {
+              userId: currentUser.id,
+              matchId: matchData.id,
+              team1Id: matchData.team1Id,
+              team2Id: matchData.team2Id,
+              userTeamData: userTeamData ? { id: userTeamData.id, name: userTeamData.name } : null
+            });
+            setUserTeam(userTeamData);
 
-          // If user has a team, load team players for ready up modal
-          if (userTeamData) {
-            const players = await getTeamPlayers(userTeamData.id);
-            setTeamPlayers(players);
+            if (userTeamData) {
+              const players = await getTeamPlayers(userTeamData.id);
+              setTeamPlayers(players);
+            }
           }
         }
 
       } catch (error) {
-        console.error('Error loading match data:', error);
         toast.error('Failed to load match data');
       } finally {
+        clearTimeout(timeoutId);
         setLoading(false);
       }
     };
 
     loadMatchData();
 
-    // Set up real-time listener for match updates
     const matchRef = doc(db, 'matches', id);
     const unsubscribe = onSnapshot(matchRef, (doc) => {
       if (doc.exists()) {
@@ -112,35 +140,54 @@ const MatchPage = () => {
           resolvedAt: data.resolvedAt?.toDate()
         });
       }
+    }, (error) => {
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, [id, currentUser, navigate]);
 
   const handleReadyUp = async () => {
-    if (!match || !userTeam || !currentUser) return;
+    if (!match || !currentUser) return;
+    
+    if (currentUser.isAdmin && !userTeam) {
+      setShowTeamSelectionModal(true);
+      return;
+    }
+    
+    if (!userTeam) return;
     
     setShowReadyUpModal(true);
   };
 
   const handleSetActivePlayers = async (selectedPlayers: string[]) => {
-    if (!userTeam) return;
+    if (!currentUser) return;
     
     try {
       setReadyingUp(true);
       
-      // Update team's active players
-      await updateTeamActivePlayers(userTeam.id, selectedPlayers);
+      let targetTeam: Team | null = userTeam;
       
-      // Mark team as ready
-      await handleTeamReadyUp(match!.id, userTeam.id);
+      if (currentUser.isAdmin && adminReadyUpTeam) {
+        targetTeam = adminReadyUpTeam;
+      }
+      
+      if (!targetTeam) {
+        toast.error('No team selected for ready-up');
+        return;
+      }
+      
+      await updateTeamActivePlayers(targetTeam.id, selectedPlayers);
+      
+      await handleTeamReadyUp(match!.id, targetTeam.id);
       
       setActivePlayers(selectedPlayers);
       setShowReadyUpModal(false);
+      setAdminReadyUpTeam(null);
       toast.success('Team is ready!');
       
     } catch (error) {
-      console.error('Error setting active players:', error);
       toast.error('Failed to ready up');
     } finally {
       setReadyingUp(false);
@@ -154,7 +201,6 @@ const MatchPage = () => {
       await handleMapBanningComplete();
       toast.success('Map banning completed!');
     } catch (error) {
-      console.error('Error completing map banning:', error);
       toast.error('Failed to complete map banning');
     }
   };
@@ -165,7 +211,6 @@ const MatchPage = () => {
     const states = ['ready_up', 'map_banning', 'side_selection', 'playing', 'waiting_results', 'completed'];
     const currentStep = states.indexOf(match.matchState) + 1;
     
-    // For dispute state, use the step before it (waiting_results)
     const actualStep = match.matchState === 'disputed' ? 5 : currentStep;
     
     const labels = {
@@ -190,15 +235,16 @@ const MatchPage = () => {
   const team1 = teams.find(t => t.id === match?.team1Id);
   const team2 = teams.find(t => t.id === match?.team2Id);
   
-  const canReadyUp = userTeam && match?.matchState === 'ready_up' && 
+  const canReadyUp = (userTeam && match?.matchState === 'ready_up' && 
     ((userTeam.id === match.team1Id && !match.team1Ready) || 
-     (userTeam.id === match.team2Id && !match.team2Ready));
+     (userTeam.id === match.team2Id && !match.team2Ready))) ||
+    (currentUser?.isAdmin && match?.matchState === 'ready_up' && 
+     (!match.team1Ready || !match.team2Ready));
   
   const userTeamAlreadyReady = userTeam && 
     ((userTeam.id === match?.team1Id && match?.team1Ready) || 
      (userTeam.id === match?.team2Id && match?.team2Ready));
 
-  // Get full user data for teams to display Riot names
   const [team1Players, setTeam1Players] = useState<User[]>([]);
   const [team2Players, setTeam2Players] = useState<User[]>([]);
 
@@ -219,7 +265,6 @@ const MatchPage = () => {
     }
   }, [team1, team2]);
 
-  // Only show Riot names and chat after both teams are ready
   const bothTeamsReady = match?.team1Ready && match?.team2Ready;
 
   if (loading) {
@@ -245,7 +290,6 @@ const MatchPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      {/* Header */}
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -272,7 +316,6 @@ const MatchPage = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Progress Bar */}
         <div className="bg-gray-800 rounded-lg shadow-sm p-6 mb-6 border border-gray-700">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white flex items-center">
@@ -297,9 +340,7 @@ const MatchPage = () => {
           </div>
         </div>
 
-        {/* Match Info */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Team 1 */}
           <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
             <div className="text-center">
               <h3 className="text-lg font-semibold text-white mb-2">{team1?.name || 'Team 1'}</h3>
@@ -313,8 +354,20 @@ const MatchPage = () => {
                   {match.team1Ready ? 'Ready' : 'Not Ready'}
                 </span>
               </div>
+              {currentUser?.isAdmin && team1 && team1Players.length > 0 && (
+                <button
+                  className="mt-2 mb-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded text-xs"
+                  onClick={() => {
+                    setShowReadyUpModal(true);
+                    setTeamPlayers(team1Players);
+                    setActivePlayers((team1 as any).activePlayers || []);
+                    setAdminReadyUpTeam(team1);
+                  }}
+                >
+                  Admin: Force Ready Up & Select Players
+                </button>
+              )}
               
-              {/* Show Riot names only after both teams ready up */}
               {bothTeamsReady && team1Players.length > 0 && (
                 <div className="mt-4">
                   <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center justify-center">
@@ -333,7 +386,6 @@ const MatchPage = () => {
             </div>
           </div>
 
-          {/* Match Status */}
           <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
             <div className="text-center">
               <h3 className="text-lg font-semibold text-white mb-2">Match Status</h3>
@@ -376,7 +428,6 @@ const MatchPage = () => {
             </div>
           </div>
 
-          {/* Team 2 */}
           <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
             <div className="text-center">
               <h3 className="text-lg font-semibold text-white mb-2">{team2?.name || 'Team 2'}</h3>
@@ -390,8 +441,20 @@ const MatchPage = () => {
                   {match.team2Ready ? 'Ready' : 'Not Ready'}
                 </span>
               </div>
+              {currentUser?.isAdmin && team2 && team2Players.length > 0 && (
+                <button
+                  className="mt-2 mb-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded text-xs"
+                  onClick={() => {
+                    setShowReadyUpModal(true);
+                    setTeamPlayers(team2Players);
+                    setActivePlayers((team2 as any).activePlayers || []);
+                    setAdminReadyUpTeam(team2);
+                  }}
+                >
+                  Admin: Force Ready Up & Select Players
+                </button>
+              )}
               
-              {/* Show Riot names only after both teams ready up */}
               {bothTeamsReady && team2Players.length > 0 && (
                 <div className="mt-4">
                   <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center justify-center">
@@ -411,7 +474,6 @@ const MatchPage = () => {
           </div>
         </div>
 
-        {/* Ready Up Section */}
         {match.matchState === 'ready_up' && (
           <div className="bg-gray-800 rounded-lg shadow-sm p-6 mb-6 border border-gray-700">
             <div className="text-center">
@@ -435,7 +497,7 @@ const MatchPage = () => {
                   ) : (
                     <>
                       <CheckCircle className="w-5 h-5 mr-2" />
-                      Select Players & Ready Up
+                      {currentUser?.isAdmin && !userTeam ? 'Admin: Select Team & Ready Up' : 'Select Players & Ready Up'}
                     </>
                   )}
                 </button>
@@ -444,8 +506,53 @@ const MatchPage = () => {
                   <CheckCircle className="w-6 h-6 mr-2" />
                   <span className="font-semibold">You are ready!</span>
                 </div>
-              ) : !userTeam ? (
+              ) : !userTeam && !currentUser?.isAdmin ? (
                 <p className="text-gray-400">Your team is not in this match</p>
+              ) : currentUser?.isAdmin && !userTeam ? (
+                <div className="space-y-4">
+                  <p className="text-blue-400 font-medium">Admin Controls</p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    {team1 && !match.team1Ready && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const players = await getTeamPlayers(team1.id);
+                            setTeamPlayers(players);
+                            setActivePlayers((team1 as any).activePlayers || []);
+                            setAdminReadyUpTeam(team1);
+                            setShowReadyUpModal(true);
+                          } catch (error) {
+                            toast.error('Failed to load team players');
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg transition-colors text-sm"
+                      >
+                        Admin: Ready Up {team1.name}
+                      </button>
+                    )}
+                    {team2 && !match.team2Ready && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const players = await getTeamPlayers(team2.id);
+                            setTeamPlayers(players);
+                            setActivePlayers((team2 as any).activePlayers || []);
+                            setAdminReadyUpTeam(team2);
+                            setShowReadyUpModal(true);
+                          } catch (error) {
+                            toast.error('Failed to load team players');
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg transition-colors text-sm"
+                      >
+                        Admin: Ready Up {team2.name}
+                      </button>
+                    )}
+                  </div>
+                  {match.team1Ready && match.team2Ready && (
+                    <p className="text-green-400 text-sm">Both teams are ready!</p>
+                  )}
+                </div>
               ) : (
                 <p className="text-gray-400">Waiting for both teams to ready up...</p>
               )}
@@ -453,11 +560,8 @@ const MatchPage = () => {
           </div>
         )}
 
-        {/* Main Content and Chat Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-          {/* Main Content */}
           <div className="lg:col-span-3">
-            {/* Map Banning Section */}
             {match.matchState === 'map_banning' && (
               <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
                 <MapBanning
@@ -468,7 +572,6 @@ const MatchPage = () => {
               </div>
             )}
 
-            {/* Side Selection Section - Show if in side_selection state */}
             {match.matchState === 'side_selection' && (
               <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
                 <SideSelection
@@ -479,7 +582,6 @@ const MatchPage = () => {
               </div>
             )}
 
-            {/* Match In Progress Section */}
             {(match.matchState === 'playing' || match.matchState === 'waiting_results' || match.matchState === 'disputed') && (
               <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
                 <MatchInProgress
@@ -491,7 +593,6 @@ const MatchPage = () => {
             )}
           </div>
 
-          {/* Chat Section - Only show after both teams ready up */}
           {bothTeamsReady && (
             <div className="lg:col-span-1">
               <MatchChat 
@@ -502,17 +603,95 @@ const MatchPage = () => {
             </div>
           )}
         </div>
+
+        {/* Match Header */}
+        <div className="bg-gray-800 rounded-lg shadow-sm p-6 mb-6 border border-gray-700">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-white">Match #{match.matchNumber}</h2>
+            <span className="text-sm text-gray-300">
+              Round {match.round} • {match.tournamentType === 'qualifier' ? 'Qualifier' : 'Final Event'}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Ready Up Modal */}
-      <ReadyUpModal
-        isOpen={showReadyUpModal}
-        onClose={() => setShowReadyUpModal(false)}
-        team={userTeam!}
-        teamPlayers={teamPlayers}
-        currentActivePlayers={activePlayers}
-        onSetActivePlayers={handleSetActivePlayers}
-      />
+      {showReadyUpModal && (adminReadyUpTeam || userTeam) && (
+        <ReadyUpModal
+          isOpen={true}
+          onClose={() => {
+            setShowReadyUpModal(false);
+            setAdminReadyUpTeam(null);
+          }}
+          team={adminReadyUpTeam || userTeam!}
+          teamPlayers={teamPlayers}
+          currentActivePlayers={activePlayers}
+          onSetActivePlayers={handleSetActivePlayers}
+        />
+      )}
+
+      {showTeamSelectionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-700">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-white mb-4">Select Team to Ready Up</h3>
+              <p className="text-gray-300 mb-6">Choose which team you want to ready up as an admin:</p>
+              
+              <div className="space-y-3">
+                {team1 && !match.team1Ready && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setShowTeamSelectionModal(false);
+                        const players = await getTeamPlayers(team1.id);
+                        setTeamPlayers(players);
+                        setActivePlayers((team1 as any).activePlayers || []);
+                        setAdminReadyUpTeam(team1);
+                        setShowReadyUpModal(true);
+                      } catch (error) {
+                        toast.error('Failed to load team players');
+                      }
+                    }}
+                    className="w-full px-4 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg transition-colors"
+                  >
+                    Ready Up {team1.name}
+                  </button>
+                )}
+                
+                {team2 && !match.team2Ready && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setShowTeamSelectionModal(false);
+                        const players = await getTeamPlayers(team2.id);
+                        setTeamPlayers(players);
+                        setActivePlayers((team2 as any).activePlayers || []);
+                        setAdminReadyUpTeam(team2);
+                        setShowReadyUpModal(true);
+                      } catch (error) {
+                        toast.error('Failed to load team players');
+                      }
+                    }}
+                    className="w-full px-4 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg transition-colors"
+                  >
+                    Ready Up {team2.name}
+                  </button>
+                )}
+                
+                {match.team1Ready && match.team2Ready && (
+                  <p className="text-gray-400">Both teams are already ready!</p>
+                )}
+              </div>
+              
+              <button
+                onClick={() => setShowTeamSelectionModal(false)}
+                className="mt-4 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

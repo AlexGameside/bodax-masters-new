@@ -18,7 +18,6 @@ import TournamentCreation from './pages/TournamentCreation';
 import TournamentDetail from './pages/TournamentDetail';
 import TournamentManagement from './pages/TournamentManagement';
 import ConnectionStatus from './components/ConnectionStatus';
-import GlobalDiscordNotification from './components/GlobalDiscordNotification';
 // Footer pages
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
@@ -312,227 +311,85 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden flex flex-col">
-        {/* Subtle grid/code background */}
-        <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
-        
-        {/* Show Navbar if launched or if user is admin */}
-        {(isLaunched() || isAdmin === true) && (
-          <div className="relative z-30">
-            <Navbar 
-              currentUser={currentUser} 
-              isAdmin={isAdmin === true} 
-              onTeamUpdate={handleTeamUpdate}
-              onLogout={handleUserLogout}
-            />
-          </div>
-        )}
-        <main className="flex-1 relative z-20">
+      <div className="flex flex-col min-h-screen">
+        <Navbar 
+          currentUser={currentUser} 
+          onLogout={handleUserLogout} 
+          isAdmin={isAdmin || false}
+        />
+        <ConnectionStatus />
+        <main className="flex-grow">
           <Routes>
-            {/* Landing page - show countdown if not launched, actual landing page if launched */}
+            {/* Public routes */}
             <Route path="/" element={isLaunched() ? <LandingPage /> : <CountdownPage />} />
-            
-            {/* Public pages - always accessible */}
+            <Route path="/register" element={<UserRegistration onRegister={handleUserRegister} />} />
+            <Route path="/login" element={<UserLogin onLogin={handleUserLogin} />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
             <Route path="/cookie-policy" element={<CookiePolicy />} />
             <Route path="/gdpr" element={<GDPR />} />
             <Route path="/contact" element={<ContactUs />} />
-            <Route path="/help-center" element={<HelpCenter />} />
+            <Route path="/help" element={<HelpCenter />} />
             <Route path="/faq" element={<FAQ />} />
-            <Route path="/login" element={<UserLogin onLogin={handleUserLogin} />} />
-            <Route path="/register" element={<UserRegistration onRegister={handleUserRegister} />} />
-            
-            {/* Protected pages - redirect to countdown if not launched */}
-            <Route 
-              path="/profile" 
-              element={
-                (isLaunched() || isAdmin === true) && currentUser ? (
-                  <Profile />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/dashboard" 
-              element={
-                (isLaunched() || isAdmin === true) && currentUser ? (
-                  <UserDashboard 
-                    currentUser={currentUser}
-                    userTeam={userTeam}
-                    teamInvitations={teamInvitations}
-                    userMatches={userMatches}
-                    teamPlayers={teamPlayers}
-                    onCreateTeam={async (teamData) => {
-                      await handleCreateTeam(teamData);
-                    }}
-                    onInvitePlayer={async (teamId, username) => {
-                      await handleInvitePlayer(teamId, username);
-                    }}
-                    onAcceptInvitation={handleAcceptInvitation}
-                    onDeclineInvitation={handleDeclineInvitation}
-                    onLogout={handleUserLogout}
-                  />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/team-registration" 
-              element={
-                (isLaunched() || isAdmin === true) && currentUser ? (
-                  <TeamRegistration 
-                    onRegister={handleCreateTeam}
-                    teams={teams}
-                  />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/team-management" 
-              element={
-                (isLaunched() || isAdmin === true) && currentUser ? (
-                  <TeamManagement currentUser={currentUser} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/create-team" 
-              element={
-                (isLaunched() || isAdmin === true) && currentUser ? (
-                  <CreateTeam currentUser={currentUser} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/admin" 
-              element={
-                isAdmin === true ? (
-                  <AdminPanel 
-                    teams={teams}
-                    matches={matches}
-                    isAdmin={true}
-                    onAddTeam={async (team) => {
-                      await addTeam(team);
-                    }}
-                    onUpdateMatch={updateMatch}
-                    onDeleteTeam={deleteTeam}
-                    onDeleteAllTeams={deleteAllTeams}
-                    onDeleteAllMatches={deleteAllMatches}
-                    onGenerateRandomTeams={generateRandomTeamsForTesting}
-                    onGenerateFinalBracket={generateFinalBracketForTesting}
-                  />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/admin/tournaments" 
-              element={
-                isAdmin === true ? (
-                  <TournamentManagement />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/admin/tournaments/create" 
-              element={
-                isAdmin === true ? (
-                  <TournamentCreation />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/admin/tournaments/:id" 
-              element={
-                isAdmin === true ? (
-                  <TournamentDetail currentUser={currentUser} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/tournaments" 
-              element={
-                (isLaunched() || isAdmin === true) ? (
-                  <TournamentList currentUser={currentUser} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/tournaments/create" 
-              element={
-                (isLaunched() || isAdmin === true) ? (
-                  <TournamentCreation />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/tournaments/management" 
-              element={
-                (isLaunched() || isAdmin === true) ? (
-                  <TournamentManagement />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/tournaments/:id" 
-              element={
-                (isLaunched() || isAdmin === true) ? (
-                  <TournamentDetail currentUser={currentUser} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
-            <Route 
-              path="/match/:id" 
-              element={
-                (isLaunched() || isAdmin === true) ? (
-                  <MatchPage />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              } 
-            />
             <Route path="/tournament-rules" element={<TournamentRules />} />
-            <Route path="/discord-callback" element={<DiscordCallback />} />
-            
-            {/* Catch all route - redirect to countdown */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="/discord/callback" element={<DiscordCallback />} />
+
+            {/* Protected routes */}
+            <Route path="/dashboard" element={
+              currentUser ? (
+                <UserDashboard 
+                  currentUser={currentUser}
+                  userTeam={userTeam}
+                  teamInvitations={teamInvitations}
+                  userMatches={userMatches}
+                  teamPlayers={teamPlayers}
+                  onCreateTeam={handleCreateTeam}
+                  onInvitePlayer={handleInvitePlayer}
+                  onAcceptInvitation={handleAcceptInvitation}
+                  onDeclineInvitation={handleDeclineInvitation}
+                  onLogout={handleUserLogout}
+                />
+              ) : <Navigate to="/login" />
+            } />
+            <Route path="/profile" element={currentUser ? <Profile currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/team/register" element={
+              currentUser ? (
+                <TeamRegistration 
+                  onRegister={handleCreateTeam}
+                  teams={teams}
+                />
+              ) : <Navigate to="/login" />
+            } />
+            <Route path="/team/manage" element={currentUser ? <TeamManagement currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/team/create" element={currentUser ? <CreateTeam currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/match/:matchId" element={currentUser ? <MatchPage currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/tournaments" element={currentUser ? <TournamentList currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/tournaments/:id" element={currentUser ? <TournamentDetail currentUser={currentUser} /> : <Navigate to="/login" />} />
+            <Route path="/tournament/:id" element={currentUser ? <TournamentDetail currentUser={currentUser} /> : <Navigate to="/login" />} />
+
+            {/* Admin routes */}
+            <Route path="/admin" element={
+              isAdmin ? (
+                <AdminPanel 
+                  teams={teams}
+                  matches={matches}
+                  isAdmin={true}
+                  onAddTeam={addTeam}
+                  onUpdateMatch={updateMatch}
+                  onDeleteTeam={deleteTeam}
+                  onDeleteAllTeams={deleteAllTeams}
+                  onDeleteAllMatches={deleteAllMatches}
+                  onGenerateRandomTeams={generateRandomTeamsForTesting}
+                  onGenerateFinalBracket={generateFinalBracketForTesting}
+                />
+              ) : <Navigate to="/" />
+            } />
+            <Route path="/admin/tournaments" element={isAdmin ? <Navigate to="/admin/tournaments/manage" /> : <Navigate to="/" />} />
+            <Route path="/admin/tournaments/create" element={isAdmin ? <TournamentCreation /> : <Navigate to="/" />} />
+            <Route path="/admin/tournaments/manage" element={isAdmin ? <TournamentManagement /> : <Navigate to="/" />} />
           </Routes>
         </main>
-        {/* Show Footer if launched or if user is admin */}
-        {(isLaunched() || isAdmin === true) && (
-          <div className="relative z-20">
-            <Footer />
-          </div>
-        )}
-        <ConnectionStatus />
-        <GlobalDiscordNotification 
-          discordLinked={!!(currentUser?.discordId && currentUser?.discordLinked)}
-          inDiscordServer={currentUser?.inDiscordServer ?? false}
-        />
+        <Footer />
       </div>
     </Router>
   );

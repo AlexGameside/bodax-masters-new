@@ -13,7 +13,9 @@ import {
   serverTimestamp,
   Timestamp,
   writeBatch,
-  runTransaction
+  runTransaction,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { 
@@ -33,6 +35,10 @@ import type {
 } from '../types/tournament';
 import { checkUserInDiscordServer } from './discordService';
 import { getUserById } from './firebaseService';
+import { 
+  generateSingleEliminationBracket, 
+  generateDoubleEliminationBracket 
+} from './firebaseService';
 
 // Helper function to retry Firebase operations
 const retryOperation = async <T>(
@@ -60,59 +66,68 @@ const retryOperation = async <T>(
 
 // Tournament Creation
 export const createTournament = async (tournamentData: Partial<Tournament>, adminId: string): Promise<string> => {
-  return retryOperation(async () => {
-    try {
-      const tournament: Partial<Tournament> = {
-        ...tournamentData,
-        createdBy: adminId,
-        adminIds: [adminId],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        status: 'draft',
-        teams: [],
-        waitlist: [],
-        rejectedTeams: [],
-        matches: [],
-        brackets: {},
-        stats: {
-          registrationCount: 0,
-          completedMatches: 0,
-          totalMatches: 0,
-          averageMatchDuration: 0,
-          disputeCount: 0,
-          forfeitCount: 0,
-          viewershipPeak: 0,
-          totalViewership: 0,
-          completionRate: 0,
-        },
-        seeding: {
-          method: tournamentData.format?.seedingMethod || 'random',
-          rankings: [],
-        },
-      };
+  try {
+    console.log('🚀 DEBUG: createTournament called with:', { tournamentData, adminId });
 
-      const docRef = await addDoc(collection(db, 'tournaments'), {
-        ...tournament,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        schedule: {
-          ...tournament.schedule,
-          startDate: Timestamp.fromDate(tournament.schedule!.startDate),
-          endDate: Timestamp.fromDate(tournament.schedule!.endDate),
-          blackoutDates: tournament.schedule!.blackoutDates.map(date => Timestamp.fromDate(date)),
-        },
-        requirements: {
-          ...tournament.requirements,
-          registrationDeadline: Timestamp.fromDate(tournament.requirements!.registrationDeadline),
-        },
-      });
-
-      return docRef.id;
-    } catch (error) {
-      console.error('Error creating tournament:', error);
-      throw new Error('Failed to create tournament');
+    // Validate required fields
+    if (!tournamentData.name?.trim()) {
+      throw new Error('Tournament name is required');
     }
-  });
+
+    if (!tournamentData.description?.trim()) {
+      throw new Error('Tournament description is required');
+    }
+
+    if (!tournamentData.format?.teamCount) {
+      throw new Error('Number of teams is required');
+    }
+
+    // Create the tournament document
+    const tournamentRef = await addDoc(collection(db, 'tournaments'), {
+      ...tournamentData,
+      status: 'registration',
+      createdAt: new Date(),
+      createdBy: adminId,
+      adminIds: [adminId],
+      teams: [],
+      waitlist: [],
+      rejectedTeams: [],
+      stats: {
+        registrationCount: 0,
+        completedMatches: 0,
+        totalMatches: 0,
+        averageMatchDuration: 0,
+        disputeCount: 0,
+        forfeitCount: 0,
+        viewershipPeak: 0,
+        totalViewership: 0,
+        completionRate: 0,
+      },
+      seeding: {
+        method: 'random',
+        rankings: [],
+      },
+      brackets: {},
+      matches: [],
+    });
+
+    const tournamentId = tournamentRef.id;
+    console.log('✅ DEBUG: Tournament created with ID:', tournamentId);
+
+    // Generate brackets based on tournament type
+    if (tournamentData.format?.type === 'double-elimination') {
+      console.log('🔍 DEBUG: Generating double elimination bracket for tournament:', tournamentId);
+      // For double elimination, we'll generate brackets when teams register
+      // The bracket generation will happen when the tournament starts
+    } else {
+      console.log('🔍 DEBUG: Single elimination tournament - brackets will be generated when tournament starts');
+    }
+
+    return tournamentId;
+  } catch (error) {
+    console.error('❌ DEBUG: Error creating tournament:', error);
+    throw error;
+  }
 };
 
 // Tournament Management
@@ -291,14 +306,50 @@ export const closeRegistration = async (tournamentId: string): Promise<void> => 
 
 export const startTournament = async (tournamentId: string): Promise<void> => {
   try {
-    const tournamentRef = doc(db, 'tournaments', tournamentId);
-    await updateDoc(tournamentRef, {
+    console.log('🚀 DEBUG: startTournament called for tournament:', tournamentId);
+
+    const tournament = await getTournament(tournamentId);
+    if (!tournament) {
+      throw new Error('Tournament not found');
+    }
+
+    if (tournament.status !== 'registration-open') {
+      throw new Error('Tournament is not in registration status');
+    }
+
+    if (tournament.teams.length < 2) {
+      throw new Error('Need at least 2 teams to start tournament');
+    }
+
+    // Get the configured team count from tournament format
+    const configuredTeamCount = tournament.format.teamCount;
+    console.log(`🔍 DEBUG: Tournament configured for ${configuredTeamCount} teams, but ${tournament.teams.length} teams registered`);
+
+    // Use the configured team count for bracket generation, not the actual registered teams
+    // If more teams registered than configured, use the first N teams
+    const teamsForBracket = tournament.teams.slice(0, configuredTeamCount);
+    console.log(`🔍 DEBUG: Using first ${teamsForBracket.length} teams for bracket generation`);
+
+    // Update tournament status
+    await updateDoc(doc(db, 'tournaments', tournamentId), {
       status: 'in-progress',
-      updatedAt: serverTimestamp(),
+      startedAt: new Date(),
+      updatedAt: new Date()
     });
+
+    // Generate brackets based on tournament type using the configured team count
+    if (tournament.format.type === 'double-elimination') {
+      console.log('🔍 DEBUG: Generating double elimination bracket');
+      await generateDoubleEliminationBracket(tournamentId, teamsForBracket);
+    } else {
+      console.log('🔍 DEBUG: Generating single elimination bracket');
+      await generateSingleEliminationBracket(tournamentId, teamsForBracket);
+    }
+
+    console.log('✅ DEBUG: Tournament started successfully');
   } catch (error) {
-    console.error('Error starting tournament:', error);
-    throw new Error('Failed to start tournament');
+    console.error('❌ DEBUG: Error starting tournament:', error);
+    throw error;
   }
 };
 
@@ -338,7 +389,7 @@ export const registerTeamForTournament = async (
       throw new Error('Tournament registration is not open');
     }
 
-    if (tournament.teams.length >= tournament.requirements.maxTeams) {
+    if (tournament.teams.length >= tournament.format.teamCount) {
       // Add to waitlist
       await updateDoc(tournamentRef, {
         waitlist: [...tournament.waitlist, teamId],
@@ -378,7 +429,7 @@ export const approveTeamRegistration = async (tournamentId: string, teamId: stri
 
     // Move from waitlist to main teams if there's space
     const waitlistIndex = tournament.waitlist.indexOf(teamId);
-    if (waitlistIndex > -1 && tournament.teams.length < tournament.requirements.maxTeams) {
+    if (waitlistIndex > -1 && tournament.teams.length < tournament.format.teamCount) {
       const newWaitlist = tournament.waitlist.filter(id => id !== teamId);
       const newTeams = [...tournament.teams, teamId];
       
@@ -614,111 +665,7 @@ export const getTournamentAnalytics = async (tournamentId: string): Promise<{
   }
 };
 
-// Verify Discord requirements for tournament registration
-export const verifyDiscordRequirements = async (
-  tournamentId: string, 
-  teamId: string
-): Promise<{ 
-  canRegister: boolean; 
-  errors: string[]; 
-  warnings: string[]; 
-  missingDiscordUsers: string[] 
-}> => {
-  try {
-    const tournament = await getTournament(tournamentId);
-    if (!tournament) {
-      return {
-        canRegister: false,
-        errors: ['Tournament not found'],
-        warnings: [],
-        missingDiscordUsers: []
-      };
-    }
-
-    // Check if Discord is required for this tournament
-    if (!tournament.requirements?.requireDiscord) {
-      return {
-        canRegister: true,
-        errors: [],
-        warnings: [],
-        missingDiscordUsers: []
-      };
-    }
-
-    // Get team details
-    const teamRef = doc(db, 'teams', teamId);
-    const teamDoc = await getDoc(teamRef);
-    if (!teamDoc.exists()) {
-      return {
-        canRegister: false,
-        errors: ['Team not found'],
-        warnings: [],
-        missingDiscordUsers: []
-      };
-    }
-
-    const team = teamDoc.data() as Team;
-    const errors: string[] = [];
-    const warnings: string[] = [];
-    const missingDiscordUsers: string[] = [];
-
-    // Check each team member
-    for (const memberId of team.members) {
-      const user = await getUserById(memberId);
-      if (!user) {
-        errors.push(`Team member ${memberId} not found`);
-        continue;
-      }
-
-      // Check if user has Discord linked
-      if (!user.discordId || !user.discordLinked) {
-        missingDiscordUsers.push(user.username || user.email);
-        errors.push(`${user.username || user.email} does not have Discord linked`);
-        continue;
-      }
-
-      // Check if user is in our Discord server
-      try {
-        const isInServer = await checkUserInDiscordServer(user.discordId);
-        if (!isInServer) {
-          missingDiscordUsers.push(user.username || user.email);
-          errors.push(`${user.username || user.email} is not a member of our Discord server`);
-        }
-      } catch (error) {
-        console.error('Error checking Discord server membership:', error);
-        warnings.push(`Could not verify Discord server membership for ${user.username || user.email}`);
-      }
-    }
-
-    // Check team captain specifically
-    if (team.captainId) {
-      const captain = await getUserById(team.captainId);
-      if (captain && (!captain.discordId || !captain.discordLinked)) {
-        errors.push('Team captain must have Discord linked');
-      }
-    }
-
-    const canRegister = errors.length === 0;
-
-    return {
-      canRegister,
-      errors,
-      warnings,
-      missingDiscordUsers
-    };
-
-  } catch (error) {
-    console.error('Error verifying Discord requirements:', error);
-    return {
-      canRegister: false,
-      errors: ['Failed to verify Discord requirements'],
-      warnings: [],
-      missingDiscordUsers: []
-    };
-  }
-};
-
-// Enhanced team registration with Discord verification
+// Enhanced team registration with Discord verification (DISCORD CHECKS REMOVED)
 export const registerTeamForTournamentWithVerification = async (
   tournamentId: string, 
   teamId: string, 
@@ -735,29 +682,15 @@ export const registerTeamForTournamentWithVerification = async (
   warnings?: string[] 
 }> => {
   try {
-    // First verify Discord requirements
-    const verification = await verifyDiscordRequirements(tournamentId, teamId);
-    
-    if (!verification.canRegister) {
-      return {
-        success: false,
-        message: 'Discord requirements not met',
-        errors: verification.errors,
-        warnings: verification.warnings
-      };
-    }
-
-    // If verification passes, proceed with registration
+    // Directly register the team, skip Discord checks
     await registerTeamForTournament(tournamentId, teamId, registrationData);
-
     return {
       success: true,
       message: 'Team registered successfully',
-      warnings: verification.warnings
+      warnings: []
     };
-
   } catch (error) {
-    console.error('Error registering team with verification:', error);
+    console.error('Error registering team:', error);
     return {
       success: false,
       message: 'Failed to register team',

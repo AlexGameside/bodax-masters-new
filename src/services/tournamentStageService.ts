@@ -79,7 +79,6 @@ export const generateGroups = async (tournamentId: string): Promise<void> => {
     // Don't automatically generate first match day - let admin do it manually
     
   } catch (error) {
-    console.error('Error generating groups:', error);
     throw error;
   }
 };
@@ -143,7 +142,6 @@ export const generateMatchDay = async (tournamentId: string, matchDay: number): 
     });
     
   } catch (error) {
-    console.error('Error generating match day:', error);
     throw error;
   }
 };
@@ -207,7 +205,6 @@ export const checkGroupStageCompletion = async (tournamentId: string): Promise<b
     
     return false;
   } catch (error) {
-    console.error('Error checking group stage completion:', error);
     throw error;
   }
 };
@@ -259,7 +256,6 @@ export const startKnockoutStage = async (tournamentId: string): Promise<void> =>
     });
     
   } catch (error) {
-    console.error('Error starting knockout stage:', error);
     throw error;
   }
 };
@@ -393,7 +389,6 @@ export const updateGroupStandings = async (tournamentId: string, match: Match): 
     });
     
   } catch (error) {
-    console.error('Error updating group standings:', error);
     throw error;
   }
 };
@@ -471,7 +466,6 @@ export const advanceWinnerToNextRound = async (tournamentId: string, match: Matc
     }
     
   } catch (error) {
-    console.error('Error advancing winner to next round:', error);
     throw error;
   }
 };
@@ -536,7 +530,6 @@ export const completeCurrentRound = async (tournamentId: string): Promise<void> 
     }
     // No need to update knockoutStage.currentRound for single elimination
   } catch (error) {
-    console.error('Error completing current round:', error);
     throw error;
   }
 }; 

@@ -85,31 +85,7 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
     setError('');
 
     try {
-      // Check Discord requirements first
-      if (!currentUser?.discordId || !currentUser?.discordLinked) {
-        toast.error('You must link your Discord account before registering for tournaments!');
-        toast.error('Please visit your profile to link Discord first.');
-        setError('Discord account not linked');
-        return;
-      }
-
-      // Check if user is in Discord server
-      try {
-        const inDiscordServer = await checkUserInDiscordServer(currentUser.discordId);
-        if (!inDiscordServer) {
-          toast.error('You must join our Discord server before registering for tournaments!');
-          toast.error('Please join our Discord server: https://discord.gg/MZzEyX3peN');
-          setError('Not in Discord server');
-          return;
-        }
-      } catch (error) {
-        console.error('Error checking Discord server membership:', error);
-        toast.error('Unable to verify Discord server membership. Please try again.');
-        setError('Discord verification failed');
-        return;
-      }
-
-      // Use the new verification system
+      // Use the new verification system (no Discord checks)
       const result = await registerTeamForTournamentWithVerification(
         tournamentId,
         teamId,
@@ -489,9 +465,6 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
                   <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-black/40 text-purple-200 border border-purple-700">
                     {tournament.format?.type?.replace(/-/g, ' ') || 'Format N/A'}
                   </span>
-                  {tournament.requirements?.requireDiscord && (
-                    <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-blue-900 text-blue-200 border border-blue-700">Discord Required</span>
-                  )}
                   {tournament.requirements?.requireRiotId && (
                     <span className="inline-flex items-center px-4 py-1.5 rounded-full text-base font-bold bg-purple-900 text-purple-200 border border-purple-700">Riot ID Required</span>
                   )}
@@ -635,6 +608,8 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
           teamMembers={selectedTeamForRegistration.members || []}
           onMembersSelected={handleTeamMembersSelected}
           onCancel={handleCancelTeamMemberSelection}
+          tournamentId={pendingTournamentId || ''}
+          maxPlayers={5}
         />
       )}
     </div>

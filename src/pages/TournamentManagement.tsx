@@ -252,7 +252,7 @@ const TournamentManagement = () => {
                     <div className="text-xs text-gray-400">Teams</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-semibold">{tournament.requirements.maxTeams}</div>
+                    <div className="text-lg font-semibold">{tournament.format?.teamCount || 8}</div>
                     <div className="text-xs text-gray-400">Max Teams</div>
                   </div>
                 </div>

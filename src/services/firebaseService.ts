@@ -412,17 +412,57 @@ export const getUserTeamForMatch = async (userId: string, match: Match): Promise
   try {
     console.log('getUserTeamForMatch called with:', { userId, matchId: match.id, team1Id: match.team1Id, team2Id: match.team2Id });
     
-    const teams = await getUserTeams(userId);
-    console.log('User teams found:', teams.map(t => ({ id: t.id, name: t.name })));
+    // More efficient: directly check if user is in the teams in this match
+    const matchTeamIds: string[] = [match.team1Id, match.team2Id].filter((id): id is string => typeof id === 'string' && !!id);
     
-    // Find the team that's actually in this match
-    const teamInMatch = teams.find(team => 
-      team.id === match.team1Id || team.id === match.team2Id
-    );
+    if (matchTeamIds.length === 0) {
+      console.log('No teams in match');
+      return null;
+    }
     
-    console.log('Team in match found:', teamInMatch ? { id: teamInMatch.id, name: teamInMatch.name } : 'None');
+    // Get user's teamIds directly
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (!userDoc.exists()) {
+      console.log('User not found');
+      return null;
+    }
     
-    return teamInMatch || null;
+    const userTeamIds = userDoc.data().teamIds || [];
+    console.log('User team IDs:', userTeamIds);
+    
+    // Find which team in the match the user belongs to
+    let userTeamId: string | undefined = userTeamIds.find((teamId: string) => matchTeamIds.includes(teamId));
+    
+    // Fallback approach: If teamIds approach fails, check team members directly
+    if (!userTeamId) {
+      console.log('User not found in teamIds, checking team members directly...');
+      for (const teamId of matchTeamIds) {
+        try {
+          const team = await getTeamById(teamId);
+          if (team && team.members) {
+            const isMember = team.members.some(member => member.userId === userId);
+            if (isMember) {
+              userTeamId = String(teamId);
+              console.log('Found user in team members:', teamId);
+              break;
+            }
+          }
+        } catch (error) {
+          console.warn(`Error checking team ${teamId}:`, error);
+        }
+      }
+    }
+    
+    if (!userTeamId) {
+      console.log('User not in any team in this match');
+      return null;
+    }
+    
+    // Get the specific team
+    const team = await getTeamById(String(userTeamId));
+    console.log('Team in match found:', team ? { id: team.id, name: team.name } : 'None');
+    
+    return team;
   } catch (error) {
     console.error('Error getting user team for match:', error);
     return null;
@@ -1403,6 +1443,12 @@ export const generateSingleEliminationBracket = async (tournamentId: string, tea
     if (teamIds.length < 2) {
       throw new Error('Need at least 2 teams to generate bracket');
     }
+
+    // Validate team count for single elimination
+    const validTeamSizes = [4, 8, 16, 32];
+    if (!validTeamSizes.includes(teamIds.length)) {
+      throw new Error(`Single elimination requires 4, 8, 16, or 32 teams. Got ${teamIds.length} teams.`);
+    }
     
     // Shuffle teams for random seeding
     const shuffledTeams = [...teamIds].sort(() => Math.random() - 0.5);
@@ -1506,6 +1552,12 @@ export const generateSingleEliminationBracket = async (tournamentId: string, tea
 export const generateSingleEliminationBracketMatches = (teams: any[], tournamentId: string): Omit<Match, 'id'>[] => {
   if (teams.length < 2) {
     throw new Error('Need at least 2 teams to generate bracket');
+  }
+
+  // Validate team count for single elimination
+  const validTeamSizes = [4, 8, 16, 32];
+  if (!validTeamSizes.includes(teams.length)) {
+    throw new Error(`Single elimination requires 4, 8, 16, or 32 teams. Got ${teams.length} teams.`);
   }
   
   // Shuffle teams for random seeding
@@ -1631,7 +1683,7 @@ export const fillTournamentWithDemoTeams = async (tournamentId: string, userTeam
     }
     
     // Calculate how many demo teams to add to fill completely
-    const maxTeams = tournament.requirements?.maxTeams || 8;
+    const maxTeams = tournament.format?.teamCount || 8;
     const teamsToAdd = maxTeams - (tournament.teams?.length || 0);
     
     if (teamsToAdd <= 0) {
@@ -1693,7 +1745,7 @@ export const startTournament = async (tournamentId: string): Promise<void> => {
     throw new Error('Tournament must be registration-closed to start');
   }
   
-  const maxTeams = tournamentData.requirements?.maxTeams || 8;
+  const maxTeams = tournamentData.format?.teamCount || 8;
   if ((tournamentData.teams?.length || 0) !== maxTeams) {
     throw new Error('Tournament must have the maximum number of teams to start');
   }
@@ -2854,6 +2906,12 @@ export const generateTournamentBracket = async (tournamentId: string, teamIds: s
     if (teamIds.length < 2) {
       throw new Error('Need at least 2 teams to generate bracket');
     }
+
+    // Validate team count for tournament brackets
+    const validTeamSizes = [4, 8, 16, 32];
+    if (!validTeamSizes.includes(teamIds.length)) {
+      throw new Error(`Tournament brackets require 4, 8, 16, or 32 teams. Got ${teamIds.length} teams.`);
+    }
     
     // Delete existing matches for this tournament
     const existingMatches = await getTournamentMatches(tournamentId);
@@ -3198,9 +3256,18 @@ export const startSingleElimination = async (tournamentId: string): Promise<void
     if (allTeams.length < 2) {
       throw new Error('Need at least 2 teams to start single elimination');
     }
+
+    // Get the configured team count from tournament format
+    const configuredTeamCount = tournament.format.teamCount;
+    console.log(`🔍 DEBUG: Tournament configured for ${configuredTeamCount} teams, but ${allTeams.length} teams registered`);
+
+    // Use the configured team count for bracket generation, not the actual registered teams
+    // If more teams registered than configured, use the first N teams
+    const teamsForBracket = allTeams.slice(0, configuredTeamCount);
+    console.log(`🔍 DEBUG: Using first ${teamsForBracket.length} teams for bracket generation`);
     
     // Generate single elimination bracket
-    await generateSingleEliminationBracket(tournamentId, allTeams);
+    await generateSingleEliminationBracket(tournamentId, teamsForBracket);
     
     // Update tournament status
     await updateDoc(tournamentRef, {
@@ -3210,6 +3277,46 @@ export const startSingleElimination = async (tournamentId: string): Promise<void
     
   } catch (error) {
     console.error('Error starting single elimination:', error);
+    throw error;
+  }
+};
+
+export const startDoubleElimination = async (tournamentId: string): Promise<void> => {
+  try {
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    const tournamentDoc = await getDoc(tournamentRef);
+    
+    if (!tournamentDoc.exists()) {
+      throw new Error('Tournament not found');
+    }
+    
+    const tournament = tournamentDoc.data() as Tournament;
+    const allTeams = tournament.teams || [];
+    
+    if (allTeams.length < 2) {
+      throw new Error('Need at least 2 teams to start double elimination');
+    }
+
+    // Get the configured team count from tournament format
+    const configuredTeamCount = tournament.format.teamCount;
+    console.log(`🔍 DEBUG: Tournament configured for ${configuredTeamCount} teams, but ${allTeams.length} teams registered`);
+
+    // Use the configured team count for bracket generation, not the actual registered teams
+    // If more teams registered than configured, use the first N teams
+    const teamsForBracket = allTeams.slice(0, configuredTeamCount);
+    console.log(`🔍 DEBUG: Using first ${teamsForBracket.length} teams for bracket generation`);
+    
+    // Generate double elimination bracket
+    await generateDoubleEliminationBracket(tournamentId, teamsForBracket);
+    
+    // Update tournament status
+    await updateDoc(tournamentRef, {
+      status: 'in-progress',
+      startedAt: new Date()
+    });
+    
+  } catch (error) {
+    console.error('Error starting double elimination:', error);
     throw error;
   }
 };
@@ -3283,5 +3390,803 @@ export const getUserById = async (userId: string): Promise<User | null> => {
   } catch (error) {
     console.error('Error getting user by ID:', error);
     return null;
+  }
+};
+
+// --- Restore missing export for Profile.tsx compatibility ---
+export const unlinkDiscordAccount = async (userId: string): Promise<void> => {
+  // No-op for now. Implement actual unlink logic if needed.
+  return;
+};
+
+// --- Double Elimination Bracket Generator ---
+export const generateDoubleEliminationBracket = async (tournamentId: string, teamIds: string[]): Promise<void> => {
+  if (!teamIds || teamIds.length < 2) throw new Error('At least 2 teams required');
+
+  // Validate team count for double elimination
+  const validTeamSizes = [4, 8, 16, 32];
+  if (!validTeamSizes.includes(teamIds.length)) {
+    throw new Error(`Double elimination requires 4, 8, 16, or 32 teams. Got ${teamIds.length} teams.`);
+  }
+
+  console.log(`🔍 DEBUG: Generating double elimination bracket for ${teamIds.length} teams`);
+
+  // Shuffle teams for random seeding
+  const shuffled = [...teamIds].sort(() => Math.random() - 0.5);
+  const matches: Omit<Match, 'id'>[] = [];
+  let matchNumber = 1;
+
+  // Calculate rounds needed
+  const totalRounds = Math.ceil(Math.log2(teamIds.length));
+  console.log(`🔍 DEBUG: Total rounds needed: ${totalRounds}`);
+
+  // Generate Winners Bracket
+  console.log('🔍 DEBUG: Generating winners bracket...');
+  
+  // Winners Round 1
+  for (let i = 0; i < shuffled.length; i += 2) {
+    matches.push({
+      team1Id: shuffled[i],
+      team2Id: shuffled[i + 1] || null,
+      team1Score: 0,
+      team2Score: 0,
+      winnerId: null,
+      isComplete: false,
+      round: 1,
+      matchNumber: matchNumber++,
+      tournamentId,
+      tournamentType: 'double-elim',
+      bracketType: 'winners',
+      matchState: 'ready_up',
+      mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+      bannedMaps: { team1: [], team2: [] },
+      team1Ready: false,
+      team2Ready: false,
+      team1MapBans: [],
+      team2MapBans: [],
+      createdAt: new Date()
+    });
+  }
+
+  // Generate subsequent winners rounds
+  for (let round = 2; round <= totalRounds; round++) {
+    const matchesInRound = Math.pow(2, totalRounds - round);
+    for (let match = 1; match <= matchesInRound; match++) {
+      matches.push({
+        team1Id: null,
+        team2Id: null,
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        isComplete: false,
+        round,
+        matchNumber: matchNumber++,
+        tournamentId,
+        tournamentType: 'double-elim',
+        bracketType: 'winners',
+        matchState: 'ready_up',
+        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        bannedMaps: { team1: [], team2: [] },
+        team1Ready: false,
+        team2Ready: false,
+        team1MapBans: [],
+        team2MapBans: [],
+        createdAt: new Date()
+      });
+    }
+  }
+
+  // Generate Losers Bracket
+  console.log('🔍 DEBUG: Generating losers bracket...');
+  
+  // Losers bracket has more rounds than winners bracket
+  const losersRounds = totalRounds * 2 - 1;
+  
+  for (let round = 1; round <= losersRounds; round++) {
+    // Calculate matches in this losers round
+    let matchesInRound: number;
+    
+    if (round === 1) {
+      // First losers round: half the teams (losers from winners round 1)
+      matchesInRound = Math.floor(teamIds.length / 4);
+    } else if (round === 2) {
+      // Second losers round: quarter of teams (winners from losers round 1 + losers from winners round 2)
+      matchesInRound = Math.floor(teamIds.length / 4);
+    } else {
+      // Subsequent rounds: half of previous round
+      matchesInRound = Math.max(1, Math.floor(teamIds.length / Math.pow(2, round + 1)));
+    }
+    
+    for (let match = 1; match <= matchesInRound; match++) {
+      matches.push({
+        team1Id: null,
+        team2Id: null,
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        isComplete: false,
+        round,
+        matchNumber: matchNumber++,
+        tournamentId,
+        tournamentType: 'double-elim',
+        bracketType: 'losers',
+        matchState: 'ready_up',
+        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        bannedMaps: { team1: [], team2: [] },
+        team1Ready: false,
+        team2Ready: false,
+        team1MapBans: [],
+        team2MapBans: [],
+        createdAt: new Date()
+      });
+    }
+  }
+
+  // Generate Grand Finals (winners bracket finalist vs losers bracket finalist)
+  console.log('🔍 DEBUG: Generating grand finals...');
+  matches.push({
+    team1Id: null, // Winners bracket finalist
+    team2Id: null, // Losers bracket finalist
+    team1Score: 0,
+    team2Score: 0,
+    winnerId: null,
+    isComplete: false,
+    round: totalRounds + 1,
+    matchNumber: matchNumber++,
+    tournamentId,
+    tournamentType: 'double-elim',
+    bracketType: 'grand_final',
+    matchState: 'ready_up',
+    mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+    bannedMaps: { team1: [], team2: [] },
+    team1Ready: false,
+    team2Ready: false,
+    team1MapBans: [],
+    team2MapBans: [],
+    createdAt: new Date()
+  });
+
+  // If needed, generate a second grand final match (if losers bracket finalist wins first match)
+  if (teamIds.length >= 8) {
+    matches.push({
+      team1Id: null, // Winners bracket finalist
+      team2Id: null, // Losers bracket finalist (if they won the first grand final)
+      team1Score: 0,
+      team2Score: 0,
+      winnerId: null,
+      isComplete: false,
+      round: totalRounds + 1,
+      matchNumber: matchNumber++,
+      tournamentId,
+      tournamentType: 'double-elim',
+      bracketType: 'grand_final',
+      matchState: 'ready_up',
+      mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+      bannedMaps: { team1: [], team2: [] },
+      team1Ready: false,
+      team2Ready: false,
+      team1MapBans: [],
+      team2MapBans: [],
+      createdAt: new Date()
+    });
+  }
+
+  console.log(`🔍 DEBUG: Generated ${matches.length} matches for double elimination bracket`);
+  console.log(`🔍 DEBUG: Winners bracket: ${matches.filter(m => m.bracketType === 'winners').length} matches`);
+  console.log(`🔍 DEBUG: Losers bracket: ${matches.filter(m => m.bracketType === 'losers').length} matches`);
+  console.log(`🔍 DEBUG: Grand finals: ${matches.filter(m => m.bracketType === 'grand_final').length} matches`);
+
+  // Add all matches to Firebase
+  for (const match of matches) {
+    await addMatch(match);
+  }
+
+  console.log(`✅ DEBUG: Double elimination bracket generated successfully for tournament ${tournamentId}`);
+};
+
+// --- Team Revert Functions ---
+
+// Revert team registration from tournament
+export const revertTeamRegistration = async (tournamentId: string, teamId: string): Promise<void> => {
+  try {
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    const tournamentDoc = await getDoc(tournamentRef);
+    
+    if (!tournamentDoc.exists()) {
+      throw new Error('Tournament not found');
+    }
+    
+    const tournamentData = tournamentDoc.data();
+    const teams = tournamentData.teams || [];
+    const approvedTeams = tournamentData.approvedTeams || [];
+    const pendingTeams = tournamentData.pendingTeams || [];
+    const rejectedTeams = tournamentData.rejectedTeams || [];
+    
+    // Remove from all arrays
+    const updatedTeams = teams.filter((id: string) => id !== teamId);
+    const updatedApprovedTeams = approvedTeams.filter((id: string) => id !== teamId);
+    const updatedPendingTeams = pendingTeams.filter((id: string) => id !== teamId);
+    const updatedRejectedTeams = rejectedTeams.filter((id: string) => id !== teamId);
+    
+    // Update tournament
+    await updateDoc(tournamentRef, {
+      teams: updatedTeams,
+      approvedTeams: updatedApprovedTeams,
+      pendingTeams: updatedPendingTeams,
+      rejectedTeams: updatedRejectedTeams,
+      updatedAt: new Date()
+    });
+    
+    // Update team registration status
+    const teamRef = doc(db, 'teams', teamId);
+    await updateDoc(teamRef, {
+      registeredForTournament: false,
+      tournamentRegistrationDate: null
+    });
+    
+    console.log(`Reverted team ${teamId} registration from tournament ${tournamentId}`);
+  } catch (error) {
+    console.error('Error reverting team registration:', error);
+    throw error;
+  }
+};
+
+// Revert team approval (move back to pending)
+export const revertTeamApproval = async (tournamentId: string, teamId: string): Promise<void> => {
+  try {
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    const tournamentDoc = await getDoc(tournamentRef);
+    
+    if (!tournamentDoc.exists()) {
+      throw new Error('Tournament not found');
+    }
+    
+    const tournamentData = tournamentDoc.data();
+    const approvedTeams = tournamentData.approvedTeams || [];
+    const pendingTeams = tournamentData.pendingTeams || [];
+    
+    // Remove from approved teams
+    const updatedApprovedTeams = approvedTeams.filter((id: string) => id !== teamId);
+    
+    // Add to pending teams if not already there
+    const updatedPendingTeams = pendingTeams.includes(teamId) ? pendingTeams : [...pendingTeams, teamId];
+    
+    await updateDoc(tournamentRef, {
+      approvedTeams: updatedApprovedTeams,
+      pendingTeams: updatedPendingTeams,
+      updatedAt: new Date()
+    });
+    
+    console.log(`Reverted team ${teamId} approval for tournament ${tournamentId}`);
+  } catch (error) {
+    console.error('Error reverting team approval:', error);
+    throw error;
+  }
+};
+
+// Revert team rejection (move back to pending)
+export const revertTeamRejection = async (tournamentId: string, teamId: string): Promise<void> => {
+  try {
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    const tournamentDoc = await getDoc(tournamentRef);
+    
+    if (!tournamentDoc.exists()) {
+      throw new Error('Tournament not found');
+    }
+    
+    const tournamentData = tournamentDoc.data();
+    const rejectedTeams = tournamentData.rejectedTeams || [];
+    const pendingTeams = tournamentData.pendingTeams || [];
+    
+    // Remove from rejected teams
+    const updatedRejectedTeams = rejectedTeams.filter((id: string) => id !== teamId);
+    
+    // Add to pending teams if not already there
+    const updatedPendingTeams = pendingTeams.includes(teamId) ? pendingTeams : [...pendingTeams, teamId];
+    
+    await updateDoc(tournamentRef, {
+      rejectedTeams: updatedRejectedTeams,
+      pendingTeams: updatedPendingTeams,
+      updatedAt: new Date()
+    });
+    
+    console.log(`Reverted team ${teamId} rejection for tournament ${tournamentId}`);
+  } catch (error) {
+    console.error('Error reverting team rejection:', error);
+    throw error;
+  }
+};
+
+// Get team status in tournament
+export const getTeamTournamentStatus = async (tournamentId: string, teamId: string): Promise<'registered' | 'approved' | 'pending' | 'rejected' | 'not-registered'> => {
+  try {
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    const tournamentDoc = await getDoc(tournamentRef);
+    
+    if (!tournamentDoc.exists()) {
+      throw new Error('Tournament not found');
+    }
+    
+    const tournamentData = tournamentDoc.data();
+    const teams = tournamentData.teams || [];
+    const approvedTeams = tournamentData.approvedTeams || [];
+    const pendingTeams = tournamentData.pendingTeams || [];
+    const rejectedTeams = tournamentData.rejectedTeams || [];
+    
+    if (!teams.includes(teamId)) {
+      return 'not-registered';
+    }
+    
+    if (approvedTeams.includes(teamId)) {
+      return 'approved';
+    }
+    
+    if (rejectedTeams.includes(teamId)) {
+      return 'rejected';
+    }
+    
+    if (pendingTeams.includes(teamId)) {
+      return 'pending';
+    }
+    
+    return 'registered';
+  } catch (error) {
+    console.error('Error getting team tournament status:', error);
+    throw error;
+  }
+};
+
+// --- Bracket Revert Functions ---
+
+// Revert a match result and reset the match
+export const revertMatchResult = async (matchId: string): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    const matchDoc = await getDoc(matchRef);
+    
+    if (!matchDoc.exists()) {
+      throw new Error('Match not found');
+    }
+    
+    const matchData = matchDoc.data();
+    
+    // Reset match to ready_up state
+    await updateDoc(matchRef, {
+      team1Score: 0,
+      team2Score: 0,
+      winnerId: null,
+      isComplete: false,
+      matchState: 'ready_up',
+      team1Ready: false,
+      team2Ready: false,
+      team1MapBans: [],
+      team2MapBans: [],
+      team1MapPick: null,
+      team2MapPick: null,
+      selectedMap: null,
+      bannedMaps: { team1: [], team2: [] },
+      sideSelection: {},
+      disputeRequested: false,
+      disputeReason: null,
+      adminAssigned: null,
+      adminResolution: null,
+      resolvedAt: null
+    });
+    
+    console.log(`Reverted match ${matchId} result`);
+  } catch (error) {
+    console.error('Error reverting match result:', error);
+    throw error;
+  }
+};
+
+// Revert a team's advancement to the next round
+export const revertTeamAdvancement = async (matchId: string, teamId: string): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    const matchDoc = await getDoc(matchRef);
+    
+    if (!matchDoc.exists()) {
+      throw new Error('Match not found');
+    }
+    
+    const matchData = matchDoc.data();
+    
+    // Find the next match this team was advanced to
+    const nextMatchId = matchData.nextMatchId;
+    if (!nextMatchId) {
+      throw new Error('No next match found for this match');
+    }
+    
+    const nextMatchRef = doc(db, 'matches', nextMatchId);
+    const nextMatchDoc = await getDoc(nextMatchRef);
+    
+    if (!nextMatchDoc.exists()) {
+      throw new Error('Next match not found');
+    }
+    
+    const nextMatchData = nextMatchDoc.data();
+    
+    // Remove the team from the next match
+    let updatedTeam1Id = nextMatchData.team1Id;
+    let updatedTeam2Id = nextMatchData.team2Id;
+    
+    if (nextMatchData.team1Id === teamId) {
+      updatedTeam1Id = null;
+    } else if (nextMatchData.team2Id === teamId) {
+      updatedTeam2Id = null;
+    }
+    
+    // Reset the next match if both teams are removed
+    if (!updatedTeam1Id && !updatedTeam2Id) {
+      await updateDoc(nextMatchRef, {
+        team1Id: null,
+        team2Id: null,
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        isComplete: false,
+        matchState: 'waiting_for_teams',
+        team1Ready: false,
+        team2Ready: false
+      });
+    } else {
+      await updateDoc(nextMatchRef, {
+        team1Id: updatedTeam1Id,
+        team2Id: updatedTeam2Id,
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        isComplete: false,
+        matchState: 'ready_up',
+        team1Ready: false,
+        team2Ready: false
+      });
+    }
+    
+    console.log(`Reverted team ${teamId} advancement from match ${matchId} to ${nextMatchId}`);
+  } catch (error) {
+    console.error('Error reverting team advancement:', error);
+    throw error;
+  }
+};
+
+// Revert an entire round (reset all matches in a round)
+export const revertRound = async (tournamentId: string, round: number): Promise<void> => {
+  try {
+    // Get all matches for the tournament
+    const matches = await getMatches();
+    const tournamentMatches = matches.filter(match => match.tournamentId === tournamentId);
+    
+    // Find matches in the specified round
+    const roundMatches = tournamentMatches.filter(match => match.round === round);
+    
+    if (roundMatches.length === 0) {
+      throw new Error(`No matches found for round ${round}`);
+    }
+    
+    // Get all teams that advanced from this round
+    const advancedTeams: string[] = [];
+    const matchToNextMatchMap: { [matchId: string]: string } = {};
+    
+    roundMatches.forEach(match => {
+      if (match.winnerId) {
+        advancedTeams.push(match.winnerId);
+      }
+      if (match.nextMatchId) {
+        matchToNextMatchMap[match.id] = match.nextMatchId;
+      }
+    });
+    
+    console.log(`Teams that advanced from round ${round}:`, advancedTeams);
+    console.log(`Match to next match mapping:`, matchToNextMatchMap);
+    
+    // Reset all matches in the round
+    const resetPromises = roundMatches.map(match => 
+      updateDoc(doc(db, 'matches', match.id), {
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        isComplete: false,
+        matchState: 'ready_up',
+        team1Ready: false,
+        team2Ready: false,
+        team1MapBans: [],
+        team2MapBans: [],
+        team1MapPick: null,
+        team2MapPick: null,
+        selectedMap: null,
+        bannedMaps: { team1: [], team2: [] },
+        sideSelection: {},
+        disputeRequested: false,
+        disputeReason: null,
+        adminAssigned: null,
+        adminResolution: null,
+        resolvedAt: null
+      })
+    );
+    
+    await Promise.all(resetPromises);
+    
+    // Remove advanced teams from all subsequent rounds
+    const subsequentMatches = tournamentMatches.filter(match => match.round > round);
+    const subsequentUpdatePromises = subsequentMatches.map(match => {
+      let updatedTeam1Id = match.team1Id;
+      let updatedTeam2Id = match.team2Id;
+      let needsUpdate = false;
+      
+      // Remove team1 if it was advanced from the reverted round
+      if (match.team1Id && advancedTeams.includes(match.team1Id)) {
+        updatedTeam1Id = null;
+        needsUpdate = true;
+      }
+      
+      // Remove team2 if it was advanced from the reverted round
+      if (match.team2Id && advancedTeams.includes(match.team2Id)) {
+        updatedTeam2Id = null;
+        needsUpdate = true;
+      }
+      
+      if (!needsUpdate) {
+        return Promise.resolve(); // No update needed
+      }
+      
+      // If both teams are removed, reset the match completely
+      if (!updatedTeam1Id && !updatedTeam2Id) {
+        return updateDoc(doc(db, 'matches', match.id), {
+          team1Id: null,
+          team2Id: null,
+          team1Score: 0,
+          team2Score: 0,
+          winnerId: null,
+          isComplete: false,
+          matchState: 'waiting_for_teams',
+          team1Ready: false,
+          team2Ready: false,
+          team1MapBans: [],
+          team2MapBans: [],
+          team1MapPick: null,
+          team2MapPick: null,
+          selectedMap: null,
+          bannedMaps: { team1: [], team2: [] },
+          sideSelection: {},
+          disputeRequested: false,
+          disputeReason: null,
+          adminAssigned: null,
+          adminResolution: null,
+          resolvedAt: null
+        });
+      } else {
+        // Update with remaining teams
+        return updateDoc(doc(db, 'matches', match.id), {
+          team1Id: updatedTeam1Id,
+          team2Id: updatedTeam2Id,
+          team1Score: 0,
+          team2Score: 0,
+          winnerId: null,
+          isComplete: false,
+          matchState: updatedTeam1Id && updatedTeam2Id ? 'ready_up' : 'waiting_for_teams',
+          team1Ready: false,
+          team2Ready: false,
+          team1MapBans: [],
+          team2MapBans: [],
+          team1MapPick: null,
+          team2MapPick: null,
+          selectedMap: null,
+          bannedMaps: { team1: [], team2: [] },
+          sideSelection: {},
+          disputeRequested: false,
+          disputeReason: null,
+          adminAssigned: null,
+          adminResolution: null,
+          resolvedAt: null
+        });
+      }
+    });
+    
+    // Filter out empty promises and execute updates
+    const validUpdates = subsequentUpdatePromises.filter(promise => promise !== Promise.resolve());
+    await Promise.all(validUpdates);
+    
+    console.log(`Reverted round ${round} and removed ${advancedTeams.length} teams from subsequent rounds for tournament ${tournamentId}`);
+  } catch (error) {
+    console.error('Error reverting round:', error);
+    throw error;
+  }
+};
+
+// Get match progression info (which teams advanced from this match)
+export const getMatchProgressionInfo = async (matchId: string): Promise<{
+  currentMatch: Match;
+  nextMatch: Match | null;
+  advancedTeam: string | null;
+}> => {
+  try {
+    const match = await getMatch(matchId);
+    if (!match) {
+      throw new Error('Match not found');
+    }
+    
+    let nextMatch: Match | null = null;
+    if (match.nextMatchId) {
+      nextMatch = await getMatch(match.nextMatchId);
+    }
+    
+    return {
+      currentMatch: match,
+      nextMatch,
+      advancedTeam: match.winnerId || null
+    };
+  } catch (error) {
+    console.error('Error getting match progression info:', error);
+    throw error;
+  }
+};
+
+// Comprehensive revert function that handles bracket progression
+export const revertRoundComprehensive = async (tournamentId: string, round: number): Promise<void> => {
+  try {
+    // Get all matches for the tournament
+    const matches = await getMatches();
+    const tournamentMatches = matches.filter(match => match.tournamentId === tournamentId);
+    
+    // Find matches in the specified round
+    const roundMatches = tournamentMatches.filter(match => match.round === round);
+    
+    if (roundMatches.length === 0) {
+      throw new Error(`No matches found for round ${round}`);
+    }
+    
+    // Step 1: Collect all teams that advanced from this round
+    const advancedTeams: string[] = [];
+    roundMatches.forEach(match => {
+      if (match.winnerId) {
+        advancedTeams.push(match.winnerId);
+      }
+    });
+    
+    console.log(`Teams that advanced from round ${round}:`, advancedTeams);
+    
+    // Step 2: Reset all matches in the current round
+    const resetPromises = roundMatches.map(match => 
+      updateDoc(doc(db, 'matches', match.id), {
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        isComplete: false,
+        matchState: 'ready_up',
+        team1Ready: false,
+        team2Ready: false,
+        team1MapBans: [],
+        team2MapBans: [],
+        team1MapPick: null,
+        team2MapPick: null,
+        selectedMap: null,
+        bannedMaps: { team1: [], team2: [] },
+        sideSelection: {},
+        disputeRequested: false,
+        disputeReason: null,
+        adminAssigned: null,
+        adminResolution: null,
+        resolvedAt: null
+      })
+    );
+    
+    await Promise.all(resetPromises);
+    
+    // Step 3: Remove advanced teams from ALL subsequent rounds recursively
+    const removeTeamsFromSubsequentRounds = async (teamsToRemove: string[], startRound: number) => {
+      const subsequentMatches = tournamentMatches.filter(match => match.round > startRound);
+      
+      for (const match of subsequentMatches) {
+        let updatedTeam1Id = match.team1Id;
+        let updatedTeam2Id = match.team2Id;
+        let needsUpdate = false;
+        
+        // Check if either team should be removed
+        if (match.team1Id && teamsToRemove.includes(match.team1Id)) {
+          updatedTeam1Id = null;
+          needsUpdate = true;
+        }
+        
+        if (match.team2Id && teamsToRemove.includes(match.team2Id)) {
+          updatedTeam2Id = null;
+          needsUpdate = true;
+        }
+        
+        if (needsUpdate) {
+          // If both teams are removed, reset the match completely
+          if (!updatedTeam1Id && !updatedTeam2Id) {
+            await updateDoc(doc(db, 'matches', match.id), {
+              team1Id: null,
+              team2Id: null,
+              team1Score: 0,
+              team2Score: 0,
+              winnerId: null,
+              isComplete: false,
+              matchState: 'waiting_for_teams',
+              team1Ready: false,
+              team2Ready: false,
+              team1MapBans: [],
+              team2MapBans: [],
+              team1MapPick: null,
+              team2MapPick: null,
+              selectedMap: null,
+              bannedMaps: { team1: [], team2: [] },
+              sideSelection: {},
+              disputeRequested: false,
+              disputeReason: null,
+              adminAssigned: null,
+              adminResolution: null,
+              resolvedAt: null
+            });
+          } else {
+            // Update with remaining teams
+            await updateDoc(doc(db, 'matches', match.id), {
+              team1Id: updatedTeam1Id,
+              team2Id: updatedTeam2Id,
+              team1Score: 0,
+              team2Score: 0,
+              winnerId: null,
+              isComplete: false,
+              matchState: updatedTeam1Id && updatedTeam2Id ? 'ready_up' : 'waiting_for_teams',
+              team1Ready: false,
+              team2Ready: false,
+              team1MapBans: [],
+              team2MapBans: [],
+              team1MapPick: null,
+              team2MapPick: null,
+              selectedMap: null,
+              bannedMaps: { team1: [], team2: [] },
+              sideSelection: {},
+              disputeRequested: false,
+              disputeReason: null,
+              adminAssigned: null,
+              adminResolution: null,
+              resolvedAt: null
+            });
+          }
+        }
+      }
+    };
+    
+    // Execute the recursive removal
+    await removeTeamsFromSubsequentRounds(advancedTeams, round);
+    
+    console.log(`Comprehensive revert completed for round ${round}. Removed ${advancedTeams.length} teams from all subsequent rounds.`);
+  } catch (error) {
+    console.error('Error in comprehensive round revert:', error);
+    throw error;
+  }
+};
+
+// Debug function to show bracket state
+export const debugBracketState = async (tournamentId: string): Promise<void> => {
+  try {
+    const matches = await getMatches();
+    const tournamentMatches = matches.filter(match => match.tournamentId === tournamentId);
+    
+    console.log('=== BRACKET DEBUG STATE ===');
+    console.log(`Tournament ID: ${tournamentId}`);
+    console.log(`Total matches: ${tournamentMatches.length}`);
+    
+    const rounds = new Map<number, Match[]>();
+    tournamentMatches.forEach(match => {
+      if (!rounds.has(match.round)) {
+        rounds.set(match.round, []);
+      }
+      rounds.get(match.round)!.push(match);
+    });
+    
+    rounds.forEach((roundMatches, roundNumber) => {
+      console.log(`\n--- Round ${roundNumber} ---`);
+      roundMatches.forEach(match => {
+        console.log(`Match ${match.matchNumber}: ${match.team1Id || 'TBD'} vs ${match.team2Id || 'TBD'} | Winner: ${match.winnerId || 'None'} | State: ${match.matchState} | Complete: ${match.isComplete}`);
+      });
+    });
+    
+    console.log('=== END BRACKET DEBUG ===');
+  } catch (error) {
+    console.error('Error debugging bracket state:', error);
   }
 };

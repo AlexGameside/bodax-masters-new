@@ -38,6 +38,7 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
   const loadMemberStatus = async () => {
     setLoading(true);
     try {
+      // Load all users first (more efficient than individual calls)
       const membersData = await Promise.all(
         teamMembers.map(async (member) => {
           const user = await getUserById(member.userId);
@@ -51,21 +52,13 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
             };
           }
 
-          // Check Discord server membership
-          let inDiscordServer = false;
-          if (user.discordId && user.discordLinked) {
-            try {
-              inDiscordServer = await checkUserInDiscordServer(user.discordId);
-            } catch (error) {
-              console.error('Error checking Discord server membership:', error);
-            }
-          }
-
+          // Skip Discord check for now to improve performance
+          // We'll check Discord status only when needed
           return {
             ...member,
             user,
             discordLinked: !!(user.discordId && user.discordLinked),
-            inDiscordServer,
+            inDiscordServer: false, // Will be checked on-demand
             isSelected: false
           };
         })
@@ -80,41 +73,47 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
     }
   };
 
-  const toggleMemberSelection = (userId: string) => {
-    setMembersWithStatus(prev => {
-      const member = prev.find(m => m.userId === userId);
-      if (!member) return prev;
-
-      // Don't allow selection if Discord requirements not met
-      if (!member.discordLinked || !member.inDiscordServer) {
-        toast.error(`${member.user?.username || 'Member'} must link Discord and join our server first`);
-        return prev;
-      }
-
-      // Check if we're at max players
-      const currentlySelected = prev.filter(m => m.isSelected).length;
-      if (!member.isSelected && currentlySelected >= maxPlayers) {
-        toast.error(`Maximum ${maxPlayers} players allowed`);
-        return prev;
-      }
-
-      return prev.map(m => 
-        m.userId === userId 
-          ? { ...m, isSelected: !m.isSelected }
-          : m
-      );
-    });
+  // Check Discord status on-demand when user tries to select a member
+  const checkDiscordStatus = async (userId: string, discordId: string): Promise<boolean> => {
+    try {
+      const inDiscordServer = await checkUserInDiscordServer(discordId);
+      
+      // Update the member's Discord status
+      setMembersWithStatus(prev => prev.map(member => 
+        member.userId === userId 
+          ? { ...member, inDiscordServer }
+          : member
+      ));
+      
+      return inDiscordServer;
+    } catch (error) {
+      console.error('Error checking Discord status:', error);
+      return false;
+    }
   };
 
-  const handleConfirmSelection = () => {
-    const selectedMembers = membersWithStatus.filter(m => m.isSelected);
+  const toggleMemberSelection = async (userId: string) => {
+    const member = membersWithStatus.find(m => m.userId === userId);
+    if (!member || !member.user) return;
+
+    // Toggle selection (no Discord verification required)
+    setMembersWithStatus(prev => prev.map(member => 
+      member.userId === userId 
+        ? { ...member, isSelected: !member.isSelected }
+        : member
+    ));
+  };
+
+  const handleConfirm = () => {
+    const selectedUserIds = membersWithStatus
+      .filter(m => m.isSelected)
+      .map(m => m.userId);
     
-    if (selectedMembers.length < 5) {
-      toast.error('You must select at least 5 players');
+    if (selectedUserIds.length !== maxPlayers) {
+      toast.error(`Please select exactly ${maxPlayers} players`);
       return;
     }
-
-    const selectedUserIds = selectedMembers.map(m => m.userId);
+    
     onMembersSelected(selectedUserIds);
   };
 
@@ -147,35 +146,22 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
   };
 
   const getStatusIcon = (member: MemberWithStatus) => {
-    if (!member.user) return <XCircle className="w-5 h-5 text-red-500" />;
-    
-    if (!member.discordLinked) {
-      return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
-    }
-    
-    if (!member.inDiscordServer) {
-      return <MessageCircle className="w-5 h-5 text-blue-500" />;
-    }
-    
-    return <CheckCircle className="w-5 h-5 text-green-500" />;
+    if (!member.user) return <XCircle className="w-4 h-4 text-red-500" />;
+    return <CheckCircle className="w-4 h-4 text-green-500" />;
   };
 
   const getStatusText = (member: MemberWithStatus) => {
     if (!member.user) return 'User not found';
-    if (!member.discordLinked) return 'Discord not linked';
-    if (!member.inDiscordServer) return 'Not in Discord server';
     return 'Ready for tournament';
   };
 
   const getStatusColor = (member: MemberWithStatus) => {
     if (!member.user) return 'text-red-400';
-    if (!member.discordLinked) return 'text-yellow-400';
-    if (!member.inDiscordServer) return 'text-blue-400';
     return 'text-green-400';
   };
 
   const canSelectMember = (member: MemberWithStatus) => {
-    return member.user && member.discordLinked && member.inDiscordServer;
+    return member.user;
   };
 
   const selectedCount = membersWithStatus.filter(m => m.isSelected).length;
@@ -187,7 +173,7 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
         <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
           <div className="text-center">
             <div className="text-white text-lg mb-2">Loading Team Members...</div>
-            <div className="text-gray-400 text-sm">Verifying Discord status</div>
+            <div className="text-gray-400 text-sm">Loading user information</div>
           </div>
         </div>
       </div>
@@ -216,14 +202,6 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
               <span className="text-green-400">Ready for tournament</span>
             </div>
             <div className="flex items-center gap-2">
-              <MessageCircle className="w-4 h-4 text-blue-500" />
-              <span className="text-blue-400">Not in Discord server</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-yellow-500" />
-              <span className="text-yellow-400">Discord not linked</span>
-            </div>
-            <div className="flex items-center gap-2">
               <XCircle className="w-4 h-4 text-red-500" />
               <span className="text-red-400">User not found</span>
             </div>
@@ -231,110 +209,86 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
         </div>
 
         {/* Selection Info */}
-        <div className="bg-blue-900/20 border border-blue-500 rounded-lg p-4 mb-6">
-          <div className="text-blue-400 font-semibold mb-2">Tournament Requirements</div>
-          <div className="text-blue-200 text-sm">
-            • All players must have Discord linked and be in our Discord server<br/>
-            • Minimum {maxPlayers} players required<br/>
-            • Selected: {selectedCount}/{maxPlayers} players
+        <div className="bg-gray-700 rounded-lg p-4 mb-6">
+          <div className="text-white font-semibold mb-2">
+            Select {maxPlayers} Players ({selectedCount}/{maxPlayers})
+          </div>
+          <div className="text-gray-300 text-sm">
+            {readyMembers.length} players ready
           </div>
         </div>
 
         {/* Team Members */}
         <div className="space-y-3 mb-6">
-          {membersWithStatus.map((member) => (
-            <div
-              key={member.userId}
-              className={`bg-gray-700 rounded-lg p-4 border-2 transition-all ${
-                member.isSelected 
-                  ? 'border-green-500 bg-green-900/20' 
-                  : canSelectMember(member)
-                    ? 'border-gray-600 hover:border-gray-500 cursor-pointer'
-                    : 'border-gray-600 opacity-60'
-              }`}
-              onClick={() => canSelectMember(member) && toggleMemberSelection(member.userId)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(member)}
+          {membersWithStatus.map((member) => {
+            const isVerifying = verifying === member.userId;
+            const isSelectable = canSelectMember(member);
+            
+            return (
+              <div
+                key={member.userId}
+                className={`p-4 border rounded-lg transition-all ${
+                  member.isSelected
+                    ? 'border-blue-500 bg-blue-900/20'
+                    : isSelectable
+                    ? 'border-gray-600 hover:border-gray-500 bg-gray-700 cursor-pointer'
+                    : 'border-gray-700 bg-gray-800 cursor-not-allowed opacity-60'
+                }`}
+                onClick={() => isSelectable && !isVerifying && toggleMemberSelection(member.userId)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      member.isSelected
+                        ? 'border-blue-400 bg-blue-400'
+                        : 'border-gray-400'
+                    }`}>
+                      {member.isSelected && <CheckCircle className="w-3 h-3 text-white" />}
+                    </div>
                     <div>
-                      <div className="text-white font-semibold">
-                        {member.user?.username || 'Unknown User'}
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium text-white">
+                          {member.user?.username || 'Unknown User'}
+                        </span>
+                        {getStatusIcon(member)}
                       </div>
-                      <div className={`text-sm ${getStatusColor(member)}`}>
-                        {getStatusText(member)}
+                      <div className="text-sm text-gray-300">
+                        {member.user?.riotId || 'No Riot ID'}
                       </div>
                     </div>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    {isVerifying && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                    )}
+                    <span className={`text-xs ${getStatusColor(member)}`}>
+                      {getStatusText(member)}
+                    </span>
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Send notification button for members who need Discord */}
-                  {member.user && (!member.discordLinked || !member.inDiscordServer) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        sendDiscordNotification(member.userId, member.user?.username || '');
-                      }}
-                      disabled={verifying === member.userId}
-                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors"
-                    >
-                      {verifying === member.userId ? 'Sending...' : 'Notify'}
-                    </button>
-                  )}
-
-                  {/* Profile link for members who need Discord */}
-                  {member.user && (!member.discordLinked || !member.inDiscordServer) && (
-                    <a
-                      href="/profile"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center gap-1"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      Profile
-                    </a>
-                  )}
-
-                  {/* Selection indicator */}
-                  {member.isSelected && (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                  )}
-                </div>
+                
+                {/* No action buttons needed - Discord not required */}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-3">
+        <div className="flex space-x-3">
           <button
-            onClick={onCancel}
-            className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirmSelection}
-            disabled={selectedCount < 5 || selectedCount > maxPlayers}
-            className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors"
+            onClick={handleConfirm}
+            disabled={selectedCount !== maxPlayers}
+            className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
           >
             Confirm Selection ({selectedCount}/{maxPlayers})
           </button>
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            Cancel
+          </button>
         </div>
-
-        {/* Warning if not enough ready members */}
-        {readyMembers.length < 5 && (
-          <div className="bg-yellow-900/20 border border-yellow-500 rounded-lg p-4 mt-4">
-            <div className="text-yellow-400 font-semibold mb-2">⚠️ Not Enough Ready Members</div>
-            <div className="text-yellow-200 text-sm">
-              Only {readyMembers.length} members are ready for tournament registration. 
-              You need at least 5 members with Discord linked and in our server.
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

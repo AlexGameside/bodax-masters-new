@@ -47,10 +47,8 @@ async function sendTournamentNotification(userIds, tournamentName, startTime, me
       const user = await client.users.fetch(userId);
       await user.send({ embeds: [embed] });
       results.success.push(userId);
-      console.log(`Notification sent to ${user.tag} (${userId})`);
     } catch (error) {
       results.failed.push(userId);
-      console.error(`Failed to send notification to ${userId}:`, error.message);
     }
   }
 
@@ -81,10 +79,8 @@ async function sendMatchNotification(userIds, team1Name, team2Name, matchTime, m
       const user = await client.users.fetch(userId);
       await user.send({ embeds: [embed] });
       results.success.push(userId);
-      console.log(`Match notification sent to ${user.tag} (${userId})`);
     } catch (error) {
       results.failed.push(userId);
-      console.error(`Failed to send match notification to ${userId}:`, error.message);
     }
   }
 
@@ -107,10 +103,8 @@ async function sendTeamInvitation(userId, teamName, inviterName) {
   try {
     const user = await client.users.fetch(userId);
     await user.send({ embeds: [embed] });
-    console.log(`Team invitation sent to ${user.tag} (${userId})`);
     return true;
   } catch (error) {
-    console.error(`Failed to send team invitation to ${userId}:`, error.message);
     return false;
   }
 }
@@ -141,10 +135,8 @@ async function sendAdminNotification(userIds, title, message, type = 'info') {
       const user = await client.users.fetch(userId);
       await user.send({ embeds: [embed] });
       results.success.push(userId);
-      console.log(`Admin notification sent to ${user.tag} (${userId})`);
     } catch (error) {
       results.failed.push(userId);
-      console.error(`Failed to send admin notification to ${userId}:`, error.message);
     }
   }
 

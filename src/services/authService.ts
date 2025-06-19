@@ -60,7 +60,6 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { 
     };
     notifyAuthStateListeners(currentUser);
   } catch (error: any) {
-    console.error('Registration error:', error);
     if (error.code === 'auth/email-already-in-use') {
       throw new Error('Email already registered');
     }
@@ -103,7 +102,6 @@ export const loginUser = async (usernameOrEmail: string, password: string): Prom
     };
     notifyAuthStateListeners(currentUser);
   } catch (error: any) {
-    console.error('Login error:', error);
     if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
       throw new Error('Invalid username/email or password');
     }
@@ -117,7 +115,6 @@ export const logoutUser = async (): Promise<void> => {
     currentUser = null;
     notifyAuthStateListeners(null);
   } catch (error) {
-    console.error('Logout error:', error);
     throw error;
   }
 };
@@ -126,7 +123,6 @@ export const resetPassword = async (email: string): Promise<void> => {
   try {
     await sendPasswordResetEmail(auth, email);
   } catch (error: any) {
-    console.error('Password reset error:', error);
     if (error.code === 'auth/user-not-found') {
       throw new Error('No account found with this email address');
     }
