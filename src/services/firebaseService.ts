@@ -544,60 +544,92 @@ export const getMatches = async (): Promise<Match[]> => {
 };
 
 export const getMatch = async (matchId: string): Promise<Match | null> => {
-  try {
-    console.log('getMatch called with ID:', matchId);
-    const docRef = doc(db, 'matches', matchId);
-    const docSnap = await getDoc(docRef);
-    
-    console.log('Document exists:', docSnap.exists());
-    
-    if (!docSnap.exists()) {
-      console.log('Match document does not exist');
-      return null;
-    }
-    
+  const docRef = doc(db, 'matches', matchId);
+  const docSnap = await getDoc(docRef);
+
+  if (docSnap.exists()) {
     const data = docSnap.data();
-    console.log('Match data:', data);
-    
     return {
       id: docSnap.id,
-      team1Id: data.team1Id || null,
-      team2Id: data.team2Id || null,
-      team1Score: data.team1Score || 0,
-      team2Score: data.team2Score || 0,
-      winnerId: data.winnerId || null,
-      isComplete: data.isComplete || false,
-      round: data.round || 1,
-      matchNumber: data.matchNumber || 1,
-      nextMatchId: data.nextMatchId,
-      tournamentId: data.tournamentId || null,
-      tournamentType: data.tournamentType || 'single-elim',
-      bracketType: data.bracketType,
-      createdAt: data.createdAt?.toDate() || new Date(),
-      // Map banning system
-      matchState: data.matchState || 'ready_up',
-      mapPool: data.mapPool || ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
-      bannedMaps: data.bannedMaps || { team1: [], team2: [] },
+      tournamentId: data.tournamentId,
+      round: data.round,
+      matchNumber: data.matchNumber,
+      team1Id: data.team1Id,
+      team2Id: data.team2Id,
+      winnerId: data.winnerId,
+      team1Score: data.team1Score,
+      team2Score: data.team2Score,
+      status: data.status,
+      scheduledTime: data.scheduledTime?.toDate(),
+      map: data.map,
+      team1Ready: data.team1Ready,
+      team2Ready: data.team2Ready,
+      bannedMaps: data.bannedMaps,
       selectedMap: data.selectedMap,
-      team1Ready: data.team1Ready || false,
-      team2Ready: data.team2Ready || false,
-      team1MapBans: data.team1MapBans || [],
-      team2MapBans: data.team2MapBans || [],
-      team1MapPick: data.team1MapPick,
-      team2MapPick: data.team2MapPick,
-      // Side selection
-      sideSelection: data.sideSelection || {},
-      // Dispute system
-      disputeRequested: data.disputeRequested || false,
-      disputeReason: data.disputeReason,
-      adminAssigned: data.adminAssigned,
-      adminResolution: data.adminResolution,
-      resolvedAt: data.resolvedAt?.toDate()
-    };
-  } catch (error) {
-    console.error('Error getting match:', error);
-    return null;
+      matchState: data.matchState,
+      mapPool: data.mapPool,
+      team1Side: data.team1Side,
+      team2Side: data.team2Side,
+      sideSelection: data.sideSelection,
+      resultSubmission: data.resultSubmission,
+      dispute: data.dispute,
+      isWinnerBracket: data.isWinnerBracket,
+      // Fixes for build error
+      isComplete: data.isComplete ?? false,
+      tournamentType: data.tournamentType ?? 'single-elim',
+      createdAt: data.createdAt?.toDate() ?? new Date(),
+      team1MapBans: data.team1MapBans ?? [],
+      team2MapBans: data.team2MapBans ?? [],
+    } as Match;
   }
+  return null;
+};
+
+export const onMatchUpdate = (matchId: string, callback: (match: Match | null) => void): (() => void) => {
+  const matchRef = doc(db, 'matches', matchId);
+  
+  const unsubscribe = onSnapshot(matchRef, (docSnap) => {
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      const matchData = {
+        id: docSnap.id,
+        tournamentId: data.tournamentId,
+        round: data.round,
+        matchNumber: data.matchNumber,
+        team1Id: data.team1Id,
+        team2Id: data.team2Id,
+        winnerId: data.winnerId,
+        team1Score: data.team1Score,
+        team2Score: data.team2Score,
+        status: data.status,
+        scheduledTime: data.scheduledTime?.toDate(),
+        map: data.map,
+        team1Ready: data.team1Ready,
+        team2Ready: data.team2Ready,
+        bannedMaps: data.bannedMaps,
+        selectedMap: data.selectedMap,
+        matchState: data.matchState,
+        mapPool: data.mapPool,
+        team1Side: data.team1Side,
+        team2Side: data.team2Side,
+        sideSelection: data.sideSelection,
+        resultSubmission: data.resultSubmission,
+        dispute: data.dispute,
+        isWinnerBracket: data.isWinnerBracket,
+        // Fixes for build error
+        isComplete: data.isComplete ?? false,
+        tournamentType: data.tournamentType ?? 'single-elim',
+        createdAt: data.createdAt?.toDate() ?? new Date(),
+        team1MapBans: data.team1MapBans ?? [],
+        team2MapBans: data.team2MapBans ?? [],
+      } as Match;
+      callback(matchData);
+    } else {
+      callback(null);
+    }
+  });
+  
+  return unsubscribe;
 };
 
 export const updateMatch = async (matchId: string, result: { team1Score: number; team2Score: number }): Promise<void> => {

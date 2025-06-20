@@ -141,30 +141,6 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
 
   return (
     <div className="space-y-4">
-      {/* Sides Display - More Prominent */}
-      {match.team1Side && match.team2Side && (
-        <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 border-2 border-blue-500/50 rounded-lg p-4 shadow-lg">
-          <h4 className="text-lg font-bold text-blue-200 mb-3 flex items-center justify-center">
-            <Target className="w-5 h-5 mr-2" />
-            MATCH SIDES
-          </h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center p-3 bg-red-900/30 border-2 border-red-500/50 rounded-lg">
-              <div className="text-sm text-red-200 font-medium mb-1">{team1?.name}</div>
-              <div className={`text-xl font-bold ${match.team1Side === 'attack' ? 'text-orange-300' : 'text-blue-300'}`}>
-                {match.team1Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
-              </div>
-            </div>
-            <div className="text-center p-3 bg-blue-900/30 border-2 border-blue-500/50 rounded-lg">
-              <div className="text-sm text-blue-200 font-medium mb-1">{team2?.name}</div>
-              <div className={`text-xl font-bold ${match.team2Side === 'attack' ? 'text-orange-300' : 'text-blue-300'}`}>
-                {match.team2Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Match Status */}
       <div className="bg-gray-800/50 rounded-lg p-4">
         <div className="flex items-center justify-between">
@@ -187,6 +163,28 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
             <span>{isCreatingDispute ? 'Creating...' : 'Need Help?'}</span>
           </button>
         </div>
+
+        {/* Sides Display - Integrated */}
+        {match.team1Side && match.team2Side && (
+            <div className="mt-4 pt-4 border-t border-gray-700/50 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="bg-gray-700/40 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-300">{team1?.name}</span>
+                        <span className={`font-bold px-2 py-1 rounded-md text-xs ${match.team1Side === 'attack' ? 'bg-orange-500/20 text-orange-300' : 'bg-blue-500/20 text-blue-300'}`}>
+                            {match.team1Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
+                        </span>
+                    </div>
+                </div>
+                <div className="bg-gray-700/40 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-300">{team2?.name}</span>
+                        <span className={`font-bold px-2 py-1 rounded-md text-xs ${match.team2Side === 'attack' ? 'bg-orange-500/20 text-orange-300' : 'bg-blue-500/20 text-blue-300'}`}>
+                            {match.team2Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
 
       {/* Result Submission */}
