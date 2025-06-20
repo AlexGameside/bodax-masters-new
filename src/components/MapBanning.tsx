@@ -41,7 +41,8 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
   const isUserTeamTurn = (isTeam1 && isTeam1Turn) || (isTeam2 && !isTeam1Turn);
   
   // Determine which team should pick the map (Team 1 picks when 2 maps remain)
-  const isMapSelectionTurn = isMapSelectionPhase && isTeam1Turn;
+  // When we reach 5 bans, it should be Team 1's turn to select, regardless of whose turn it was for banning
+  const isMapSelectionTurn = isMapSelectionPhase && isTeam1;
 
   const handleBanMap = async (mapName: string) => {
     if (!match || !userTeam) {
@@ -97,7 +98,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
       if (isMapSelectionTurn) {
         return "Team 1's turn to select the final map";
       } else {
-        return "Team 1 has selected the map. Team 2 will choose attack/defense next.";
+        return "Waiting for Team 1 to select the final map";
       }
     } else {
       if (isTeam1Turn) {
@@ -110,10 +111,10 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
 
   const getActionButtonText = (mapName: string) => {
     if (isMapSelectionPhase) {
-      if (isMapSelectionTurn && isTeam1) {
+      if (isMapSelectionTurn) {
         return `Select ${mapName}`;
       } else {
-        return `${mapName} (Waiting for Team 1 to select)`;
+        return `${mapName} (Waiting for Team 1)`;
       }
     } else {
       if (isUserTeamTurn) {
@@ -127,7 +128,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
   const isButtonDisabled = (mapName: string) => {
     if (banningLoading) return true;
     if (isMapSelectionPhase) {
-      return !isMapSelectionTurn || !isTeam1;
+      return !isMapSelectionTurn;
     } else {
       return !isUserTeamTurn;
     }
@@ -151,7 +152,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
           <p className="text-blue-200 font-medium">{getTurnIndicator()}</p>
           <p className="text-sm text-gray-300 mt-1">
             {isMapSelectionPhase 
-              ? `${availableMaps.length} maps remaining - ${isMapSelectionTurn ? 'Select one' : 'Waiting for Team 1'}`
+              ? `${availableMaps.length} maps remaining - ${isMapSelectionTurn ? 'Team 1 select one' : 'Waiting for Team 1'}`
               : `${totalBans}/5 bans completed - ${availableMaps.length} maps remaining`
             }
           </p>
