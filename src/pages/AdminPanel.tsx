@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Team, Match, User, Tournament } from '../types/tournament';
-import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink, MessageCircle, FileText, Activity, RefreshCw } from 'lucide-react';
+import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink, MessageCircle, FileText, Activity, RefreshCw, User as UserIcon } from 'lucide-react';
 import { getAllUsers, updateUserAdminStatus, createTestScenario, clearTestData, createTestUsersWithAuth, getTestUsers, migrateAllTeams, updateAllInvitationsExpiration, sendDiscordNotificationToUser, getUsersWithDiscord, getSignupLogs, getGeneralLogs, logAdminAction, type AdminLog } from '../services/firebaseService';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { toast } from 'react-hot-toast';
 
 interface AdminPanelProps {
   teams: Team[];
@@ -32,7 +33,7 @@ const AdminPanel = ({
   onGenerateFinalBracket
 }: AdminPanelProps) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs'>('tournaments');
+  const [activeTab, setActiveTab] = useState<'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs' | 'users'>('tournaments');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -51,6 +52,11 @@ const AdminPanel = ({
   const [signupLogs, setSignupLogs] = useState<AdminLog[]>([]);
   const [generalLogs, setGeneralLogs] = useState<AdminLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [userMatches, setUserMatches] = useState<Record<string, { active: Match[], history: Match[] }>>({});
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Add null checks for teams and matches
   const safeTeams = teams || [];
@@ -108,6 +114,13 @@ const AdminPanel = ({
     }
   }, [activeTab]);
 
+  // Load users when users tab is active
+  useEffect(() => {
+    if (activeTab === 'users' && allUsers.length === 0) {
+      loadUsers();
+    }
+  }, [activeTab]);
+
   // Load test users when test tab is active
   useEffect(() => {
     if (activeTab === 'matches') {
@@ -155,6 +168,15 @@ const AdminPanel = ({
       loadGeneralLogs();
     }
   }, [activeTab]);
+
+  // Cleanup search timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTimeout]);
 
   const loadUsers = async () => {
     setLoadingUsers(true);
@@ -214,24 +236,176 @@ const AdminPanel = ({
     setUpdatingUser(userId);
     try {
       await updateUserAdminStatus(userId, isAdmin);
+      
       // Update local state
       setAllUsers(prev => prev.map(user => 
         user.id === userId ? { ...user, isAdmin } : user
       ));
+      
+      // Log the action
+      await logAdminAction(
+        'update_user_admin_status',
+        `Updated admin status for user ${userId} to ${isAdmin}`,
+        undefined,
+        undefined,
+        { userId, isAdmin }
+      );
+      
+      toast.success(`Admin status updated successfully`);
     } catch (error) {
       console.error('Error updating admin status:', error);
-      alert('Failed to update admin status. Please try again.');
+      toast.error('Failed to update admin status');
     } finally {
       setUpdatingUser(null);
     }
   };
 
-  // Filter users based on search term
-  const filteredUsers = allUsers.filter(user =>
-    user.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-    user.riotId.toLowerCase().includes(userSearchTerm.toLowerCase())
-  );
+  const handleUpdateUser = async (userId: string, updates: {
+    username?: string;
+    email?: string;
+    riotId?: string;
+    discordUsername?: string;
+    discordId?: string;
+    discordAvatar?: string;
+    discordLinked?: boolean;
+    inDiscordServer?: boolean;
+    isAdmin?: boolean;
+    teamIds?: string[];
+  }) => {
+    setUpdatingUser(userId);
+    try {
+      const { updateUser } = await import('../services/firebaseService');
+      await updateUser(userId, updates);
+      
+      // Update local state
+      setAllUsers(prev => prev.map(user => 
+        user.id === userId ? { ...user, ...updates } : user
+      ));
+      
+      // Log the action
+      await logAdminAction(
+        'update_user',
+        `Updated user ${userId} profile information`,
+        undefined,
+        undefined,
+        { 
+          userId, 
+          updates: Object.fromEntries(
+            Object.entries(updates).filter(([_, value]) => value !== undefined)
+          )
+        }
+      );
+      
+      toast.success('User updated successfully');
+    } catch (error) {
+      console.error('Error updating user:', error);
+      toast.error('Failed to update user');
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+  };
+
+  const handleSaveUser = async (updatedUser: User) => {
+    try {
+      const { username, email, riotId, discordUsername, discordId, discordAvatar, discordLinked, inDiscordServer, isAdmin, teamIds } = updatedUser;
+      
+      // Prepare updates object, converting empty strings to undefined for optional fields
+      const updates: any = {
+        username,
+        email,
+        riotId,
+        discordUsername,
+        discordLinked,
+        inDiscordServer,
+        isAdmin,
+        teamIds
+      };
+      
+      // Only include optional fields if they have values
+      if (discordId && discordId.trim() !== '') {
+        updates.discordId = discordId;
+      }
+      
+      if (discordAvatar && discordAvatar.trim() !== '') {
+        updates.discordAvatar = discordAvatar;
+      }
+      
+      await handleUpdateUser(updatedUser.id, updates);
+      
+      setEditingUser(null);
+    } catch (error) {
+      console.error('Error saving user:', error);
+      toast.error('Failed to save user changes');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingUser(null);
+  };
+
+  // Search users function - only loads users when actually searching
+  const searchUsers = async (searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      setFilteredUsers([]);
+      return;
+    }
+
+    setSearchingUsers(true);
+    try {
+      const { getAllUsers } = await import('../services/firebaseService');
+      const users = await getAllUsers();
+      
+      // Filter users based on search term with null safety
+      const filtered = users.filter(user => {
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          (user.username?.toLowerCase() || '').includes(searchLower) ||
+          (user.email?.toLowerCase() || '').includes(searchLower) ||
+          (user.riotId?.toLowerCase() || '').includes(searchLower) ||
+          (user.discordUsername?.toLowerCase() || '').includes(searchLower)
+        );
+      });
+      
+      setFilteredUsers(filtered);
+      
+      // Load match data for found users
+      await loadUserMatches(filtered);
+    } catch (error) {
+      console.error('Error searching users:', error);
+      toast.error('Failed to search users');
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  // Load match data for users
+  const loadUserMatches = async (users: User[]) => {
+    try {
+      const { getUserMatches } = await import('../services/firebaseService');
+      const matchesData: Record<string, { active: Match[], history: Match[] }> = {};
+      
+      // Load matches for each user (limit to first 10 users to avoid performance issues)
+      const usersToLoad = users.slice(0, 10);
+      
+      for (const user of usersToLoad) {
+        const userMatches = await getUserMatches(user.id);
+        const active = userMatches.filter(match => 
+          ['ready_up', 'map_banning', 'side_selection', 'playing', 'waiting_results', 'disputed'].includes(match.matchState)
+        );
+        const history = userMatches.filter(match => match.isComplete);
+        
+        matchesData[user.id] = { active, history };
+      }
+      
+      setUserMatches(matchesData);
+    } catch (error) {
+      console.error('Error loading user matches:', error);
+    }
+  };
 
   const exportTeamsCSV = () => {
     const headers = ['ID', 'Name', 'Captain ID', 'Members Count', 'Team Tag', 'Registered'];
@@ -455,11 +629,12 @@ const AdminPanel = ({
             { id: 'disputes', label: 'Disputes', icon: AlertTriangle },
             { id: 'notifications', label: 'Notifications', icon: MessageSquare },
             { id: 'signup-logs', label: 'Signup Logs', icon: FileText },
-            { id: 'general-logs', label: 'General Logs', icon: Activity }
+            { id: 'general-logs', label: 'General Logs', icon: Activity },
+            { id: 'users', label: 'Users', icon: Users }
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs')}
+              onClick={() => setActiveTab(tab.id as 'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs' | 'users')}
               className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg'
@@ -1006,6 +1181,419 @@ const AdminPanel = ({
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Users Tab */}
+        {activeTab === 'users' && (
+          <div className="card">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white flex items-center">
+                <Users className="w-6 h-6 mr-3 text-primary-400" />
+                User Management ({filteredUsers.length} users)
+              </h2>
+              <button
+                onClick={loadUsers}
+                disabled={loadingUsers}
+                className="btn-secondary"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${loadingUsers ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Search users by username, email, Riot ID, or Discord username..."
+                  value={userSearchTerm}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setUserSearchTerm(value);
+                    
+                    // Clear previous timeout
+                    if (searchTimeout) {
+                      clearTimeout(searchTimeout);
+                    }
+                    
+                    // Set new timeout for debounced search
+                    const timeoutId = setTimeout(() => {
+                      searchUsers(value);
+                    }, 300); // Reduced from 500ms to 300ms for better responsiveness
+                    
+                    setSearchTimeout(timeoutId);
+                  }}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                {searchingUsers && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500"></div>
+                  </div>
+                )}
+              </div>
+
+              {/* Match Information Summary */}
+              {filteredUsers.length > 0 && (
+                <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center">
+                    <Trophy className="w-5 h-5 mr-2 text-yellow-400" />
+                    Match Overview
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center p-3 bg-blue-900/20 border border-blue-700/30 rounded">
+                      <div className="text-2xl font-bold text-blue-400">
+                        {filteredUsers.length}
+                      </div>
+                      <div className="text-sm text-gray-300">Users Found</div>
+                    </div>
+                    <div className="text-center p-3 bg-green-900/20 border border-green-700/30 rounded">
+                      <div className="text-2xl font-bold text-green-400">
+                        {Object.values(userMatches).reduce((total, matches) => total + matches.active.length, 0)}
+                      </div>
+                      <div className="text-sm text-gray-300">Active Matches</div>
+                    </div>
+                    <div className="text-center p-3 bg-purple-900/20 border border-purple-700/30 rounded">
+                      <div className="text-2xl font-bold text-purple-400">
+                        {Object.values(userMatches).reduce((total, matches) => total + matches.history.length, 0)}
+                      </div>
+                      <div className="text-sm text-gray-300">Match History</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Users Table */}
+              {loadingUsers ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                  <p className="text-gray-400">Loading users...</p>
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="text-center py-8">
+                  <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-400 mb-2">Search for Users</h3>
+                  <p className="text-gray-500">
+                    {userSearchTerm ? 'No users match your search criteria.' : 'Enter a search term to find users. Search by username, email, Riot ID, or Discord username.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredUsers.map((user) => (
+                    <div key={user.id} className="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:bg-gray-750 transition-colors">
+                      {/* User Header */}
+                      <div className="flex items-center space-x-3 mb-3">
+                        <div className="flex-shrink-0">
+                          {user.discordAvatar ? (
+                            <img
+                              src={user.discordAvatar}
+                              alt={user.username}
+                              className="w-10 h-10 rounded-full"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
+                              <UserIcon className="w-5 h-5 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white font-medium truncate">{user.username}</div>
+                          <div className="text-gray-400 text-sm truncate">{user.email}</div>
+                        </div>
+                      </div>
+
+                      {/* User Details */}
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400 text-sm">Riot ID:</span>
+                          <span className="text-white text-sm font-medium">{user.riotId}</span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400 text-sm">Discord:</span>
+                          <div className="flex items-center space-x-1">
+                            {user.discordLinked ? (
+                              <>
+                                <span className="text-green-400 text-sm truncate max-w-20">{user.discordUsername}</span>
+                                {user.inDiscordServer && (
+                                  <span className="px-1 py-0.5 bg-green-900/50 text-green-300 text-xs rounded">
+                                    ✓
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-gray-500 text-sm">Not linked</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400 text-sm">Teams:</span>
+                          <span className="text-white text-sm">{user.teamIds?.length || 0}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400 text-sm">Status:</span>
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            user.isAdmin 
+                              ? 'bg-red-900/50 text-red-300' 
+                              : 'bg-gray-700 text-gray-300'
+                          }`}>
+                            {user.isAdmin ? 'Admin' : 'User'}
+                          </span>
+                        </div>
+
+                        {/* Match Information */}
+                        {userMatches[user.id] && (
+                          <>
+                            <div className="mt-3 pt-3 border-t border-gray-700">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-gray-400 text-sm font-medium">Active Matches:</span>
+                                <span className="text-green-400 text-sm font-bold">
+                                  {userMatches[user.id].active.length}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-gray-400 text-sm font-medium">Match History:</span>
+                                <span className="text-purple-400 text-sm font-bold">
+                                  {userMatches[user.id].history.length}
+                                </span>
+                              </div>
+
+                              {/* Show active match details if any */}
+                              {userMatches[user.id].active.length > 0 && (
+                                <div className="mt-3 p-2 bg-blue-900/20 border border-blue-700/30 rounded text-xs">
+                                  <div className="text-blue-300 font-medium mb-2 flex items-center">
+                                    <Play className="w-3 h-3 mr-1" />
+                                    Active Matches:
+                                  </div>
+                                  {userMatches[user.id].active.slice(0, 2).map((match, index) => {
+                                    const team1 = teams.find(t => t.id === match.team1Id);
+                                    const team2 = teams.find(t => t.id === match.team2Id);
+                                    return (
+                                      <div key={match.id} className="text-gray-300 mb-1">
+                                        <span className="font-medium">{team1?.name || 'TBD'}</span>
+                                        <span className="text-gray-500 mx-1">vs</span>
+                                        <span className="font-medium">{team2?.name || 'TBD'}</span>
+                                        <span className="text-blue-400 ml-1">({match.matchState})</span>
+                                      </div>
+                                    );
+                                  })}
+                                  {userMatches[user.id].active.length > 2 && (
+                                    <div className="text-gray-400 text-xs">+{userMatches[user.id].active.length - 2} more matches</div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Show recent match history if any */}
+                              {userMatches[user.id].history.length > 0 && (
+                                <div className="mt-2 p-2 bg-purple-900/20 border border-purple-700/30 rounded text-xs">
+                                  <div className="text-purple-300 font-medium mb-2 flex items-center">
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    Recent History:
+                                  </div>
+                                  <div className="text-gray-300 text-xs">
+                                    {userMatches[user.id].history.length} completed matches
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center justify-between pt-3 border-t border-gray-700">
+                        <button
+                          onClick={() => handleEditUser(user)}
+                          className="flex items-center space-x-1 px-3 py-1.5 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 rounded-md transition-colors text-sm"
+                        >
+                          <Edit className="w-3 h-3" />
+                          <span>Edit</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => handleUpdateAdminStatus(user.id, !user.isAdmin)}
+                          disabled={updatingUser === user.id}
+                          className={`flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors text-sm ${
+                            user.isAdmin
+                              ? 'text-orange-400 hover:text-orange-300 hover:bg-orange-900/20'
+                              : 'text-green-400 hover:text-green-300 hover:bg-green-900/20'
+                          }`}
+                        >
+                          {updatingUser === user.id ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
+                          ) : user.isAdmin ? (
+                            <>
+                              <UserX className="w-3 h-3" />
+                              <span>Remove Admin</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserCheck className="w-3 h-3" />
+                              <span>Make Admin</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* User Edit Modal */}
+        {editingUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-2xl w-full mx-4 border border-gray-700 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-semibold text-white">Edit User: {editingUser.username}</h3>
+                <button
+                  onClick={handleCancelEdit}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Username
+                    </label>
+                    <input
+                      type="text"
+                      value={editingUser.username}
+                      onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={editingUser.email}
+                      onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Riot ID
+                    </label>
+                    <input
+                      type="text"
+                      value={editingUser.riotId}
+                      onChange={(e) => setEditingUser({ ...editingUser, riotId: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Discord Username
+                    </label>
+                    <input
+                      type="text"
+                      value={editingUser.discordUsername}
+                      onChange={(e) => setEditingUser({ ...editingUser, discordUsername: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Discord ID
+                    </label>
+                    <input
+                      type="text"
+                      value={editingUser.discordId || ''}
+                      onChange={(e) => setEditingUser({ ...editingUser, discordId: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Discord Avatar URL
+                    </label>
+                    <input
+                      type="text"
+                      value={editingUser.discordAvatar || ''}
+                      onChange={(e) => setEditingUser({ ...editingUser, discordAvatar: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="discordLinked"
+                      checked={editingUser.discordLinked || false}
+                      onChange={(e) => setEditingUser({ ...editingUser, discordLinked: e.target.checked })}
+                      className="w-4 h-4 text-primary-600 bg-gray-700 border-gray-600 rounded focus:ring-primary-500"
+                    />
+                    <label htmlFor="discordLinked" className="text-sm font-medium text-gray-300">
+                      Discord Linked
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="inDiscordServer"
+                      checked={editingUser.inDiscordServer || false}
+                      onChange={(e) => setEditingUser({ ...editingUser, inDiscordServer: e.target.checked })}
+                      className="w-4 h-4 text-primary-600 bg-gray-700 border-gray-600 rounded focus:ring-primary-500"
+                    />
+                    <label htmlFor="inDiscordServer" className="text-sm font-medium text-gray-300">
+                      In Discord Server
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="isAdmin"
+                      checked={editingUser.isAdmin || false}
+                      onChange={(e) => setEditingUser({ ...editingUser, isAdmin: e.target.checked })}
+                      className="w-4 h-4 text-primary-600 bg-gray-700 border-gray-600 rounded focus:ring-primary-500"
+                    />
+                    <label htmlFor="isAdmin" className="text-sm font-medium text-gray-300">
+                      Admin Status
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-700">
+                  <button
+                    onClick={handleCancelEdit}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleSaveUser(editingUser)}
+                    disabled={updatingUser === editingUser.id}
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updatingUser === editingUser.id ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

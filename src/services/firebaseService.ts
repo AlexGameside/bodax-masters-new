@@ -989,6 +989,29 @@ export const updateUserAdminStatus = async (userId: string, isAdmin: boolean): P
   await updateDoc(userRef, { isAdmin });
 };
 
+// Comprehensive user update function for admin panel
+export const updateUser = async (userId: string, updates: {
+  username?: string;
+  email?: string;
+  riotId?: string;
+  discordUsername?: string;
+  discordId?: string;
+  discordAvatar?: string;
+  discordLinked?: boolean;
+  inDiscordServer?: boolean;
+  isAdmin?: boolean;
+  teamIds?: string[];
+}): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  
+  // Filter out undefined values to prevent Firebase errors
+  const filteredUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([_, value]) => value !== undefined)
+  );
+  
+  await updateDoc(userRef, filteredUpdates);
+};
+
 // Add new functions for Profile page
 export const updateUserProfile = async (userId: string, updates: { displayName?: string; riotName?: string }): Promise<void> => {
   const userRef = doc(db, 'users', userId);
@@ -4239,8 +4262,13 @@ export interface AdminLog {
 }
 
 export const createAdminLog = async (log: Omit<AdminLog, 'id' | 'timestamp'>): Promise<string> => {
+  // Filter out undefined values to prevent Firebase errors
+  const filteredLog = Object.fromEntries(
+    Object.entries(log).filter(([_, value]) => value !== undefined)
+  );
+  
   const docRef = await addDoc(collection(db, 'adminLogs'), {
-    ...log,
+    ...filteredLog,
     timestamp: serverTimestamp()
   });
   return docRef.id;
