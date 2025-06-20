@@ -95,11 +95,8 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
 
   const getTurnIndicator = () => {
     if (isMapSelectionPhase) {
-      if (isMapSelectionTurn) {
-        return "Team 1's turn to select the final map";
-      } else {
-        return "Waiting for Team 1 to select the final map";
-      }
+      // Always show Team 1's turn during map selection phase, regardless of current user
+      return "Team 1's turn to select the final map";
     } else {
       if (isTeam1Turn) {
         return "Team 1's turn to ban a map";
@@ -152,7 +149,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
           <p className="text-blue-200 font-medium">{getTurnIndicator()}</p>
           <p className="text-sm text-gray-300 mt-1">
             {isMapSelectionPhase 
-              ? `${availableMaps.length} maps remaining - ${isMapSelectionTurn ? 'Team 1 select one' : 'Waiting for Team 1'}`
+              ? `${availableMaps.length} maps remaining - Team 1 select one`
               : `${totalBans}/5 bans completed - ${availableMaps.length} maps remaining`
             }
           </p>
