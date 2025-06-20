@@ -76,7 +76,7 @@ const TournamentRules = () => {
               <div className="flex items-start space-x-3">
                 <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
                 <div>
-                  <strong className="text-white">Map Pool:</strong> Ascent, Bind, Breeze, Fracture, Haven, Icebox, Lotus, Pearl, Split.
+                  <strong className="text-white">Map Pool:</strong> Ascent, Icebox, Sunset, Haven, Lotus, Pearl, Split.
                 </div>
               </div>
               <div className="flex items-start space-x-3">

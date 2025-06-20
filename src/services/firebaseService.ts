@@ -522,7 +522,7 @@ export const getMatches = async (): Promise<Match[]> => {
       createdAt: data.createdAt?.toDate() || new Date(),
       // Map banning system
       matchState: data.matchState || 'ready_up',
-      mapPool: data.mapPool || ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+      mapPool: data.mapPool || ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
       bannedMaps: data.bannedMaps || { team1: [], team2: [] },
       selectedMap: data.selectedMap,
       team1Ready: data.team1Ready || false,
@@ -576,7 +576,7 @@ export const getMatch = async (matchId: string): Promise<Match | null> => {
       createdAt: data.createdAt?.toDate() || new Date(),
       // Map banning system
       matchState: data.matchState || 'ready_up',
-      mapPool: data.mapPool || ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+      mapPool: data.mapPool || ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
       bannedMaps: data.bannedMaps || { team1: [], team2: [] },
       selectedMap: data.selectedMap,
       team1Ready: data.team1Ready || false,
@@ -736,7 +736,7 @@ export const generateQualifierBracket = async (teams: Team[]): Promise<void> => 
         team2Ready: false,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
         bannedMaps: {
           team1: [],
           team2: []
@@ -783,7 +783,7 @@ export const generateFinalBracket = async (teams: Team[]): Promise<void> => {
         team2Ready: false,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
         bannedMaps: {
           team1: [],
           team2: []
@@ -809,7 +809,7 @@ export const generateFinalBracket = async (teams: Team[]): Promise<void> => {
         team2Ready: false,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
         bannedMaps: {
           team1: [],
           team2: []
@@ -836,7 +836,7 @@ export const generateFinalBracket = async (teams: Team[]): Promise<void> => {
       team2Ready: false,
       createdAt: new Date(),
       matchState: 'ready_up',
-      mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+      mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
       bannedMaps: {
         team1: [],
         team2: []
@@ -861,7 +861,7 @@ export const generateFinalBracket = async (teams: Team[]): Promise<void> => {
     team2Ready: false,
     createdAt: new Date(),
     matchState: 'ready_up',
-    mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+    mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
     bannedMaps: {
       team1: [],
       team2: []
@@ -1478,7 +1478,7 @@ export const generateSingleEliminationBracket = async (tournamentId: string, tea
           tournamentType: 'single-elim',
           createdAt: new Date(),
           matchState: 'ready_up',
-          mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+          mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
           bannedMaps: {
             team1: [],
             team2: []
@@ -1513,7 +1513,7 @@ export const generateSingleEliminationBracket = async (tournamentId: string, tea
           tournamentType: 'single-elim',
           createdAt: new Date(),
           matchState: 'ready_up',
-          mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+          mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
           bannedMaps: {
             team1: [],
             team2: []
@@ -1582,7 +1582,7 @@ export const generateSingleEliminationBracketMatches = (teams: any[], tournament
         tournamentId,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
         bannedMaps: {
           team1: [],
           team2: []
@@ -1614,7 +1614,7 @@ export const generateSingleEliminationBracketMatches = (teams: any[], tournament
         tournamentId,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
         bannedMaps: { team1: [], team2: [] },
         team1Ready: false,
         team2Ready: false,
@@ -2249,7 +2249,7 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
   const currentBannedMaps = matchData.bannedMaps || { team1: [], team2: [] };
   const totalBans = currentBannedMaps.team1.length + currentBannedMaps.team2.length;
   
-  if (totalBans < 8) {
+  if (totalBans < 5) {
     throw new Error('Map selection phase has not started yet. Continue banning maps.');
   }
   
@@ -2948,7 +2948,7 @@ export const generateTournamentBracket = async (tournamentId: string, teamIds: s
           tournamentType: 'single-elim',
           createdAt: new Date(),
           matchState: 'ready_up',
-          mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+          mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
           bannedMaps: {
             team1: [],
             team2: []
@@ -2983,7 +2983,7 @@ export const generateTournamentBracket = async (tournamentId: string, teamIds: s
           tournamentType: 'single-elim',
           createdAt: new Date(),
           matchState: 'ready_up',
-          mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+          mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
           bannedMaps: {
             team1: [],
             team2: []
@@ -3438,7 +3438,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
       tournamentType: 'double-elim',
       bracketType: 'winners',
       matchState: 'ready_up',
-      mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+      mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
       bannedMaps: { team1: [], team2: [] },
       team1Ready: false,
       team2Ready: false,
@@ -3465,7 +3465,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
         tournamentType: 'double-elim',
         bracketType: 'winners',
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
         bannedMaps: { team1: [], team2: [] },
         team1Ready: false,
         team2Ready: false,
@@ -3511,7 +3511,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
         tournamentType: 'double-elim',
         bracketType: 'losers',
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
         bannedMaps: { team1: [], team2: [] },
         team1Ready: false,
         team2Ready: false,
@@ -3537,7 +3537,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
     tournamentType: 'double-elim',
     bracketType: 'grand_final',
     matchState: 'ready_up',
-    mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+    mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
     bannedMaps: { team1: [], team2: [] },
     team1Ready: false,
     team2Ready: false,
@@ -3561,7 +3561,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
       tournamentType: 'double-elim',
       bracketType: 'grand_final',
       matchState: 'ready_up',
-      mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+      mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
       bannedMaps: { team1: [], team2: [] },
       team1Ready: false,
       team2Ready: false,

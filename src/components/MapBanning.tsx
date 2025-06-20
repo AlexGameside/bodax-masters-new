@@ -14,15 +14,12 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
 
   const maps = [
     'Ascent',
-    'Bind',
-    'Haven',
-    'Split',
     'Icebox',
-    'Breeze',
-    'Fracture',
-    'Pearl',
+    'Sunset',
+    'Haven',
     'Lotus',
-    'Sunset'
+    'Pearl',
+    'Split'
   ];
 
   const isTeam1 = userTeam?.id === match.team1Id;
@@ -38,7 +35,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
   // Calculate whose turn it is
   const totalBans = allBannedMaps.length;
   const isTeam1Turn = totalBans % 2 === 0; // Even ban count = Team 1's turn
-  const isMapSelectionPhase = totalBans >= 8; // After 8 bans, 2 maps remain for selection
+  const isMapSelectionPhase = totalBans >= 5; // After 5 bans, 2 maps remain for selection (7-5=2)
   
   // Determine if it's the current user's team's turn
   const isUserTeamTurn = (isTeam1 && isTeam1Turn) || (isTeam2 && !isTeam1Turn);
@@ -155,7 +152,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, onMapBanningCo
           <p className="text-sm text-gray-300 mt-1">
             {isMapSelectionPhase 
               ? `${availableMaps.length} maps remaining - ${isMapSelectionTurn ? 'Select one' : 'Waiting for Team 1'}`
-              : `${totalBans}/8 bans completed - ${availableMaps.length} maps remaining`
+              : `${totalBans}/5 bans completed - ${availableMaps.length} maps remaining`
             }
           </p>
         </div>

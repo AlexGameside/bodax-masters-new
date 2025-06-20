@@ -83,7 +83,7 @@ const TournamentCreation = () => {
         type: tournamentType,
         teamCount: maxTeams,
         matchFormat,
-        mapPool: ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset'],
+        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
         sideSelection: 'coin-flip',
         seedingMethod: 'random'
       };

@@ -165,11 +165,24 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
         </div>
         {/* Sides Display */}
         {match.team1Side && match.team2Side && (
-          <div className="mt-4">
-            <h4 className="text-sm font-medium text-gray-300 mb-1">Sides</h4>
-            <div className="text-sm">
-              <div className="text-red-400">{team1?.name}: {match.team1Side === 'attack' ? 'Attack' : 'Defense'}</div>
-              <div className="text-blue-400">{team2?.name}: {match.team2Side === 'attack' ? 'Attack' : 'Defense'}</div>
+          <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+            <h4 className="text-sm font-medium text-blue-300 mb-2 flex items-center">
+              <Target className="w-4 h-4 mr-2" />
+              Match Sides
+            </h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center p-2 bg-red-900/20 border border-red-500/30 rounded">
+                <div className="text-sm text-red-300 font-medium">{team1?.name}</div>
+                <div className={`text-lg font-bold ${match.team1Side === 'attack' ? 'text-orange-400' : 'text-blue-400'}`}>
+                  {match.team1Side === 'attack' ? 'ATTACK' : 'DEFENSE'}
+                </div>
+              </div>
+              <div className="text-center p-2 bg-blue-900/20 border border-blue-500/30 rounded">
+                <div className="text-sm text-blue-300 font-medium">{team2?.name}</div>
+                <div className={`text-lg font-bold ${match.team2Side === 'attack' ? 'text-orange-400' : 'text-blue-400'}`}>
+                  {match.team2Side === 'attack' ? 'ATTACK' : 'DEFENSE'}
+                </div>
+              </div>
             </div>
           </div>
         )}
