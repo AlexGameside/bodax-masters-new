@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, User, LogIn, Shield, Trophy, Users, Home, Settings, Bell, Gamepad2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import type { User as UserType, Match } from '../types/tournament';
 import NotificationBell from './NotificationBell';
-import { getUserMatches } from '../services/firebaseService';
+import { onUserMatchesChange } from '../services/firebaseService';
 
 interface NavbarProps {
   currentUser: UserType | null;
@@ -11,6 +12,30 @@ interface NavbarProps {
   onNavigate?: (path: string) => void; // Callback for navigation
   onLogout?: () => void; // Callback for logout
 }
+
+// Sound notification utility
+const playNotificationSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+    oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.3);
+  } catch (error) {
+    console.log('Sound notification not supported or blocked by browser');
+  }
+};
 
 const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarProps) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -20,29 +45,66 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
   const [loading, setLoading] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const profileDropdownRef = React.useRef<HTMLDivElement>(null);
+  const previousActiveMatchesRef = useRef<Match[]>([]);
+  const [hasNewMatch, setHasNewMatch] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
 
   useEffect(() => {
-    const loadActiveMatches = async () => {
-      if (!currentUser) return;
-      
-      try {
-        const matches = await getUserMatches(currentUser.id);
-        // Filter for matches that are ready_up, map_banning, side_selection, or playing
-        const active = matches.filter(match => 
-          ['ready_up', 'map_banning', 'side_selection', 'playing'].includes(match.matchState)
-        );
-        setActiveMatches(active);
-      } catch (error) {
-        console.error('Error loading active matches:', error);
-      }
-    };
+    if (!currentUser) {
+      setActiveMatches([]);
+      previousActiveMatchesRef.current = [];
+      setHasNewMatch(false);
+      return;
+    }
 
-    loadActiveMatches();
-    // Refresh every 30 seconds
-    const interval = setInterval(loadActiveMatches, 30000);
-    return () => clearInterval(interval);
+    // Set up real-time listener for user matches
+    const unsubscribe = onUserMatchesChange(currentUser.id, (matches) => {
+      console.log('🔄 Real-time match update:', matches.length, 'active matches');
+      
+      // Only show notifications if we had previous matches (not on initial load)
+      const hadPreviousMatches = previousActiveMatchesRef.current.length > 0;
+      
+      // Check if there are new active matches
+      const previousMatchIds = new Set(previousActiveMatchesRef.current.map(m => m.id));
+      const newMatches = matches.filter(match => !previousMatchIds.has(match.id));
+      
+      // Show toast notification and play sound for new active matches
+      // Only if we had previous matches (to avoid showing on initial page load)
+      if (newMatches.length > 0 && hadPreviousMatches) {
+        // Play notification sound
+        playNotificationSound();
+        
+        // Set new match flag for visual enhancement
+        setHasNewMatch(true);
+        
+        // Clear the new match flag after 10 seconds
+        setTimeout(() => setHasNewMatch(false), 10000);
+        
+        newMatches.forEach(match => {
+          toast.success(
+            `🎮 Match Active! Your team has a new match ready.`,
+            {
+              duration: 8000,
+              icon: '🎮',
+              style: {
+                background: '#10B981',
+                color: '#fff',
+                fontWeight: 'bold',
+              },
+            }
+          );
+        });
+      }
+      
+      setActiveMatches(matches);
+      previousActiveMatchesRef.current = matches;
+    });
+
+    // Cleanup function
+    return () => {
+      unsubscribe();
+    };
   }, [currentUser]);
 
   const handleLogout = async () => {
@@ -127,26 +189,15 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
           <div className="hidden lg:flex items-center space-x-4">
             {currentUser ? (
               <div className="flex items-center space-x-3 relative">
-                {/* Active Match Indicator */}
-                {activeMatches.length > 0 && (
-                  <button
-                    onClick={handleMatchClick}
-                    className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-3 py-2 rounded-lg transition-all duration-200 flex items-center space-x-2 animate-pulse border border-green-800"
-                    title={`You have ${activeMatches.length} active match${activeMatches.length > 1 ? 'es' : ''}`}
-                  >
-                    <Gamepad2 className="w-4 h-4" />
-                    <span className="text-sm font-medium">Match Active</span>
-                  </button>
-                )}
                 <NotificationBell userId={currentUser.id} />
                 {/* Profile Dropdown */}
                 <div className="relative" ref={profileDropdownRef}>
                   <button
-                    onClick={() => setProfileDropdownOpen((open) => !open)}
-                    className="flex items-center space-x-2 text-sm text-gray-300 hover:text-white focus:outline-none"
+                    onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                    className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
                   >
-                    <User className="w-4 h-4" />
-                    <span className="hidden sm:block">{currentUser.username}</span>
+                    <User className="w-6 h-6 rounded-full" />
+                    <span className="font-medium text-sm">{currentUser.username}</span>
                   </button>
                   {profileDropdownOpen && (
                     <div className="absolute right-0 mt-2 w-40 bg-black border border-gray-700 rounded-lg shadow-lg z-50">
@@ -245,15 +296,39 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
                 </Link>
               )}
               {currentUser ? (
-                <Link
-                  to="/profile"
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
-                    isActive('/profile') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
-                  }`}
-                  onClick={() => setIsOpen(false)}
-                >
-                  Profile
-                </Link>
+                <>
+                  <Link
+                    to="/dashboard"
+                    className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 flex items-center space-x-2 ${
+                      isActive('/dashboard') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <span>Dashboard</span>
+                  </Link>
+                  <Link
+                    to="/profile"
+                    className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 flex items-center space-x-2 ${
+                      isActive('/profile') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <span>Profile</span>
+                  </Link>
+                  <Link
+                    to="/team-management"
+                    className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 flex items-center space-x-2 ${
+                      isActive('/team-management') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <span>Team Management</span>
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors duration-200 flex items-center space-x-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Logout</span>
+                  </button>
+                </>
               ) : (
                 <div className="flex flex-col space-y-2 pt-2 border-t border-gray-700">
                   <Link

@@ -11,7 +11,9 @@ import {
   Plus,
   Settings,
   ArrowLeft,
-  X
+  X,
+  Clock,
+  XCircle
 } from 'lucide-react';
 import { 
   getUserTeams, 
@@ -23,9 +25,12 @@ import {
   addTeam,
   fillTeamWithDemoMembers,
   deleteTeam,
-  onUserTeamsChange
+  onUserTeamsChange,
+  getTeamPendingInvitations,
+  onTeamPendingInvitationsChange,
+  cancelTeamInvitation
 } from '../services/firebaseService';
-import type { Team, User as UserType, TeamMember } from '../types/tournament';
+import type { Team, User as UserType, TeamMember, TeamInvitation } from '../types/tournament';
 
 interface TeamManagementProps {
   currentUser: UserType | null;
@@ -43,6 +48,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [pendingInvitations, setPendingInvitations] = useState<{ [teamId: string]: TeamInvitation[] }>({});
 
   useEffect(() => {
     if (currentUser) {
@@ -69,15 +75,32 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
   const setupRealTimeListeners = () => {
     if (!currentUser) return;
 
+    const unsubscribers: (() => void)[] = [];
+
     // Set up real-time listener for user's teams
-    const unsubscribe = onUserTeamsChange(currentUser.id, (updatedTeams) => {
+    const teamsUnsubscribe = onUserTeamsChange(currentUser.id, (updatedTeams) => {
       console.log('Teams updated in real-time:', updatedTeams);
       setTeams(updatedTeams);
+      
+      // Set up listeners for pending invitations for each team
+      updatedTeams.forEach(team => {
+        if (canManageTeam(team)) {
+          const invitationsUnsubscribe = onTeamPendingInvitationsChange(team.id, (invitations) => {
+            setPendingInvitations(prev => ({
+              ...prev,
+              [team.id]: invitations
+            }));
+          });
+          unsubscribers.push(invitationsUnsubscribe);
+        }
+      });
     });
+
+    unsubscribers.push(teamsUnsubscribe);
 
     // Cleanup function
     return () => {
-      unsubscribe();
+      unsubscribers.forEach(unsub => unsub());
     };
   };
 
@@ -147,6 +170,32 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
     } catch (error: any) {
       setError(error.message);
     }
+  };
+
+  const handleCancelInvitation = async (invitationId: string) => {
+    if (!confirm('Are you sure you want to cancel this invitation?')) return;
+
+    try {
+      await cancelTeamInvitation(invitationId);
+      setSuccess('Invitation cancelled successfully');
+    } catch (error: any) {
+      setError(error.message);
+    }
+  };
+
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+  const getInvitedUsername = (invitation: TeamInvitation) => {
+    const invitedUser = allUsers.find(user => user.id === invitation.invitedUserId);
+    return invitedUser?.username || 'Unknown User';
   };
 
   const handleDeleteTeam = async (teamId: string) => {
@@ -252,6 +301,29 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
           </div>
         )}
 
+        {/* Pending Invitations Summary */}
+        {(() => {
+          const totalPendingInvitations = Object.values(pendingInvitations).flat().length;
+          if (totalPendingInvitations > 0) {
+            return (
+              <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/30 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-5 h-5 text-yellow-400" />
+                    <span className="text-yellow-200 font-medium">
+                      {totalPendingInvitations} Pending Invitation{totalPendingInvitations !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <span className="text-sm text-yellow-400">
+                    Invitations expire in 7 days
+                  </span>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
         {/* Teams List */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {teams.map((team) => (
@@ -332,6 +404,38 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                   })}
                 </div>
               </div>
+
+              {/* Pending Invitations */}
+              {canManageTeam(team) && pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <h4 className="text-sm font-medium text-white mb-2 flex items-center">
+                    <Clock className="w-4 h-4 mr-1 text-yellow-400" />
+                    Pending Invitations ({pendingInvitations[team.id].length})
+                  </h4>
+                  <div className="space-y-2">
+                    {pendingInvitations[team.id].map((invitation) => (
+                      <div key={invitation.id} className="flex items-center justify-between p-2 bg-yellow-900/20 border border-yellow-700/30 rounded">
+                        <div className="flex items-center space-x-2">
+                          <User className="w-3 h-3 text-yellow-400" />
+                          <span className="text-sm text-yellow-200">
+                            {getInvitedUsername(invitation)}
+                          </span>
+                          <span className="text-xs text-yellow-400">
+                            {formatTimeAgo(invitation.createdAt)}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleCancelInvitation(invitation.id)}
+                          className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                          title="Cancel invitation"
+                        >
+                          <XCircle className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Invite Button */}
               {canManageTeam(team) && team.members.length < team.maxMembers && (

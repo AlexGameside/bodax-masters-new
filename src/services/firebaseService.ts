@@ -4412,3 +4412,181 @@ export const logAdminAction = async (
     metadata
   });
 }
+
+/**
+ * Real-time listener for user matches
+ * 
+ * This function sets up a real-time listener that monitors for active matches
+ * for a given user. It correctly handles subscription management to prevent memory leaks
+ * and expands the definition of an "active" match to ensure the user is always
+ * aware of matches that require their attention.
+ * 
+ * It listens for changes in the user's teams and then sets up a listener for matches
+ * involving those teams.
+ *
+ * @param userId - The user ID to monitor matches for.
+ * @param callback - Function called whenever the user's active matches change.
+ * @returns An unsubscribe function to clean up all listeners.
+ */
+export const onUserMatchesChange = (userId: string, callback: (matches: Match[]) => void) => {
+  if (!userId) {
+    console.warn('onUserMatchesChange called with undefined or empty userId');
+    callback([]);
+    return () => {}; // Return a no-op unsubscribe function
+  }
+
+  let unsubscribeMatches: (() => void) | null = null;
+
+  // 1. Listen for changes to the user's teams
+  const teamsQuery = query(collection(db, 'teams'));
+
+  const unsubscribeTeams = onSnapshot(teamsQuery, (teamsSnapshot) => {
+    try {
+      // Unsubscribe from any previous matches listener to prevent leaks
+      if (unsubscribeMatches) {
+        unsubscribeMatches();
+        unsubscribeMatches = null;
+      }
+
+      const userTeamIds = teamsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Team))
+        .filter(team => team.members?.some(member => member.userId === userId))
+        .map(team => team.id);
+
+      if (userTeamIds.length === 0) {
+        callback([]); // User is not in any teams, so no active matches
+        return;
+      }
+      
+      // 2. Listen for matches involving the user's teams
+      const activeMatchStates = [
+        'ready_up', 
+        'map_banning', 
+        'side_selection', 
+        'playing', 
+        'waiting_for_results',
+        'disputed'
+      ];
+
+      const matchesQuery = query(
+        collection(db, 'matches'),
+        where('matchState', 'in', activeMatchStates)
+      );
+
+      unsubscribeMatches = onSnapshot(matchesQuery, (matchesSnapshot) => {
+        const allActiveMatches = matchesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date()
+        } as unknown as Match));
+
+        // Filter for matches that involve one of the user's teams
+        const userMatches = allActiveMatches.filter(match => 
+          (match.team1Id && userTeamIds.includes(match.team1Id)) || 
+          (match.team2Id && userTeamIds.includes(match.team2Id))
+        );
+
+        callback(userMatches);
+      }, (error) => {
+        console.error("Error on matches snapshot listener:", error);
+        callback([]);
+      });
+
+    } catch (error) {
+      console.error('Error in onUserMatchesChange listener:', error);
+      callback([]);
+    }
+  });
+
+  // Return a single unsubscribe function that cleans up both listeners
+  return () => {
+    unsubscribeTeams();
+    if (unsubscribeMatches) {
+      unsubscribeMatches();
+    }
+  };
+};
+
+// Log a general user action
+export const logUserAction = async (
+  action: string,
+  details: string,
+  userId?: string,
+  username?: string,
+  metadata?: Record<string, any>
+): Promise<void> => {
+  await createAdminLog({
+    type: 'user',
+    action,
+    details,
+    userId,
+    username,
+    metadata
+  });
+};
+
+// Get pending invitations sent by a specific team
+export const getTeamPendingInvitations = async (teamId: string): Promise<TeamInvitation[]> => {
+  const querySnapshot = await getDocs(
+    query(
+      collection(db, 'teamInvitations'),
+      where('teamId', '==', teamId),
+      where('status', '==', 'pending')
+    )
+  );
+  
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    createdAt: doc.data().createdAt?.toDate() || new Date(),
+    expiresAt: doc.data().expiresAt?.toDate() || new Date()
+  })) as TeamInvitation[];
+};
+
+// Real-time listener for pending invitations sent by a team
+export const onTeamPendingInvitationsChange = (teamId: string, callback: (invitations: TeamInvitation[]) => void) => {
+  const q = query(
+    collection(db, 'teamInvitations'),
+    where('teamId', '==', teamId),
+    where('status', '==', 'pending')
+  );
+  
+  return onSnapshot(q, (snapshot) => {
+    const invitations = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate() || new Date(),
+      expiresAt: doc.data().expiresAt?.toDate() || new Date()
+    })) as TeamInvitation[];
+    
+    callback(invitations);
+  });
+};
+
+// Cancel a pending invitation
+export const cancelTeamInvitation = async (invitationId: string): Promise<void> => {
+  const invitationRef = doc(db, 'teamInvitations', invitationId);
+  const invitationSnap = await getDoc(invitationRef);
+  
+  if (!invitationSnap.exists()) {
+    throw new Error('Invitation not found');
+  }
+  
+  const invitationData = invitationSnap.data();
+  
+  // Update invitation status to cancelled
+  await updateDoc(invitationRef, {
+    status: 'cancelled'
+  });
+  
+  // Create notification for invited user
+  await createNotification({
+    userId: invitationData.invitedUserId,
+    type: 'team_invite',
+    title: 'Invitation Cancelled',
+    message: 'A team invitation has been cancelled',
+    data: { teamId: invitationData.teamId },
+    isRead: false
+  });
+};

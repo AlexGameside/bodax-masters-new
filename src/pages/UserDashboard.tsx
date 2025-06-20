@@ -470,42 +470,6 @@ const UserDashboard = ({
         {/* Matches Tab */}
         {activeTab === 'matches' && (
           <div className="space-y-6">
-            {/* Active Match */}
-            {activeMatches.length > 0 && (
-              <div className="bg-blue-900/20 border border-blue-700 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-blue-300 mb-4 flex items-center">
-                  <Gamepad2 className="w-5 h-5 mr-2" />
-                  Active Match
-                </h3>
-                {activeMatches.map((match) => {
-                  // Get team names for display
-                  const team1 = teams.find(t => t.id === match.team1Id);
-                  const team2 = teams.find(t => t.id === match.team2Id);
-                  
-                  return (
-                    <div key={match.id} className="bg-gray-700 rounded-lg p-4 border border-blue-600">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h4 className="font-semibold text-white">
-                            {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
-                          </h4>
-                          <p className="text-sm text-gray-400">
-                            Round {match.round} • Tournament
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => navigate(`/match/${match.id}`)}
-                          className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200"
-                        >
-                          Join Match
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
             {/* Upcoming Matches */}
             {upcomingMatches.length > 0 && (
               <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6 hover:shadow-xl transition-shadow">
@@ -529,11 +493,11 @@ const UserDashboard = ({
               </div>
             )}
 
-            {activeMatches.length === 0 && upcomingMatches.length === 0 && (
+            {upcomingMatches.length === 0 && (
               <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-8 text-center hover:shadow-xl transition-shadow">
                 <Gamepad2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-white mb-2">No Matches</h3>
-                <p className="text-gray-400">You don't have any upcoming or active matches.</p>
+                <p className="text-gray-400">You don't have any upcoming matches.</p>
               </div>
             )}
           </div>

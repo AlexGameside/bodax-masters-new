@@ -1057,19 +1057,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
   return (
     <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden">
-      {/* Active Match Button (always at the top) */}
-      {userActiveMatches.length > 0 && (
-        <div className="fixed top-0 left-0 w-full z-50 flex justify-center bg-blue-900/90 py-2 shadow-lg">
-          <button
-            onClick={() => navigate(`/match/${userActiveMatches[0].id}`)}
-            className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-6 rounded-lg shadow-lg border border-blue-900 transition-all duration-200"
-          >
-            <Gamepad2 className="w-5 h-5" />
-            Active Match
-          </button>
-        </div>
-      )}
-
       {/* Code/terminal style header overlay */}
       <div className="absolute top-0 left-0 w-full px-4 pt-8 z-10 select-none pointer-events-none">
         <div className="text-sm md:text-lg lg:text-2xl text-gray-400 tracking-tight">
