@@ -622,16 +622,17 @@ export const updateMatchState = async (matchId: string, updates: Partial<Match>)
 export const updateMatchStateWithSides = async (
   matchId: string, 
   newState: string, 
-  sideUpdates: { team1Side?: 'attack' | 'defense' | null; team2Side?: 'attack' | 'defense' | null; matchStartTime?: string }
+  team1Side: 'attack' | 'defense',
+  team2Side: 'attack' | 'defense',
+  matchStartTime: string
 ): Promise<void> => {
   const matchRef = doc(db, 'matches', matchId);
-  
-  const updates: any = {
+  await updateDoc(matchRef, {
     matchState: newState,
-    ...sideUpdates
-  };
-  
-  await updateDoc(matchRef, updates);
+    team1Side: team1Side,
+    team2Side: team2Side,
+    matchStartTime: matchStartTime
+  });
 };
 
 export const updateMatchTeams = async (matchId: string, team1Id: string, team2Id: string): Promise<void> => {

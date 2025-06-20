@@ -35,11 +35,13 @@ const SideSelection: React.FC<SideSelectionProps> = ({ match, teams, currentUser
       const team1Side = side === 'attack' ? 'defense' : 'attack';
 
       // Update match with both sides and transition to playing state
-      await updateMatchStateWithSides(match.id, 'playing', {
+      await updateMatchStateWithSides(
+        match.id, 
+        'playing', 
         team1Side,
         team2Side,
-        matchStartTime: new Date().toISOString()
-      });
+        new Date().toISOString()
+      );
 
       const sideText = side === 'attack' ? 'Attack' : 'Defense';
       const otherSideText = side === 'attack' ? 'Defense' : 'Attack';
