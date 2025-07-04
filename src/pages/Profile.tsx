@@ -144,9 +144,25 @@ const Profile = () => {
     );
   }
 
+  // Note: Route protection is handled in App.tsx, so currentUser should always be available here
+  // But we'll keep a safety check for the loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-500 relative z-10"></div>
+      </div>
+    );
+  }
+
+  // Safety check - this should never happen due to route protection, but TypeScript needs it
   if (!currentUser) {
-    navigate('/login');
-    return null;
+    return (
+      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
+        <div className="text-red-500 relative z-10">Error: User not found</div>
+      </div>
+    );
   }
 
   const tabs = [
