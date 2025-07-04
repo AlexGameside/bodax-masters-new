@@ -42,18 +42,8 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { 
     const { password, ...userDocData } = userData;
     const userId = await createUserWithLogging(userDocData);
     
-    // Update current user and notify listeners
-    currentUser = {
-      id: userId,
-      username: userDocData.username,
-      email: userDocData.email,
-      riotId: userDocData.riotId,
-      discordUsername: userDocData.discordUsername,
-      createdAt: new Date(),
-      teamIds: userDocData.teamIds || [],
-      isAdmin: userDocData.isAdmin || false
-    };
-    notifyAuthStateListeners(currentUser);
+    // The useAuth hook will automatically detect the new user via onAuthStateChanged
+    // No need to manually update state here
   } catch (error: any) {
     if (error.code === 'auth/email-already-in-use') {
       throw new Error('Email already registered');
@@ -84,18 +74,8 @@ export const loginUser = async (usernameOrEmail: string, password: string): Prom
     // Sign in with Firebase auth
     await signInWithEmailAndPassword(auth, userData.email, password);
     
-    // Update current user and notify listeners
-    currentUser = {
-      id: userDoc.id,
-      username: userData.username,
-      email: userData.email,
-      riotId: userData.riotId,
-      discordUsername: userData.discordUsername,
-      createdAt: userData.createdAt.toDate(),
-      teamIds: userData.teamIds || [],
-      isAdmin: userData.isAdmin || false
-    };
-    notifyAuthStateListeners(currentUser);
+    // The useAuth hook will automatically detect the user via onAuthStateChanged
+    // No need to manually update state here
   } catch (error: any) {
     if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
       throw new Error('Invalid username/email or password');
@@ -134,31 +114,8 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
   };
 };
 
-// Initialize auth state listener
-onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-  if (firebaseUser) {
-    // Get user data from Firestore
-    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-    if (userDoc.exists()) {
-      const userData = userDoc.data();
-      currentUser = {
-        id: userDoc.id,
-        username: userData.username,
-        email: userData.email,
-        riotId: userData.riotId,
-        discordUsername: userData.discordUsername,
-        createdAt: userData.createdAt.toDate(),
-        teamIds: userData.teamIds || [],
-        isAdmin: userData.isAdmin || false
-      };
-    } else {
-      currentUser = null;
-    }
-  } else {
-    currentUser = null;
-  }
-  notifyAuthStateListeners(currentUser);
-});
+// Remove the duplicate auth state listener - let useAuth hook handle this
+// This prevents race conditions between multiple auth state listeners
 
 export const getCurrentUser = (): User | null => {
   return currentUser;

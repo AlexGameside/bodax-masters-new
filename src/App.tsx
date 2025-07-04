@@ -61,11 +61,11 @@ import {
 } from './services/authService';
 import { useAuth } from './hooks/useAuth';
 import { getDoc, doc } from 'firebase/firestore';
-import { db } from './config/firebase';
+import { db, auth } from './config/firebase';
 import { toast } from 'react-hot-toast';
 
 function App() {
-  const { currentUser, loading } = useAuth();
+  const { currentUser, loading, retryAuthStateCheck } = useAuth();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -115,6 +115,8 @@ function App() {
       }
 
       try {
+        console.log('🔍 DEBUG: Loading user data for:', currentUser.username);
+        
         const [userTeamData, invitationsData, matchesData] = await Promise.all([
           getUserTeam(currentUser.id),
           getTeamInvitations(currentUser.id),
@@ -139,8 +141,10 @@ function App() {
           const players = await getTeamPlayers(userTeamData.id);
           setTeamPlayers(players);
         }
+        
+        console.log('✅ DEBUG: User data loaded successfully');
       } catch (error) {
-        console.error('Error loading user data:', error);
+        console.error('❌ DEBUG: Error loading user data:', error);
         // Only set isAdmin to false on error if we're not loading
         if (!loading) {
           setIsAdmin(false);
@@ -150,6 +154,20 @@ function App() {
 
     loadUserData();
   }, [currentUser, loading]);
+
+  // Add a fallback mechanism to retry auth state check if needed
+  useEffect(() => {
+    if (!loading && !currentUser) {
+      // If we're not loading and there's no user, but Firebase auth might have a user
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        console.log('⚠️ DEBUG: Firebase has user but currentUser is null, retrying...');
+        setTimeout(() => {
+          retryAuthStateCheck();
+        }, 500);
+      }
+    }
+  }, [loading, currentUser, retryAuthStateCheck]);
 
   // Real-time listeners
   useEffect(() => {
