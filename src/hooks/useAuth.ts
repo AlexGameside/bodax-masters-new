@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth } from '../config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { User } from '../types/tournament';
@@ -12,10 +12,14 @@ export const useAuth = () => {
 
   const fetchUserData = async (firebaseUser: FirebaseUser) => {
     try {
+      console.log('🔍 DEBUG: Fetching user data for Firebase UID:', firebaseUser.uid);
+      
       // Get user data from Firestore
       const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
+        console.log('✅ DEBUG: Found user document:', userData.username);
+        
         const customUser: User = {
           id: userDoc.id,
           username: userData.username,
@@ -31,11 +35,40 @@ export const useAuth = () => {
         };
         setCurrentUser(customUser);
       } else {
-        console.warn('User document not found in Firestore for:', firebaseUser.uid);
-        setCurrentUser(null);
+        console.error('❌ DEBUG: User document not found in Firestore for Firebase UID:', firebaseUser.uid);
+        console.error('❌ DEBUG: This means the registration process failed to create the Firestore document');
+        
+        // Try to get the user by email as a fallback
+        console.log('🔍 DEBUG: Attempting fallback lookup by email...');
+        const emailQuery = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
+        const emailSnapshot = await getDocs(emailQuery);
+        
+        if (!emailSnapshot.empty) {
+          const userDoc = emailSnapshot.docs[0];
+          const userData = userDoc.data();
+          console.log('✅ DEBUG: Found user by email fallback:', userData.username);
+          
+          const customUser: User = {
+            id: userDoc.id,
+            username: userData.username,
+            email: userData.email,
+            riotId: userData.riotId,
+            discordUsername: userData.discordUsername,
+            discordId: userData.discordId,
+            discordAvatar: userData.discordAvatar,
+            discordLinked: userData.discordLinked,
+            createdAt: userData.createdAt.toDate(),
+            teamIds: userData.teamIds || [],
+            isAdmin: userData.isAdmin || false
+          };
+          setCurrentUser(customUser);
+        } else {
+          console.error('❌ DEBUG: User not found by email fallback either');
+          setCurrentUser(null);
+        }
       }
     } catch (error) {
-      console.error('Error fetching user data:', error);
+      console.error('❌ DEBUG: Error fetching user data:', error);
       setCurrentUser(null);
     }
   };

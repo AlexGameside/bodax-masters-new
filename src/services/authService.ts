@@ -21,6 +21,8 @@ const notifyAuthStateListeners = (user: User | null) => {
 
 export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { password: string }): Promise<void> => {
   try {
+    console.log('🔍 DEBUG: Starting registration for:', userData.username, userData.email);
+    
     // Check if username already exists
     const usernameQuery = query(collection(db, 'users'), where('username', '==', userData.username));
     const usernameSnapshot = await getDocs(usernameQuery);
@@ -35,21 +37,33 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { 
       throw new Error('Email already registered');
     }
 
+    console.log('🔍 DEBUG: Creating Firebase auth user...');
     // Create Firebase auth user first
     const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
+    const userId = userCredential.user.uid;
+    console.log('✅ DEBUG: Firebase auth user created with UID:', userId);
     
     // Create user document in Firestore with the Firebase UID
     const { password, ...userDocData } = userData;
-    const userId = userCredential.user.uid; // Use Firebase UID as the document ID
     
+    console.log('🔍 DEBUG: Creating Firestore document...');
     // Create the user document directly in Firestore
-    await setDoc(doc(db, 'users', userId), {
+    const userDocRef = doc(db, 'users', userId);
+    await setDoc(userDocRef, {
       ...userDocData,
       createdAt: new Date()
     });
     
+    // Verify the document was created
+    const verifyDoc = await getDoc(userDocRef);
+    if (!verifyDoc.exists()) {
+      throw new Error('Failed to create user document in Firestore');
+    }
+    
     console.log('✅ DEBUG: User registered successfully with Firebase UID:', userId);
+    console.log('✅ DEBUG: Firestore document verified:', verifyDoc.data());
   } catch (error: any) {
+    console.error('❌ DEBUG: Registration error:', error);
     if (error.code === 'auth/email-already-in-use') {
       throw new Error('Email already registered');
     }
