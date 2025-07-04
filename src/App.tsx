@@ -16,6 +16,7 @@ import TournamentList from './pages/TournamentList';
 import TournamentCreation from './pages/TournamentCreation';
 import TournamentDetail from './pages/TournamentDetail';
 import TournamentManagement from './pages/TournamentManagement';
+import TournamentInfo from './pages/TournamentInfo';
 import ConnectionStatus from './components/ConnectionStatus';
 // Footer pages
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -193,7 +194,8 @@ function App() {
   const handleCreateTeam = async (teamData: Omit<Team, 'id' | 'createdAt'>) => {
     try {
       const teamWithCreatedAt = { ...teamData, createdAt: new Date() };
-      const newTeam = await addTeam(teamWithCreatedAt);
+      const { createTeamWithLogging } = await import('./services/firebaseService');
+      const newTeam = await createTeamWithLogging(teamWithCreatedAt);
       toast.success('Team created successfully!');
       return newTeam;
     } catch (error: any) {
@@ -308,6 +310,7 @@ function App() {
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/tournament-info" element={<TournamentInfo />} />
             <Route path="/register" element={<UserRegistration onRegister={handleUserRegister} />} />
             <Route path="/login" element={<UserLogin onLogin={handleUserLogin} />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />

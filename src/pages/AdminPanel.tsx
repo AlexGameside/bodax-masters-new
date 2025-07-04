@@ -211,7 +211,9 @@ const AdminPanel = ({
   const loadSignupLogs = async () => {
     setLoadingLogs(true);
     try {
+      console.log('🔍 DEBUG: Loading signup logs...');
       const logs = await getSignupLogs(50);
+      console.log('🔍 DEBUG: Signup logs loaded:', logs);
       setSignupLogs(logs);
     } catch (error) {
       console.error('Error loading signup logs:', error);
@@ -223,12 +225,68 @@ const AdminPanel = ({
   const loadGeneralLogs = async () => {
     setLoadingLogs(true);
     try {
+      console.log('🔍 DEBUG: Loading general logs...');
       const logs = await getGeneralLogs(50);
+      console.log('🔍 DEBUG: General logs loaded:', logs);
       setGeneralLogs(logs);
     } catch (error) {
       console.error('Error loading general logs:', error);
     } finally {
       setLoadingLogs(false);
+    }
+  };
+
+  const createTestLogs = async () => {
+    try {
+      // Create some test signup logs
+      await logAdminAction(
+        'test_signup',
+        'Test user registration',
+        undefined,
+        'TestUser',
+        { test: true, timestamp: new Date().toISOString() },
+        'signup'
+      );
+
+      // Create some test general logs
+      await logAdminAction(
+        'test_general',
+        'Test general admin action',
+        undefined,
+        'TestAdmin',
+        { test: true, action: 'test_general', timestamp: new Date().toISOString() },
+        'general'
+      );
+
+      // Create a signup log using the createAdminLog function directly
+      const { createAdminLog } = await import('../services/firebaseService');
+      await createAdminLog({
+        type: 'signup',
+        action: 'test_user_registered',
+        details: 'Test user registration via createAdminLog',
+        username: 'TestUser',
+        metadata: { test: true, method: 'direct_createAdminLog' }
+      });
+
+      // Create a general log using the createAdminLog function directly
+      await createAdminLog({
+        type: 'general',
+        action: 'test_admin_action',
+        details: 'Test admin action via createAdminLog',
+        adminUsername: 'TestAdmin',
+        metadata: { test: true, method: 'direct_createAdminLog' }
+      });
+
+      toast.success('Test logs created successfully!');
+      
+      // Reload logs after creating test data
+      setTimeout(() => {
+        loadSignupLogs();
+        loadGeneralLogs();
+      }, 1000);
+    } catch (error) {
+      console.error('Error creating test logs:', error);
+      toast.error('Failed to create test logs');
     }
   };
 
@@ -1051,14 +1109,23 @@ const AdminPanel = ({
                 <FileText className="w-6 h-6 mr-3 text-primary-400" />
                 Signup Logs ({signupLogs.length})
               </h2>
-              <button
-                onClick={loadSignupLogs}
-                disabled={loadingLogs}
-                className="btn-secondary"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${loadingLogs ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={createTestLogs}
+                  className="btn-secondary"
+                >
+                  <TestTube className="w-4 h-4 mr-2" />
+                  Create Test Logs
+                </button>
+                <button
+                  onClick={loadSignupLogs}
+                  disabled={loadingLogs}
+                  className="btn-secondary"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${loadingLogs ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
             </div>
 
             <div className="space-y-6">
@@ -1120,14 +1187,23 @@ const AdminPanel = ({
                 <Activity className="w-6 h-6 mr-3 text-primary-400" />
                 General Logs ({generalLogs.length})
               </h2>
-              <button
-                onClick={loadGeneralLogs}
-                disabled={loadingLogs}
-                className="btn-secondary"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${loadingLogs ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={createTestLogs}
+                  className="btn-secondary"
+                >
+                  <TestTube className="w-4 h-4 mr-2" />
+                  Create Test Logs
+                </button>
+                <button
+                  onClick={loadGeneralLogs}
+                  disabled={loadingLogs}
+                  className="btn-secondary"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${loadingLogs ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
             </div>
 
             <div className="space-y-6">

@@ -301,29 +301,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
           </div>
         )}
 
-        {/* Pending Invitations Summary */}
-        {(() => {
-          const totalPendingInvitations = Object.values(pendingInvitations).flat().length;
-          if (totalPendingInvitations > 0) {
-            return (
-              <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/30 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Clock className="w-5 h-5 text-yellow-400" />
-                    <span className="text-yellow-200 font-medium">
-                      {totalPendingInvitations} Pending Invitation{totalPendingInvitations !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <span className="text-sm text-yellow-400">
-                    Invitations expire in 7 days
-                  </span>
-                </div>
-              </div>
-            );
-          }
-          return null;
-        })()}
-
         {/* Teams List */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {teams.map((team) => (
@@ -334,15 +311,24 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                   <p className="text-gray-400 text-sm">[{team.teamTag}]</p>
                 </div>
                 {canManageTeam(team) && (
-                  <button
-                    onClick={() => {
-                      setSelectedTeam(team);
-                      setShowSettingsModal(true);
-                    }}
-                    className="p-2 text-gray-400 hover:text-white transition-colors"
-                  >
-                    <Settings className="w-5 h-5" />
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setSelectedTeam(team);
+                        setShowSettingsModal(true);
+                      }}
+                      className="p-2 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <Settings className="w-5 h-5" />
+                    </button>
+                    {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                        <span className="text-xs text-black font-bold">
+                          {pendingInvitations[team.id].length}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -408,31 +394,35 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
               {/* Pending Invitations */}
               {canManageTeam(team) && pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
                 <div className="mt-4 pt-4 border-t border-gray-700">
-                  <h4 className="text-sm font-medium text-white mb-2 flex items-center">
-                    <Clock className="w-4 h-4 mr-1 text-yellow-400" />
+                  <h4 className="text-sm font-medium text-white mb-3 flex items-center">
+                    <Clock className="w-4 h-4 mr-2 text-yellow-400" />
                     Pending Invitations ({pendingInvitations[team.id].length})
                   </h4>
                   <div className="space-y-2">
                     {pendingInvitations[team.id].map((invitation) => (
-                      <div key={invitation.id} className="flex items-center justify-between p-2 bg-yellow-900/20 border border-yellow-700/30 rounded">
+                      <div key={invitation.id} className="flex items-center justify-between p-2 bg-gradient-to-r from-yellow-900/30 to-orange-900/20 border border-yellow-700/40 rounded">
                         <div className="flex items-center space-x-2">
-                          <User className="w-3 h-3 text-yellow-400" />
-                          <span className="text-sm text-yellow-200">
+                          <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                          <span className="text-sm text-yellow-200 font-medium">
                             {getInvitedUsername(invitation)}
                           </span>
-                          <span className="text-xs text-yellow-400">
+                          <span className="text-xs text-yellow-400 bg-yellow-900/50 px-2 py-1 rounded">
                             {formatTimeAgo(invitation.createdAt)}
                           </span>
                         </div>
                         <button
                           onClick={() => handleCancelInvitation(invitation.id)}
-                          className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                          className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors"
                           title="Cancel invitation"
                         >
-                          <XCircle className="w-3 h-3" />
+                          <XCircle className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-2 text-xs text-yellow-400 flex items-center">
+                    <span className="mr-1">⏰</span>
+                    Expires in 7 days
                   </div>
                 </div>
               )}
@@ -445,10 +435,22 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                       setSelectedTeam(team);
                       setShowInviteForm(true);
                     }}
-                    className="w-full bg-black/60 hover:bg-black/80 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border border-gray-700"
+                    className={`w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border ${
+                      pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
+                        ? 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white border-yellow-700'
+                        : 'bg-black/60 hover:bg-black/80 text-white border-gray-700'
+                    }`}
                   >
                     <UserPlus className="w-4 h-4" />
-                    <span>Invite Member</span>
+                    <span>
+                      {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
+                        ? `Invite Member (${pendingInvitations[team.id].length} pending)`
+                        : 'Invite Member'
+                      }
+                    </span>
+                    {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    )}
                   </button>
                   
                   {/* Fill Team Button - Only show if team has less than 5 members and user is admin */}
@@ -484,7 +486,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
         {/* Invite Modal */}
         {showInviteForm && selectedTeam && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-black/90 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4">
+            <div className="bg-black/90 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-white">Invite to {selectedTeam.name}</h3>
                 <button
@@ -494,6 +496,41 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
+
+              {/* Pending Invitations Section */}
+              {pendingInvitations[selectedTeam.id] && pendingInvitations[selectedTeam.id].length > 0 && (
+                <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/30 rounded-lg">
+                  <h4 className="text-sm font-medium text-white mb-3 flex items-center">
+                    <Clock className="w-4 h-4 mr-2 text-yellow-400" />
+                    Pending Invitations ({pendingInvitations[selectedTeam.id].length})
+                  </h4>
+                  <div className="space-y-2">
+                    {pendingInvitations[selectedTeam.id].map((invitation) => (
+                      <div key={invitation.id} className="flex items-center justify-between p-2 bg-yellow-900/30 border border-yellow-700/50 rounded">
+                        <div className="flex items-center space-x-2">
+                          <User className="w-3 h-3 text-yellow-400" />
+                          <span className="text-sm text-yellow-200">
+                            {getInvitedUsername(invitation)}
+                          </span>
+                          <span className="text-xs text-yellow-400">
+                            {formatTimeAgo(invitation.createdAt)}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleCancelInvitation(invitation.id)}
+                          className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                          title="Cancel invitation"
+                        >
+                          <XCircle className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 text-xs text-yellow-400">
+                    💡 Invitations expire in 7 days. You can cancel them anytime.
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleInviteUser} className="space-y-4">
                 <div>

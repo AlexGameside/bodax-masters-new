@@ -9,6 +9,7 @@ import {
 import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import type { User } from '../types/tournament';
+import { createUserWithLogging } from './firebaseService';
 
 // Store the current user in memory for now
 let currentUser: User | null = null;
@@ -37,26 +38,20 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { 
     // Create Firebase auth user
     const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
     
-    // Create user document in Firestore (without password)
+    // Create user document in Firestore with logging
     const { password, ...userDocData } = userData;
-    const userDoc = {
-      ...userDocData,
-      id: userCredential.user.uid,
-      createdAt: new Date()
-    };
-    
-    await setDoc(doc(db, 'users', userCredential.user.uid), userDoc);
+    const userId = await createUserWithLogging(userDocData);
     
     // Update current user and notify listeners
     currentUser = {
-      id: userCredential.user.uid,
-      username: userDoc.username,
-      email: userDoc.email,
-      riotId: userDoc.riotId,
-      discordUsername: userDoc.discordUsername,
-      createdAt: userDoc.createdAt,
-      teamIds: userDoc.teamIds || [],
-      isAdmin: userDoc.isAdmin || false
+      id: userId,
+      username: userDocData.username,
+      email: userDocData.email,
+      riotId: userDocData.riotId,
+      discordUsername: userDocData.discordUsername,
+      createdAt: new Date(),
+      teamIds: userDocData.teamIds || [],
+      isAdmin: userDocData.isAdmin || false
     };
     notifyAuthStateListeners(currentUser);
   } catch (error: any) {

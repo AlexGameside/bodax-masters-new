@@ -117,7 +117,7 @@ const MatchPage = () => {
           bracketType: data.bracketType,
           createdAt: data.createdAt?.toDate() || new Date(),
           matchState: data.matchState || 'ready_up',
-          mapPool: data.mapPool || ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+          mapPool: data.mapPool || ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
           bannedMaps: data.bannedMaps || { team1: [], team2: [] },
           selectedMap: data.selectedMap,
           team1Ready: data.team1Ready || false,
@@ -126,6 +126,8 @@ const MatchPage = () => {
           team2MapBans: data.team2MapBans || [],
           team1MapPick: data.team1MapPick,
           team2MapPick: data.team2MapPick,
+          team1Side: data.team1Side,
+          team2Side: data.team2Side,
           sideSelection: data.sideSelection || {},
           resultSubmission: data.resultSubmission || {
             team1Submitted: false,
@@ -580,6 +582,8 @@ const MatchPage = () => {
                 <MapBanning
                   match={match}
                   userTeam={userTeam}
+                  team1={team1}
+                  team2={team2}
                   onMapBanningComplete={handleMapBanningComplete}
                 />
               </div>

@@ -189,6 +189,25 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
           <div className="hidden lg:flex items-center space-x-4">
             {currentUser ? (
               <div className="flex items-center space-x-3 relative">
+                {/* Active Match Button */}
+                {activeMatches.length > 0 && (
+                  <button
+                    onClick={handleMatchClick}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                      hasNewMatch
+                        ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg animate-pulse'
+                        : 'bg-green-700 hover:bg-green-600 text-white'
+                    }`}
+                  >
+                    <Gamepad2 className="w-4 h-4" />
+                    <span>Active Match</span>
+                    {activeMatches.length > 1 && (
+                      <span className="bg-green-800 text-green-100 text-xs px-2 py-1 rounded-full">
+                        {activeMatches.length}
+                      </span>
+                    )}
+                  </button>
+                )}
                 <NotificationBell userId={currentUser.id} />
                 {/* Profile Dropdown */}
                 <div className="relative" ref={profileDropdownRef}>
@@ -297,6 +316,28 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
               )}
               {currentUser ? (
                 <>
+                  {/* Active Match Button for Mobile */}
+                  {activeMatches.length > 0 && (
+                    <button
+                      onClick={() => {
+                        handleMatchClick();
+                        setIsOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 flex items-center space-x-2 ${
+                        hasNewMatch
+                          ? 'text-green-400 bg-green-900/20 animate-pulse'
+                          : 'text-green-400 hover:bg-green-900/20'
+                      }`}
+                    >
+                      <Gamepad2 className="w-4 h-4" />
+                      <span>Active Match</span>
+                      {activeMatches.length > 1 && (
+                        <span className="bg-green-800 text-green-100 text-xs px-2 py-1 rounded-full ml-auto">
+                          {activeMatches.length}
+                        </span>
+                      )}
+                    </button>
+                  )}
                   <Link
                     to="/dashboard"
                     className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 flex items-center space-x-2 ${

@@ -195,7 +195,8 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
       );
     }
     
-    const maxTeams = tournament.requirements?.maxTeams || 8;
+    // Use the actual configured team count from tournament format, not requirements
+    const maxTeams = tournament.format?.teamCount || tournament.requirements?.maxTeams || 8;
     const spotsLeft = maxTeams - (tournament.teams?.length || 0);
     
     if (spotsLeft === 0) {
@@ -218,7 +219,9 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
   const canSignup = (tournament: Tournament) => {
     if (userTeams.length === 0) return false;
     if (tournament.teams?.some(teamId => userTeams.some(userTeam => userTeam.id === teamId))) return false;
-    if ((tournament.teams?.length || 0) >= (tournament.requirements?.maxTeams || 8)) return false;
+    // Use the actual configured team count from tournament format, not requirements
+    const maxTeams = tournament.format?.teamCount || tournament.requirements?.maxTeams || 8;
+    if ((tournament.teams?.length || 0) >= maxTeams) return false;
     
     // Check if any of the user's teams are in active matches
     const userTeamInActiveMatch = userTeams.some(userTeam => 
@@ -425,7 +428,7 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-400 font-mono">MAX TEAMS:</span>
                       <span className="text-white font-medium font-mono">
-                        {tournament.requirements?.maxTeams || 8}
+                        {tournament.format?.teamCount || tournament.requirements?.maxTeams || 8}
                       </span>
                     </div>
                   </div>

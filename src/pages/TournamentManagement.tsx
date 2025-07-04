@@ -245,7 +245,7 @@ const TournamentManagement = () => {
                 </p>
 
                 {/* Stats */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="text-center">
                     <div className="text-lg font-semibold">{tournament.teams.length}</div>
                     <div className="text-xs text-gray-400">Teams</div>
@@ -253,6 +253,10 @@ const TournamentManagement = () => {
                   <div className="text-center">
                     <div className="text-lg font-semibold">{tournament.format?.teamCount || 8}</div>
                     <div className="text-xs text-gray-400">Max Teams</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold">{(tournament.format?.teamCount || 8) - tournament.teams.length}</div>
+                    <div className="text-xs text-gray-400">Spots Left</div>
                   </div>
                 </div>
 

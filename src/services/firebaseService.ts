@@ -522,7 +522,7 @@ export const getMatches = async (): Promise<Match[]> => {
       createdAt: data.createdAt?.toDate() || new Date(),
       // Map banning system
       matchState: data.matchState || 'ready_up',
-      mapPool: data.mapPool || ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+      mapPool: data.mapPool || ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
       bannedMaps: data.bannedMaps || { team1: [], team2: [] },
       selectedMap: data.selectedMap,
       team1Ready: data.team1Ready || false,
@@ -769,7 +769,7 @@ export const generateQualifierBracket = async (teams: Team[]): Promise<void> => 
         team2Ready: false,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         bannedMaps: {
           team1: [],
           team2: []
@@ -816,7 +816,7 @@ export const generateFinalBracket = async (teams: Team[]): Promise<void> => {
         team2Ready: false,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         bannedMaps: {
           team1: [],
           team2: []
@@ -842,7 +842,7 @@ export const generateFinalBracket = async (teams: Team[]): Promise<void> => {
         team2Ready: false,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         bannedMaps: {
           team1: [],
           team2: []
@@ -869,7 +869,7 @@ export const generateFinalBracket = async (teams: Team[]): Promise<void> => {
       team2Ready: false,
       createdAt: new Date(),
       matchState: 'ready_up',
-      mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+      mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
       bannedMaps: {
         team1: [],
         team2: []
@@ -894,7 +894,7 @@ export const generateFinalBracket = async (teams: Team[]): Promise<void> => {
     team2Ready: false,
     createdAt: new Date(),
     matchState: 'ready_up',
-    mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+    mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
     bannedMaps: {
       team1: [],
       team2: []
@@ -1477,7 +1477,9 @@ export const signupTeamForTournament = async (tournamentId: string, teamId: stri
         throw new Error('Team is already signed up for this tournament');
       }
       
-      if (teams.length >= (tournamentData.requirements?.maxTeams || 8)) {
+      // Use the actual configured team count from tournament format, not requirements
+      const maxTeams = tournamentData.format?.teamCount || tournamentData.requirements?.maxTeams || 8;
+      if (teams.length >= maxTeams) {
         throw new Error('Tournament is full');
       }
       
@@ -1501,9 +1503,9 @@ export const generateSingleEliminationBracket = async (tournamentId: string, tea
     }
 
     // Validate team count for single elimination
-    const validTeamSizes = [4, 8, 16, 32];
+    const validTeamSizes = [2, 4, 8, 16, 32];
     if (!validTeamSizes.includes(teamIds.length)) {
-      throw new Error(`Single elimination requires 4, 8, 16, or 32 teams. Got ${teamIds.length} teams.`);
+      throw new Error(`Single elimination requires 2, 4, 8, 16, or 32 teams. Got ${teamIds.length} teams.`);
     }
     
     // Shuffle teams for random seeding
@@ -1513,74 +1515,103 @@ export const generateSingleEliminationBracket = async (tournamentId: string, tea
     const matches: Omit<Match, 'id'>[] = [];
     let matchNumber = 1;
     
-    // Calculate total rounds needed
-    const totalRounds = Math.ceil(Math.log2(shuffledTeams.length));
-    console.log('🔍 DEBUG: Total rounds needed:', totalRounds);
-    
-    // Generate first round matches
-    console.log('🔍 DEBUG: Generating first round matches...');
-    for (let i = 0; i < shuffledTeams.length; i += 2) {
-      if (i + 1 < shuffledTeams.length) {
-        const match: Omit<Match, 'id'> = {
-          team1Id: shuffledTeams[i],
-          team2Id: shuffledTeams[i + 1],
-          team1Score: 0,
-          team2Score: 0,
-          winnerId: null,
-          round: 1,
-          matchNumber: matchNumber++,
-          isComplete: false,
-          tournamentId,
-          tournamentType: 'single-elim',
-          createdAt: new Date(),
-          matchState: 'ready_up',
-          mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
-          bannedMaps: {
-            team1: [],
-            team2: []
-          },
-          team1Ready: false,
-          team2Ready: false,
-          team1MapBans: [],
-          team2MapBans: []
-        };
-        matches.push(match);
-        console.log(`🔍 DEBUG: Created round 1 match ${match.matchNumber}: ${match.team1Id} vs ${match.team2Id}`);
-      }
-    }
-    
-    // Generate subsequent rounds (semifinals, finals, etc.)
-    console.log('🔍 DEBUG: Generating subsequent rounds...');
-    for (let round = 2; round <= totalRounds; round++) {
-      const matchesInRound = Math.pow(2, totalRounds - round);
-      console.log(`🔍 DEBUG: Round ${round} will have ${matchesInRound} matches`);
+    // Special case: 2 teams, just one match (the final)
+    if (shuffledTeams.length === 2) {
+      const match: Omit<Match, 'id'> = {
+        team1Id: shuffledTeams[0],
+        team2Id: shuffledTeams[1],
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        round: 1,
+        matchNumber: matchNumber++,
+        isComplete: false,
+        tournamentId,
+        tournamentType: 'single-elim',
+        createdAt: new Date(),
+        matchState: 'ready_up',
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+        bannedMaps: {
+          team1: [],
+          team2: []
+        },
+        team1Ready: false,
+        team2Ready: false,
+        team1MapBans: [],
+        team2MapBans: []
+      };
+      matches.push(match);
+      console.log(`🔍 DEBUG: Created final match: ${match.team1Id} vs ${match.team2Id}`);
+    } else {
+      // Calculate total rounds needed
+      const totalRounds = Math.ceil(Math.log2(shuffledTeams.length));
+      console.log('🔍 DEBUG: Total rounds needed:', totalRounds);
       
-      for (let match = 1; match <= matchesInRound; match++) {
-        const newMatch: Omit<Match, 'id'> = {
-          team1Id: null,
-          team2Id: null,
-          team1Score: 0,
-          team2Score: 0,
-          winnerId: null,
-          round,
-          matchNumber: matchNumber++,
-          isComplete: false,
-          tournamentId,
-          tournamentType: 'single-elim',
-          createdAt: new Date(),
-          matchState: 'ready_up',
-          mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
-          bannedMaps: {
-            team1: [],
-            team2: []
-          },
-          team1Ready: false,
-          team2Ready: false,
-          team1MapBans: [],
-          team2MapBans: []
-        };
-        matches.push(newMatch);
-        console.log(`🔍 DEBUG: Created round ${round} match ${newMatch.matchNumber}: TBD vs TBD`);
+      // Generate first round matches
+      console.log('🔍 DEBUG: Generating first round matches...');
+      for (let i = 0; i < shuffledTeams.length; i += 2) {
+        if (i + 1 < shuffledTeams.length) {
+          const match: Omit<Match, 'id'> = {
+            team1Id: shuffledTeams[i],
+            team2Id: shuffledTeams[i + 1],
+            team1Score: 0,
+            team2Score: 0,
+            winnerId: null,
+            round: 1,
+            matchNumber: matchNumber++,
+            isComplete: false,
+            tournamentId,
+            tournamentType: 'single-elim',
+            createdAt: new Date(),
+            matchState: 'ready_up',
+            mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+            bannedMaps: {
+              team1: [],
+              team2: []
+            },
+            team1Ready: false,
+            team2Ready: false,
+            team1MapBans: [],
+            team2MapBans: []
+          };
+          matches.push(match);
+          console.log(`🔍 DEBUG: Created round 1 match ${match.matchNumber}: ${match.team1Id} vs ${match.team2Id}`);
+        }
+      }
+      
+      // Generate subsequent rounds (semifinals, finals, etc.)
+      console.log('🔍 DEBUG: Generating subsequent rounds...');
+      for (let round = 2; round <= totalRounds; round++) {
+        const matchesInRound = Math.pow(2, totalRounds - round);
+        console.log(`🔍 DEBUG: Round ${round} will have ${matchesInRound} matches`);
+        
+        for (let match = 1; match <= matchesInRound; match++) {
+          const newMatch: Omit<Match, 'id'> = {
+            team1Id: null,
+            team2Id: null,
+            team1Score: 0,
+            team2Score: 0,
+            winnerId: null,
+            round,
+            matchNumber: matchNumber++,
+            isComplete: false,
+            tournamentId,
+            tournamentType: 'single-elim',
+            createdAt: new Date(),
+            matchState: 'ready_up',
+            mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+            bannedMaps: {
+              team1: [],
+              team2: []
+            },
+            team1Ready: false,
+            team2Ready: false,
+            team1MapBans: [],
+            team2MapBans: []
+          };
+          matches.push(newMatch);
+          console.log(`🔍 DEBUG: Created round ${round} match ${newMatch.matchNumber}: TBD vs TBD`);
+        }
       }
     }
     
@@ -1611,9 +1642,9 @@ export const generateSingleEliminationBracketMatches = (teams: any[], tournament
   }
 
   // Validate team count for single elimination
-  const validTeamSizes = [4, 8, 16, 32];
+  const validTeamSizes = [2, 4, 8, 16, 32];
   if (!validTeamSizes.includes(teams.length)) {
-    throw new Error(`Single elimination requires 4, 8, 16, or 32 teams. Got ${teams.length} teams.`);
+    throw new Error(`Single elimination requires 2, 4, 8, 16, or 32 teams. Got ${teams.length} teams.`);
   }
   
   // Shuffle teams for random seeding
@@ -1638,7 +1669,7 @@ export const generateSingleEliminationBracketMatches = (teams: any[], tournament
         tournamentId,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         bannedMaps: {
           team1: [],
           team2: []
@@ -1670,7 +1701,7 @@ export const generateSingleEliminationBracketMatches = (teams: any[], tournament
         tournamentId,
         createdAt: new Date(),
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         bannedMaps: { team1: [], team2: [] },
         team1Ready: false,
         team2Ready: false,
@@ -2218,7 +2249,7 @@ export const handleMapBanningComplete = async (matchId: string): Promise<void> =
   const totalBans = safeBannedMaps.team1.length + safeBannedMaps.team2.length;
   const hasMapSelected = matchData.selectedMap;
   
-  if (totalBans >= 8 && hasMapSelected) {
+  if (totalBans >= 5 && hasMapSelected) {
     // Update match state to side selection
     await updateDoc(matchRef, {
       matchState: 'side_selection',
@@ -2229,6 +2260,8 @@ export const handleMapBanningComplete = async (matchId: string): Promise<void> =
 
 // Function to ban a map
 export const banMap = async (matchId: string, teamId: string, mapName: string): Promise<void> => {
+  console.log('🔍 DEBUG: banMap called with:', { matchId, teamId, mapName });
+  
   const matchRef = doc(db, 'matches', matchId);
   const matchDoc = await getDoc(matchRef);
   
@@ -2240,17 +2273,42 @@ export const banMap = async (matchId: string, teamId: string, mapName: string): 
   const isTeam1 = matchData.team1Id === teamId;
   const isTeam2 = matchData.team2Id === teamId;
   
+  console.log('🔍 DEBUG: Team identification in banMap:', { 
+    teamId, 
+    matchTeam1Id: matchData.team1Id, 
+    matchTeam2Id: matchData.team2Id,
+    isTeam1, 
+    isTeam2 
+  });
+  
   if (!isTeam1 && !isTeam2) {
     throw new Error('Team is not part of this match');
   }
   
-  // Get current banned maps
+  // Get current banned maps and ban sequence
   const currentBannedMaps = matchData.bannedMaps || { team1: [], team2: [] };
+  const banSequence = matchData.banSequence || [];
   const totalBans = currentBannedMaps.team1.length + currentBannedMaps.team2.length;
+  
+  console.log('🔍 DEBUG: Current ban state:', { 
+    totalBans, 
+    team1Bans: currentBannedMaps.team1.length, 
+    team2Bans: currentBannedMaps.team2.length,
+    team1BannedMaps: currentBannedMaps.team1,
+    team2BannedMaps: currentBannedMaps.team2,
+    banSequence
+  });
   
   // Determine whose turn it is to ban
   // Turn order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
   const isTeam1Turn = totalBans % 2 === 0; // Even ban count = Team 1's turn
+  
+  console.log('🔍 DEBUG: Turn calculation:', { 
+    totalBans, 
+    isTeam1Turn, 
+    isTeam1, 
+    isTeam2 
+  });
   
   // Check if it's the correct team's turn
   if (isTeam1 && !isTeam1Turn) {
@@ -2260,8 +2318,8 @@ export const banMap = async (matchId: string, teamId: string, mapName: string): 
     throw new Error("It's not your team's turn to ban. Please wait for the other team.");
   }
   
-  // Check if we've reached the map selection phase (after 8 bans, 2 maps remain)
-  if (totalBans >= 8) {
+  // Check if we've reached the map selection phase (after 5 bans, 2 maps remain)
+  if (totalBans >= 5) {
     throw new Error('Map banning phase is complete. Please select from the remaining maps.');
   }
   
@@ -2272,15 +2330,24 @@ export const banMap = async (matchId: string, teamId: string, mapName: string): 
     currentBannedMaps.team2 = [...currentBannedMaps.team2, mapName];
   }
   
+  // Add to ban sequence
+  const newBanSequence = [...banSequence, { teamId, mapName, banNumber: totalBans + 1 }];
+  
+  console.log('🔍 DEBUG: Updated banned maps:', currentBannedMaps);
+  console.log('🔍 DEBUG: Updated ban sequence:', newBanSequence);
+  
   // Update the match document
   await updateDoc(matchRef, {
     bannedMaps: currentBannedMaps,
+    banSequence: newBanSequence,
     updatedAt: serverTimestamp()
   });
 };
 
 // Function to select the final map
 export const selectMap = async (matchId: string, teamId: string, mapName: string): Promise<void> => {
+  console.log('🔍 DEBUG: selectMap called with:', { matchId, teamId, mapName });
+  
   const matchRef = doc(db, 'matches', matchId);
   const matchDoc = await getDoc(matchRef);
   
@@ -2292,21 +2359,133 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
   const isTeam1 = matchData.team1Id === teamId;
   const isTeam2 = matchData.team2Id === teamId;
   
+  console.log('🔍 DEBUG: Team identification:', { 
+    teamId, 
+    matchTeam1Id: matchData.team1Id, 
+    matchTeam2Id: matchData.team2Id,
+    isTeam1, 
+    isTeam2 
+  });
+  
   if (!isTeam1 && !isTeam2) {
     throw new Error('Team is not part of this match');
   }
   
-  // Only Team 1 can select the map
-  if (!isTeam1) {
-    throw new Error('Only Team 1 can select the final map');
-  }
-  
-  // Check if we're in the map selection phase (after 8 bans)
+  // Check if we're in the map selection phase (after 5 bans)
   const currentBannedMaps = matchData.bannedMaps || { team1: [], team2: [] };
+  const banSequence = matchData.banSequence || [];
   const totalBans = currentBannedMaps.team1.length + currentBannedMaps.team2.length;
+  
+  console.log('🔍 DEBUG: Ban counts:', { 
+    totalBans, 
+    team1Bans: currentBannedMaps.team1.length, 
+    team2Bans: currentBannedMaps.team2.length,
+    team1BannedMaps: currentBannedMaps.team1,
+    team2BannedMaps: currentBannedMaps.team2,
+    banSequence
+  });
   
   if (totalBans < 5) {
     throw new Error('Map selection phase has not started yet. Continue banning maps.');
+  }
+  
+  // Determine which team should select the map based on ban sequence
+  // The team that banned last should NOT be the one to select
+  let teamThatShouldSelect: 'team1' | 'team2';
+  
+  if (banSequence.length > 0) {
+    const lastBan = banSequence[banSequence.length - 1];
+    const lastBanTeamId = lastBan.teamId;
+    
+    console.log('🔍 DEBUG: Last ban info:', { 
+      lastBan, 
+      lastBanTeamId, 
+      matchTeam1Id: matchData.team1Id, 
+      matchTeam2Id: matchData.team2Id 
+    });
+    
+    // If Team 1 banned last, Team 2 should select
+    // If Team 2 banned last, Team 1 should select
+    if (lastBanTeamId === matchData.team1Id) {
+      teamThatShouldSelect = 'team2';
+    } else if (lastBanTeamId === matchData.team2Id) {
+      teamThatShouldSelect = 'team1';
+    } else {
+      // Fallback to count-based logic if ban sequence is corrupted
+      const team1Bans = currentBannedMaps.team1.length;
+      const team2Bans = currentBannedMaps.team2.length;
+      
+      // After 5 bans: Team 1 has 3 bans, Team 2 has 2 bans
+      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1
+      // Team 1 banned last, so Team 2 should select
+      if (totalBans === 5) {
+        teamThatShouldSelect = 'team2';
+      } else if (totalBans === 6) {
+        // After 6 bans: Team 1 has 3 bans, Team 2 has 3 bans
+        // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
+        // Team 2 banned last, so Team 1 should select
+        teamThatShouldSelect = 'team1';
+      } else if (totalBans === 7) {
+        // After 7 bans: Team 1 has 4 bans, Team 2 has 3 bans
+        // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1
+        // Team 1 banned last, so Team 2 should select
+        teamThatShouldSelect = 'team2';
+      } else {
+        // After 8 bans: Team 1 has 4 bans, Team 2 has 4 bans
+        // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
+        // Team 2 banned last, so Team 1 should select
+        teamThatShouldSelect = 'team1';
+      }
+    }
+  } else {
+    // Fallback to count-based logic if no ban sequence
+    const team1Bans = currentBannedMaps.team1.length;
+    const team2Bans = currentBannedMaps.team2.length;
+    
+    // After 5 bans: Team 1 has 3 bans, Team 2 has 2 bans
+    // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1
+    // Team 1 banned last, so Team 2 should select
+    if (totalBans === 5) {
+      teamThatShouldSelect = 'team2';
+    } else if (totalBans === 6) {
+      // After 6 bans: Team 1 has 3 bans, Team 2 has 3 bans
+      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
+      // Team 2 banned last, so Team 1 should select
+      teamThatShouldSelect = 'team1';
+    } else if (totalBans === 7) {
+      // After 7 bans: Team 1 has 4 bans, Team 2 has 3 bans
+      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1
+      // Team 1 banned last, so Team 2 should select
+      teamThatShouldSelect = 'team2';
+    } else {
+      // After 8 bans: Team 1 has 4 bans, Team 2 has 4 bans
+      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
+      // Team 2 banned last, so Team 1 should select
+      teamThatShouldSelect = 'team1';
+    }
+  }
+  
+  console.log('🔍 DEBUG: Team selection logic:', { 
+    totalBans, 
+    team1Bans: currentBannedMaps.team1.length, 
+    team2Bans: currentBannedMaps.team2.length, 
+    teamThatShouldSelect,
+    banSequenceLength: banSequence.length
+  });
+  
+  // Check if the current team is the one that should select
+  const currentTeamShouldSelect = (teamThatShouldSelect === 'team1' && isTeam1) || (teamThatShouldSelect === 'team2' && isTeam2);
+  
+  console.log('🔍 DEBUG: Current team should select:', { 
+    currentTeamShouldSelect, 
+    teamThatShouldSelect, 
+    isTeam1, 
+    isTeam2 
+  });
+  
+  if (!currentTeamShouldSelect) {
+    const otherTeamName = teamThatShouldSelect === 'team1' ? 'Team 1' : 'Team 2';
+    throw new Error(`Only ${otherTeamName} can select the final map at this time`);
   }
   
   // Verify the map is available (not banned)
@@ -2314,6 +2493,8 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
   if (allBannedMaps.includes(mapName)) {
     throw new Error('Cannot select a banned map');
   }
+  
+  console.log('🔍 DEBUG: Map selection successful, updating match state');
   
   // Update the match document
   await updateDoc(matchRef, {
@@ -3004,7 +3185,7 @@ export const generateTournamentBracket = async (tournamentId: string, teamIds: s
           tournamentType: 'single-elim',
           createdAt: new Date(),
           matchState: 'ready_up',
-          mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+          mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
           bannedMaps: {
             team1: [],
             team2: []
@@ -3039,7 +3220,7 @@ export const generateTournamentBracket = async (tournamentId: string, teamIds: s
           tournamentType: 'single-elim',
           createdAt: new Date(),
           matchState: 'ready_up',
-          mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+          mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
           bannedMaps: {
             team1: [],
             team2: []
@@ -3494,7 +3675,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
       tournamentType: 'double-elim',
       bracketType: 'winners',
       matchState: 'ready_up',
-      mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+      mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
       bannedMaps: { team1: [], team2: [] },
       team1Ready: false,
       team2Ready: false,
@@ -3521,7 +3702,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
         tournamentType: 'double-elim',
         bracketType: 'winners',
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         bannedMaps: { team1: [], team2: [] },
         team1Ready: false,
         team2Ready: false,
@@ -3567,7 +3748,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
         tournamentType: 'double-elim',
         bracketType: 'losers',
         matchState: 'ready_up',
-        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         bannedMaps: { team1: [], team2: [] },
         team1Ready: false,
         team2Ready: false,
@@ -3593,7 +3774,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
     tournamentType: 'double-elim',
     bracketType: 'grand_final',
     matchState: 'ready_up',
-    mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+    mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
     bannedMaps: { team1: [], team2: [] },
     team1Ready: false,
     team2Ready: false,
@@ -3617,7 +3798,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
       tournamentType: 'double-elim',
       bracketType: 'grand_final',
       matchState: 'ready_up',
-      mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+      mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
       bannedMaps: { team1: [], team2: [] },
       team1Ready: false,
       team2Ready: false,
@@ -4275,15 +4456,21 @@ export const createAdminLog = async (log: Omit<AdminLog, 'id' | 'timestamp'>): P
 };
 
 export const getAdminLogs = async (type?: string, limitCount: number = 100): Promise<AdminLog[]> => {
+  console.log('🔍 DEBUG: getAdminLogs called with:', { type, limitCount });
+  
   let q = query(collection(db, 'adminLogs'), orderBy('timestamp', 'desc'), limit(limitCount));
   
   if (type) {
     q = query(collection(db, 'adminLogs'), where('type', '==', type), orderBy('timestamp', 'desc'), limit(limitCount));
   }
   
+  console.log('🔍 DEBUG: Executing query for adminLogs...');
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => {
+  console.log('🔍 DEBUG: Query result size:', querySnapshot.size);
+  
+  const logs = querySnapshot.docs.map(doc => {
     const data = doc.data();
+    console.log('🔍 DEBUG: Log data:', { id: doc.id, type: data.type, action: data.action });
     return {
       id: doc.id,
       type: data.type,
@@ -4297,6 +4484,9 @@ export const getAdminLogs = async (type?: string, limitCount: number = 100): Pro
       metadata: data.metadata || {}
     };
   }) as AdminLog[];
+  
+  console.log('🔍 DEBUG: Processed logs:', logs.length);
+  return logs;
 };
 
 export const getSignupLogs = async (limitCount: number = 100): Promise<AdminLog[]> => {
@@ -4429,10 +4619,11 @@ export const logAdminAction = async (
   details: string,
   adminId?: string,
   adminUsername?: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>,
+  type: 'signup' | 'general' | 'tournament' | 'match' | 'team' | 'user' = 'general'
 ): Promise<void> => {
   await createAdminLog({
-    type: 'general',
+    type,
     action,
     details,
     adminId,

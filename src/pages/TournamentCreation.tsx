@@ -41,14 +41,14 @@ const TournamentCreation = () => {
   const [currency, setCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD');
 
   // Registration
-  const [maxTeams, setMaxTeams] = useState<number>(4);
+  const [maxTeams, setMaxTeams] = useState<number>(2);
   const [requireRiotId, setRequireRiotId] = useState<boolean>(true);
   const [requireRankVerification, setRequireRankVerification] = useState<boolean>(false);
   const [minimumRank, setMinimumRank] = useState<string>('');
   const [entryFee, setEntryFee] = useState<number>(0);
 
   // Valid team sizes for elimination tournaments
-  const validTeamSizes = [4, 8, 16, 32];
+  const validTeamSizes = [2, 4, 8, 16, 32];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +65,7 @@ const TournamentCreation = () => {
 
     // Validate team size for elimination tournaments
     if (!validTeamSizes.includes(maxTeams)) {
-      setError(`Team size must be 4, 8, 16, or 32 for ${tournamentType} tournaments`);
+      setError(`Team size must be 2, 4, 8, 16, or 32 for ${tournamentType} tournaments`);
       return;
     }
 
@@ -83,7 +83,7 @@ const TournamentCreation = () => {
         type: tournamentType,
         teamCount: maxTeams,
         matchFormat,
-        mapPool: ['Ascent', 'Icebox', 'Sunset', 'Haven', 'Lotus', 'Pearl', 'Split'],
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         sideSelection: 'coin-flip',
         seedingMethod: 'random'
       };
@@ -328,6 +328,7 @@ const TournamentCreation = () => {
                     className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     required
                   >
+                    <option value={2}>2 Teams</option>
                     <option value={4}>4 Teams</option>
                     <option value={8}>8 Teams</option>
                     <option value={16}>16 Teams</option>
