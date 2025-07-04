@@ -12,8 +12,6 @@ export const useAuth = () => {
 
   const fetchUserData = async (firebaseUser: FirebaseUser) => {
     try {
-      console.log('🔍 DEBUG: Fetching user data for:', firebaseUser.uid);
-      
       // Get user data from Firestore
       const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
       if (userDoc.exists()) {
@@ -31,14 +29,13 @@ export const useAuth = () => {
           teamIds: userData.teamIds || [],
           isAdmin: userData.isAdmin || false
         };
-        console.log('✅ DEBUG: User data fetched successfully:', customUser.username);
         setCurrentUser(customUser);
       } else {
-        console.warn('⚠️ DEBUG: User document not found in Firestore for:', firebaseUser.uid);
+        console.warn('User document not found in Firestore for:', firebaseUser.uid);
         setCurrentUser(null);
       }
     } catch (error) {
-      console.error('❌ DEBUG: Error fetching user data:', error);
+      console.error('Error fetching user data:', error);
       setCurrentUser(null);
     }
   };
@@ -46,16 +43,12 @@ export const useAuth = () => {
   const refreshUser = async () => {
     const firebaseUser = auth.currentUser;
     if (firebaseUser) {
-      console.log('🔄 DEBUG: Refreshing user data for:', firebaseUser.uid);
       await fetchUserData(firebaseUser);
-    } else {
-      console.log('🔄 DEBUG: No current user to refresh');
     }
   };
 
   // Add a retry mechanism for failed auth state changes
   const retryAuthStateCheck = async () => {
-    console.log('🔄 DEBUG: Retrying auth state check');
     const firebaseUser = auth.currentUser;
     if (firebaseUser) {
       await fetchUserData(firebaseUser);
@@ -63,25 +56,19 @@ export const useAuth = () => {
   };
 
   useEffect(() => {
-    console.log('🔍 DEBUG: Setting up auth state listener');
-    
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      console.log('🔍 DEBUG: Auth state changed:', firebaseUser ? `User: ${firebaseUser.uid}` : 'No user');
-      
       if (firebaseUser) {
         // Add a small delay to ensure Firebase auth is fully settled
         setTimeout(async () => {
           await fetchUserData(firebaseUser);
         }, 100);
       } else {
-        console.log('🔍 DEBUG: Setting currentUser to null');
         setCurrentUser(null);
       }
       setLoading(false);
     });
 
     return () => {
-      console.log('🔍 DEBUG: Cleaning up auth state listener');
       unsubscribe();
     };
   }, []);

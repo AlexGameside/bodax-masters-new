@@ -115,8 +115,6 @@ function App() {
       }
 
       try {
-        console.log('🔍 DEBUG: Loading user data for:', currentUser.username);
-        
         const [userTeamData, invitationsData, matchesData] = await Promise.all([
           getUserTeam(currentUser.id),
           getTeamInvitations(currentUser.id),
@@ -141,10 +139,8 @@ function App() {
           const players = await getTeamPlayers(userTeamData.id);
           setTeamPlayers(players);
         }
-        
-        console.log('✅ DEBUG: User data loaded successfully');
       } catch (error) {
-        console.error('❌ DEBUG: Error loading user data:', error);
+        console.error('Error loading user data:', error);
         // Only set isAdmin to false on error if we're not loading
         if (!loading) {
           setIsAdmin(false);
