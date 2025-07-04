@@ -55,19 +55,18 @@ import {
   onTeamPlayersChange
 } from './services/firebaseService';
 import { 
-  onAuthStateChange, 
   registerUser, 
   loginUser, 
   logoutUser 
 } from './services/authService';
+import { useAuth } from './hooks/useAuth';
 import { getDoc, doc } from 'firebase/firestore';
 import { db } from './config/firebase';
 import { toast } from 'react-hot-toast';
 
 function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { currentUser, loading } = useAuth();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [userTeam, setUserTeam] = useState<Team | null>(null);
@@ -98,15 +97,7 @@ function App() {
     loadData();
   }, []);
 
-  // Auth state listener
-  useEffect(() => {
-    const unsubscribe = onAuthStateChange((user) => {
-      setCurrentUser(user);
-      setLoading(false);
-    });
 
-    return unsubscribe;
-  }, []);
 
   // Load user data when user changes
   useEffect(() => {
@@ -188,7 +179,6 @@ function App() {
 
   const handleUserLogout = async () => {
     await logoutUser();
-    setCurrentUser(null);
   };
 
   const handleCreateTeam = async (teamData: Omit<Team, 'id' | 'createdAt'>) => {

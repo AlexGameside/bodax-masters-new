@@ -107,8 +107,8 @@ export const loginUser = async (usernameOrEmail: string, password: string): Prom
 export const logoutUser = async (): Promise<void> => {
   try {
     await signOut(auth);
-    currentUser = null;
-    notifyAuthStateListeners(null);
+    // The onAuthStateChanged listener in authService.ts will automatically handle the state change
+    // and notify all listeners when the user signs out
   } catch (error) {
     throw error;
   }
