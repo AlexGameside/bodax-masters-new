@@ -6,6 +6,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Bodax Gaming - Professional Valorant Tournament Management Platform" />
     <title>Bodax Gaming - Valorant Tournament Platform</title>
+    
+    <!-- Suppress browser extension errors -->
+    <script>
+      window.addEventListener('error', function(event) {
+        if (event.message && event.message.includes('message channel closed')) {
+          event.preventDefault();
+          return false;
+        }
+      });
+      
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && typeof event.reason === 'string' && event.reason.includes('message channel closed')) {
+          event.preventDefault();
+          return false;
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
