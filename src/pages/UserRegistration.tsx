@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, Gamepad2, Eye, EyeOff } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import type { User as UserType } from '../types/tournament';
 
 interface UserRegistrationProps {
@@ -85,7 +86,11 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
       };
 
       await onRegister(userData);
-      navigate('/profile');
+      toast.success('Account created successfully! Welcome to Bodax Masters! 🎉');
+      // Small delay to show the toast before redirecting
+      setTimeout(() => {
+        navigate('/profile');
+      }, 1000);
     } catch (error: any) {
       console.error('Registration error:', error);
       if (error.message.includes('username')) {

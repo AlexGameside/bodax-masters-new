@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Lock, Eye, EyeOff } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface UserLoginProps {
   onLogin: (username: string, password: string) => Promise<void>;
@@ -29,7 +30,11 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
     
     try {
       await onLogin(formData.username.trim(), formData.password);
-      navigate('/profile');
+      toast.success('Successfully logged in! 🎉');
+      // Small delay to show the toast before redirecting
+      setTimeout(() => {
+        navigate('/profile');
+      }, 1000);
     } catch (error: any) {
       console.error('Login error:', error);
       setError(error.message || 'Invalid username or password');
