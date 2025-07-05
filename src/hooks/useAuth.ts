@@ -34,6 +34,7 @@ export const useAuth = () => {
           isAdmin: userData.isAdmin || false
         };
         setCurrentUser(customUser);
+        setLoading(false); // Only set loading to false when we have user data
       } else {
         console.error('❌ DEBUG: User document not found in Firestore for Firebase UID:', firebaseUser.uid);
         console.error('❌ DEBUG: This means the registration process failed to create the Firestore document');
@@ -72,6 +73,7 @@ export const useAuth = () => {
                 isAdmin: correctedUserData.isAdmin || false
               };
               setCurrentUser(customUser);
+              setLoading(false); // Only set loading to false when we have user data
               return;
             }
           }
@@ -90,14 +92,17 @@ export const useAuth = () => {
             isAdmin: userData.isAdmin || false
           };
           setCurrentUser(customUser);
+          setLoading(false); // Only set loading to false when we have user data
         } else {
           console.error('❌ DEBUG: User not found by email fallback either');
           setCurrentUser(null);
+          setLoading(false); // Set loading to false when we confirm no user
         }
       }
     } catch (error) {
       console.error('❌ DEBUG: Error fetching user data:', error);
       setCurrentUser(null);
+      setLoading(false); // Set loading to false on error
     }
   };
 
@@ -157,8 +162,9 @@ export const useAuth = () => {
         }, 100);
       } else {
         setCurrentUser(null);
+        setLoading(false); // Only set loading to false when no Firebase user
       }
-      setLoading(false);
+      // Don't set loading to false here - let fetchUserData handle it
     });
 
     return () => {
