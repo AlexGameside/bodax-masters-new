@@ -610,12 +610,13 @@ const MatchPage = () => {
             )}
           </div>
 
-          {bothTeamsReady && (
+          {(bothTeamsReady || currentUser?.isAdmin) && (
             <div className="lg:col-span-1">
               <MatchChat 
                 matchId={match.id} 
                 userTeam={userTeam} 
                 teams={teams} 
+                isAdmin={currentUser?.isAdmin}
               />
             </div>
           )}

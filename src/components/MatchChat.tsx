@@ -19,9 +19,10 @@ interface MatchChatProps {
   matchId: string;
   userTeam?: any;
   teams: any[];
+  isAdmin?: boolean;
 }
 
-const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams }) => {
+const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams, isAdmin }) => {
   const { currentUser } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -99,15 +100,20 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams }) => {
       // Get username from team players or use display name
       let username = currentUser.username || 'Unknown';
       
-      // Find the user in team players to get their proper username
-      const player = teamPlayers.find(p => p.id === currentUser.id);
-      if (player) {
-        username = player.username || player.riotId || currentUser.username || 'Unknown';
-      } else if (userTeam?.members) {
-        // Fallback to team members if player not found in teamPlayers
-        const member = userTeam.members.find((m: any) => m.userId === currentUser.id);
-        if (member) {
-          username = member.username || member.riotName || currentUser.username || 'Unknown';
+      // If admin, add admin identifier
+      if (isAdmin) {
+        username = `[ADMIN] ${username}`;
+      } else {
+        // Find the user in team players to get their proper username
+        const player = teamPlayers.find(p => p.id === currentUser.id);
+        if (player) {
+          username = player.username || player.riotId || currentUser.username || 'Unknown';
+        } else if (userTeam?.members) {
+          // Fallback to team members if player not found in teamPlayers
+          const member = userTeam.members.find((m: any) => m.userId === currentUser.id);
+          if (member) {
+            username = member.username || member.riotName || currentUser.username || 'Unknown';
+          }
         }
       }
 
@@ -135,7 +141,8 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams }) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const getTeamColor = (teamId?: string) => {
+  const getTeamColor = (teamId?: string, isAdminMessage?: boolean) => {
+    if (isAdminMessage) return 'text-purple-400 font-bold';
     if (!teamId) return 'text-gray-300';
     return teamId === userTeam?.id ? 'text-blue-400' : 'text-red-400';
   };
@@ -165,7 +172,7 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams }) => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2 mb-1">
-                    <span className={`text-xs font-medium ${getTeamColor(msg.teamId)}`}>
+                    <span className={`text-xs font-medium ${getTeamColor(msg.teamId, msg.username?.startsWith('[ADMIN]'))}`}>
                       {msg.username}
                     </span>
                     <span className="text-xs text-gray-500">
