@@ -32,8 +32,10 @@ const TournamentCreation = () => {
   // Tournament format
   const [tournamentType, setTournamentType] = useState<'single-elimination' | 'double-elimination'>('single-elimination');
   const [matchFormat, setMatchFormat] = useState<'BO1' | 'BO3' | 'BO5'>('BO3');
+  const [seedingMethod, setSeedingMethod] = useState<'random' | 'manual'>('random');
 
   // Schedule
+  const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
 
   // Prize pool
@@ -85,7 +87,7 @@ const TournamentCreation = () => {
         matchFormat,
         mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         sideSelection: 'coin-flip',
-        seedingMethod: 'random'
+        seedingMethod: seedingMethod
       };
 
       const rules: TournamentRules = {
@@ -102,7 +104,7 @@ const TournamentCreation = () => {
       };
 
       const schedule: TournamentSchedule = {
-        startDate: new Date(), // Start immediately
+        startDate: startDate ? new Date(startDate) : new Date(), // Use selected start date or start immediately
         endDate: endDate ? new Date(endDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now if no end date
         timeZone: 'UTC',
         matchDuration: 60,
@@ -285,31 +287,62 @@ const TournamentCreation = () => {
                     <option value="BO5">Best of 5</option>
                   </select>
                 </div>
+
+                <div>
+                  <label htmlFor="seedingMethod" className="block text-sm font-medium text-gray-200">
+                    Seeding Method
+                  </label>
+                  <select
+                    id="seedingMethod"
+                    value={seedingMethod}
+                    onChange={(e) => setSeedingMethod(e.target.value as 'random' | 'manual')}
+                    className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="random">Random Seeding</option>
+                    <option value="manual">Manual Seeding</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Manual seeding allows you to arrange teams in custom order
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Schedule */}
             <div>
               <h2 className="text-xl font-semibold mb-4">Schedule</h2>
-              <div className="mb-4 p-3 bg-blue-900/30 border border-blue-500 rounded-md">
-                <p className="text-sm text-blue-300">
-                  <strong>Note:</strong> Tournaments start immediately when created. You can optionally set an end date.
-                </p>
-              </div>
-              <div>
-                <label htmlFor="endDate" className="block text-sm font-medium text-gray-200">
-                  End Date (Optional)
-                </label>
-                <input
-                  type="datetime-local"
-                  id="endDate"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                />
-                <p className="mt-1 text-xs text-gray-400">
-                  Leave empty to set end date to 7 days from now
-                </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="startDate" className="block text-sm font-medium text-gray-200">
+                    Start Date *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    id="startDate"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    When the tournament will begin
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="endDate" className="block text-sm font-medium text-gray-200">
+                    End Date (Optional)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    id="endDate"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Leave empty to set end date to 7 days from start
+                  </p>
+                </div>
               </div>
             </div>
 

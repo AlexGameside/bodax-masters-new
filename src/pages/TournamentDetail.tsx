@@ -87,6 +87,7 @@ import TournamentSchedule from '../components/TournamentSchedule';
 import TournamentLeaderboard from '../components/TournamentLeaderboard';
 import TeamMemberSelection from '../components/TeamMemberSelection';
 import { useAuth } from '../hooks/useAuth';
+import ManualSeedingInterface from '../components/ManualSeedingInterface';
 
 interface TournamentDetailProps {
   currentUser: User | null;
@@ -129,6 +130,21 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     round?: number;
     description: string;
   } | null>(null);
+  const [showManualSeeding, setShowManualSeeding] = useState(false);
+
+  // Helper function to format dates
+  const formatDate = (date: Date | string) => {
+    if (!date) return 'TBD';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
+  };
 
   // Check Discord requirements
   const discordLinked = !!(authUser?.discordId && authUser?.discordLinked);
@@ -1080,7 +1096,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         </div>
 
         {/* Tournament Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
             <div className="text-red-400 font-bold text-sm mb-2">STATUS</div>
             <div className="text-gray-200 text-lg font-bold capitalize">{tournament.status.replace('-', ' ')}</div>
@@ -1091,6 +1107,14 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               {tournament.status === 'completed' && 'Tournament completed'}
               {tournament.status === 'group-stage' && 'Group stage in progress'}
               {tournament.status === 'knockout-stage' && 'Knockout stage in progress'}
+            </div>
+          </div>
+
+          <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
+            <div className="text-red-400 font-bold text-sm mb-2">START TIME</div>
+            <div className="text-gray-200 text-lg font-bold">{formatDate(tournament.schedule?.startDate)}</div>
+            <div className="text-gray-400 text-xs mt-1">
+              Tournament begins
             </div>
           </div>
 
@@ -1118,6 +1142,14 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           <div className="text-red-400 font-bold text-sm mb-3">TOURNAMENT REQUIREMENTS</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
+              <span className="text-gray-400">Start Date:</span>
+              <span className="text-gray-200 ml-2">{formatDate(tournament.schedule?.startDate)}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">End Date:</span>
+              <span className="text-gray-200 ml-2">{formatDate(tournament.schedule?.endDate)}</span>
+            </div>
+            <div>
               <span className="text-gray-400">Format:</span>
               <span className="text-gray-200 ml-2 capitalize">{tournament.format?.type?.replace(/-/g, ' ') || 'Single Elimination'}</span>
             </div>
@@ -1128,6 +1160,10 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
             <div>
               <span className="text-gray-400">Max Teams:</span>
               <span className="text-gray-200 ml-2">{tournament.format?.teamCount || 8}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Match Format:</span>
+              <span className="text-gray-200 ml-2">{tournament.format?.matchFormat || 'BO1'}</span>
             </div>
           </div>
         </div>
@@ -1185,6 +1221,22 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           <div className="fixed top-28 right-8 z-40 bg-black/80 border border-yellow-700 rounded-lg p-3 w-64 shadow-lg">
             <div className="text-yellow-400 font-bold text-xs mb-2 text-center">ADMIN TOOLS</div>
             <div className="grid grid-cols-1 gap-2">
+              {/* Bracket Reveal Button */}
+              <button
+                onClick={() => navigate(`/admin/bracket-reveal/${id}`)}
+                className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-1 px-2 rounded text-xs border border-purple-900 transition-all duration-200"
+              >
+                Bracket Reveal
+              </button>
+              {/* Manual Seeding Button: Only show if seeding is manual and registration is closed */}
+              {(tournament.seeding?.method === 'manual' || tournament.format?.seedingMethod === 'manual') && tournament.status === 'registration-closed' && (
+                <button
+                  onClick={() => setShowManualSeeding(true)}
+                  className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-1 px-2 rounded text-xs border border-blue-900 transition-all duration-200"
+                >
+                  Manual Seeding
+                </button>
+              )}
               {tournament.status === 'registration-open' && (
                 <>
                   <button
@@ -1575,6 +1627,23 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                 Confirm Revert
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Seeding Modal */}
+      {showManualSeeding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
+          <div className="relative w-full max-w-3xl mx-auto">
+            <ManualSeedingInterface
+              tournament={tournament}
+              teams={teams}
+              onSeedingUpdated={async () => {
+                setShowManualSeeding(false);
+                await reloadTournamentData();
+              }}
+              onClose={() => setShowManualSeeding(false)}
+            />
           </div>
         </div>
       )}

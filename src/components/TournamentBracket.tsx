@@ -30,6 +30,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [activeTab, setActiveTab] = useState<'winners' | 'losers' | 'grand-finals'>('winners');
 
   // Auto-refresh every 5 seconds to catch updates
   useEffect(() => {
@@ -113,7 +114,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
     const rounds: { [key: string]: BracketMatch[] } = {};
     
     // Check if this is a double elimination tournament
-    const isDoubleElimination = matches.some(m => m.tournamentType === 'double-elim');
+    const isDoubleElimination = matches.some(m => m.bracketType === 'winners' || m.bracketType === 'losers' || m.bracketType === 'grand_final');
     
     if (isDoubleElimination) {
       // Get all matches by type
@@ -199,7 +200,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
 
   const getRoundName = (roundKey: string, maxRound: number) => {
     // Check if this is a double elimination tournament
-    const isDoubleElimination = matches.some(m => m.tournamentType === 'double-elim');
+    const isDoubleElimination = matches.some(m => m.bracketType === 'winners' || m.bracketType === 'losers' || m.bracketType === 'grand_final');
     
     if (isDoubleElimination) {
       if (roundKey.startsWith('winners-')) {
@@ -255,45 +256,34 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
   const renderMatch = (bracketMatch: BracketMatch, matchIdx: number, roundIdx: number, isWinners: boolean, isGrandFinal: boolean) => {
     const { match, team1, team2 } = bracketMatch;
     const winner = getWinner(match);
-    const totalRounds = Object.keys(rounds).length;
 
     return (
       <div
         key={match.id}
-        className={`relative p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 cursor-pointer bg-gray-900/80 shadow bracket-match ${getMatchStatusColor(match)} ${
-          isWinners ? 'border-green-500/50' :
-          isGrandFinal ? 'border-yellow-500/50' :
-          'border-red-500/50'
+        className={`relative p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 cursor-pointer bg-gray-900/90 shadow-lg backdrop-blur-sm ${getMatchStatusColor(match)} ${
+          isWinners ? 'border-green-500/60 hover:border-green-400' :
+          isGrandFinal ? 'border-yellow-500/60 hover:border-yellow-400' :
+          'border-red-500/60 hover:border-red-400'
         }`}
         onClick={() => setSelectedMatch(match)}
-        style={{ minHeight: '80px' }}
+        style={{ minWidth: '180px', minHeight: '70px' }}
       >
-        {/* Vertical connector line below match (except last match) */}
-        {roundIdx < totalRounds - 1 && matchIdx % 2 === 0 && (
-          <div className="absolute left-1/2 bottom-0 w-0.5 h-8 bg-gray-700 z-0" style={{ transform: 'translateX(-50%)' }}></div>
-        )}
-        {/* Vertical connector line above match (except first match) */}
-        {roundIdx < totalRounds - 1 && matchIdx % 2 === 1 && (
-          <div className="absolute left-1/2 top-0 w-0.5 h-8 bg-gray-700 z-0" style={{ transform: 'translateX(-50%)' }}></div>
-        )}
-        {/* Horizontal connector to next round */}
-        {roundIdx < totalRounds - 1 && (
-          <div className="absolute top-1/2 -right-4 w-8 h-0.5 bg-gray-700 z-0" style={{ transform: 'translateY(-50%)' }}></div>
-        )}
 
         {/* Match Header */}
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-gray-400">
-            Match #{match.matchNumber}
-          </span>
+        <div className="flex items-center justify-between mb-2 pb-1 border-b border-gray-700/50">
           <div className="flex items-center space-x-2">
+            <span className="text-xs font-semibold text-gray-300">
+              #{match.matchNumber}
+            </span>
             {isAdmin && !match.isComplete && match.team1Id && match.team2Id && (
               <div className="bg-red-500 text-white px-1 py-0.5 rounded text-xs font-bold">
                 ADMIN
               </div>
             )}
+          </div>
+          <div className="flex items-center space-x-1">
             {getMatchStatusIcon(match)}
-            <span className="text-xs text-gray-300">
+            <span className="text-xs text-gray-400">
               {getMatchStatusText(match)}
             </span>
           </div>
@@ -301,7 +291,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
 
         {/* Revert Actions for Completed Matches (Admin Only) */}
         {isAdmin && match.isComplete && onRevertMatchResult && (
-          <div className="mb-2 flex justify-end">
+          <div className="mt-2 pt-1 border-t border-gray-700/50 flex justify-end">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -309,10 +299,10 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
                   onRevertMatchResult(match.id);
                 }
               }}
-              className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs border border-red-500 transition-all duration-200"
+              className="bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded text-xs font-medium border border-red-500 transition-all duration-200"
               title="Revert Match Result"
             >
-              Revert Result
+              Revert
             </button>
           </div>
         )}
@@ -320,56 +310,64 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
         {/* Teams */}
         <div className="space-y-2">
           {/* Team 1 */}
-          <div className={`flex items-center justify-between p-1 rounded relative ${
-            winner?.id === team1?.id ? 'bg-green-900/30 border border-green-500' : 'bg-gray-800/50'
+          <div className={`flex items-center justify-between p-2 rounded-md relative transition-all duration-200 ${
+            winner?.id === team1?.id ? 'bg-green-900/40 border border-green-500/60' : 'bg-gray-800/60 hover:bg-gray-700/60'
           }`}>
             <div className="flex items-center space-x-2">
-              <div className="w-5 h-5 bg-primary-500 rounded-full flex items-center justify-center">
+              <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                winner?.id === team1?.id ? 'bg-green-500' : 'bg-blue-500'
+              }`}>
                 <span className="text-xs font-bold text-white">1</span>
               </div>
-              <span className="text-xs font-medium text-white">
-                {team1?.name || 'TBD'}
-              </span>
-              {team1?.teamTag && (
-                <span className="text-xs text-gray-400">[{team1.teamTag}]</span>
-              )}
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-white truncate max-w-[100px]">
+                  {team1?.name || 'TBD'}
+                </span>
+                {team1?.teamTag && (
+                  <span className="text-xs text-gray-400">[{team1.teamTag}]</span>
+                )}
+              </div>
               {winner?.id === team1?.id && match.isComplete && (
-                <div className="bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold flex items-center ml-2">
-                  <Award className="w-3 h-3 mr-1" />
-                  Winner
+                <div className="bg-yellow-500 text-black px-2 py-0.5 rounded-full text-xs font-bold flex items-center ml-2">
+                  <Award className="w-2 h-2 mr-1" />
+                  W
                 </div>
               )}
             </div>
             {match.isComplete && (
-              <span className="text-xs font-bold text-white">
+              <span className="text-sm font-bold text-white bg-gray-800 px-2 py-1 rounded">
                 {match.team1Score}
               </span>
             )}
           </div>
 
           {/* Team 2 */}
-          <div className={`flex items-center justify-between p-1 rounded relative ${
-            winner?.id === team2?.id ? 'bg-green-900/30 border border-green-500' : 'bg-gray-800/50'
+          <div className={`flex items-center justify-between p-2 rounded-md relative transition-all duration-200 ${
+            winner?.id === team2?.id ? 'bg-green-900/40 border border-green-500/60' : 'bg-gray-800/60 hover:bg-gray-700/60'
           }`}>
             <div className="flex items-center space-x-2">
-              <div className="w-5 h-5 bg-gray-600 rounded-full flex items-center justify-center">
+              <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                winner?.id === team2?.id ? 'bg-green-500' : 'bg-gray-600'
+              }`}>
                 <span className="text-xs font-bold text-white">2</span>
               </div>
-              <span className="text-xs font-medium text-white">
-                {team2?.name || 'TBD'}
-              </span>
-              {team2?.teamTag && (
-                <span className="text-xs text-gray-400">[{team2.teamTag}]</span>
-              )}
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-white truncate max-w-[100px]">
+                  {team2?.name || 'TBD'}
+                </span>
+                {team2?.teamTag && (
+                  <span className="text-xs text-gray-400">[{team2.teamTag}]</span>
+                )}
+              </div>
               {winner?.id === team2?.id && match.isComplete && (
-                <div className="bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold flex items-center ml-2">
-                  <Award className="w-3 h-3 mr-1" />
-                  Winner
+                <div className="bg-yellow-500 text-black px-2 py-0.5 rounded-full text-xs font-bold flex items-center ml-2">
+                  <Award className="w-2 h-2 mr-1" />
+                  W
                 </div>
               )}
             </div>
             {match.isComplete && (
-              <span className="text-xs font-bold text-white">
+              <span className="text-sm font-bold text-white bg-gray-800 px-2 py-1 rounded">
                 {match.team2Score}
               </span>
             )}
@@ -424,108 +422,143 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
         {/* Bracket Container */}
         <div className="overflow-x-auto py-4">
           {/* Double Elimination Layout */}
-          {matches.some(m => m.tournamentType === 'double-elim') ? (
-            <div className="flex flex-col space-y-12">
-              {/* Winners Bracket */}
-              <div className="flex space-x-8 min-w-max items-stretch">
-                {Object.entries(rounds)
-                  .filter(([key]) => key.startsWith('winners-'))
-                  .map(([roundKey, roundMatches], roundIdx) => (
-                    <div key={roundKey} className="flex flex-col items-center min-w-[220px] px-2 relative">
-                      {/* Winners Bracket Header */}
-                      <div className="text-center mb-4 w-full">
-                        <div className="bg-green-900/30 border border-green-500 rounded-lg px-3 py-1 mb-2">
-                          <span className="text-green-400 font-bold text-sm">WINNERS BRACKET</span>
-                        </div>
-                      </div>
-                      
-                      {/* Round Header */}
-                      <div className="text-center mb-2 w-full">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex-1"></div>
-                          <h3 className="text-base font-semibold text-white tracking-wide">
+          {matches.some(m => m.bracketType === 'winners' || m.bracketType === 'losers' || m.bracketType === 'grand_final') ? (
+            <div className="min-w-max">
+              {/* Tournament Title */}
+              <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2">{tournament.name}</h2>
+                <p className="text-gray-400">Double Elimination Tournament</p>
+              </div>
+              
+              {/* Tab Navigation */}
+              <div className="flex justify-center mb-8">
+                <div className="flex space-x-1 bg-gray-800 rounded-lg p-1">
+                  <button
+                    onClick={() => setActiveTab('winners')}
+                    className={`px-6 py-3 rounded-md font-medium transition-all duration-200 ${
+                      activeTab === 'winners'
+                        ? 'bg-green-600 text-white shadow-lg'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    Winners Bracket
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('losers')}
+                    className={`px-6 py-3 rounded-md font-medium transition-all duration-200 ${
+                      activeTab === 'losers'
+                        ? 'bg-red-600 text-white shadow-lg'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    Losers Bracket
+                  </button>
+                  {rounds['grand-final'] && (
+                    <button
+                      onClick={() => setActiveTab('grand-finals')}
+                      className={`px-6 py-3 rounded-md font-medium transition-all duration-200 ${
+                        activeTab === 'grand-finals'
+                          ? 'bg-yellow-600 text-white shadow-lg'
+                          : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                      }`}
+                    >
+                      Grand Finals
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Winners Bracket Tab */}
+              {activeTab === 'winners' && (
+                <div className="flex space-x-16 min-w-max items-stretch">
+                  {Object.entries(rounds)
+                    .filter(([key]) => key.startsWith('winners-'))
+                    .map(([roundKey, roundMatches], roundIdx) => (
+                      <div key={roundKey} className="flex flex-col items-center">
+                        {/* Round Header */}
+                        <div className="text-center mb-8 w-full">
+                          <h3 className="text-xl font-bold text-white mb-2">
                             {getRoundName(roundKey, Object.keys(rounds).length)}
                           </h3>
-                          <div className="flex-1 flex justify-end">
-                            {isAdmin && onRevertRound && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const roundNumber = parseInt(roundKey.split('-')[1]);
-                                  if (!isNaN(roundNumber) && onRevertRound) {
-                                    onRevertRound(roundNumber);
-                                  }
-                                }}
-                                className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs border border-red-500 transition-all duration-200"
-                                title={`Revert Round ${roundKey}`}
-                              >
-                                Revert Round
-                              </button>
-                            )}
-                          </div>
+                          <div className="w-full h-2 rounded-full bg-gradient-to-r from-green-500 to-green-600"></div>
                         </div>
-                        <div className="w-full h-1 rounded-full bg-gradient-to-r from-green-500 to-green-600"></div>
-                      </div>
 
-                      {/* Matches */}
-                      <div className="space-y-8 relative">
-                        {roundMatches.map((bracketMatch, matchIdx) => renderMatch(bracketMatch, matchIdx, roundIdx, true, false))}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-
-              {/* Losers Bracket */}
-              <div className="flex space-x-8 min-w-max items-stretch">
-                {Object.entries(rounds)
-                  .filter(([key]) => key.startsWith('losers-'))
-                  .map(([roundKey, roundMatches], roundIdx) => (
-                    <div key={roundKey} className="flex flex-col items-center min-w-[220px] px-2 relative">
-                      {/* Losers Bracket Header */}
-                      <div className="text-center mb-4 w-full">
-                        <div className="bg-red-900/30 border border-red-500 rounded-lg px-3 py-1 mb-2">
-                          <span className="text-red-400 font-bold text-sm">LOSERS BRACKET</span>
+                        {/* Matches */}
+                        <div className="space-y-8 relative">
+                          {roundMatches.map((bracketMatch, matchIdx) => (
+                            <div key={bracketMatch.match.id} className="relative">
+                              {renderMatch(bracketMatch, matchIdx, roundIdx, true, false)}
+                              
+                              {/* Connection lines to next round */}
+                              {roundIdx < Object.entries(rounds).filter(([key]) => key.startsWith('winners-')).length - 1 && (
+                                <div className="absolute top-1/2 -right-8 w-16 h-0.5 bg-green-500 transform -translate-y-1/2 z-10"></div>
+                              )}
+                              
+                              {/* Vertical connection lines for pairs */}
+                              {roundMatches.length > 1 && matchIdx % 2 === 0 && matchIdx + 1 < roundMatches.length && (
+                                <div className="absolute top-1/2 left-1/2 w-0.5 h-8 bg-green-500 transform -translate-x-1/2 translate-y-4 z-10"></div>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      
-                      {/* Round Header */}
-                      <div className="text-center mb-2 w-full">
-                        <h3 className="text-base font-semibold text-white mb-1 tracking-wide">
-                          {getRoundName(roundKey, Object.keys(rounds).length)}
-                        </h3>
-                        <div className="w-full h-1 rounded-full bg-gradient-to-r from-red-500 to-red-600"></div>
-                      </div>
+                    ))}
+                </div>
+              )}
 
-                      {/* Matches */}
-                      <div className="space-y-8 relative">
-                        {roundMatches.map((bracketMatch, matchIdx) => renderMatch(bracketMatch, matchIdx, roundIdx, false, false))}
-                      </div>
-                    </div>
-                  ))}
-              </div>
+              {/* Losers Bracket Tab */}
+              {activeTab === 'losers' && (
+                <div className="flex space-x-16 min-w-max items-stretch">
+                  {Object.entries(rounds)
+                    .filter(([key]) => key.startsWith('losers-'))
+                    .map(([roundKey, roundMatches], roundIdx) => (
+                      <div key={roundKey} className="flex flex-col items-center">
+                        {/* Round Header */}
+                        <div className="text-center mb-8 w-full">
+                          <h3 className="text-xl font-bold text-white mb-2">
+                            {getRoundName(roundKey, Object.keys(rounds).length)}
+                          </h3>
+                          <div className="w-full h-2 rounded-full bg-gradient-to-r from-red-500 to-red-600"></div>
+                        </div>
 
-              {/* Grand Finals */}
-              {rounds['grand-final'] && (
+                        {/* Matches */}
+                        <div className="space-y-8 relative">
+                          {roundMatches.map((bracketMatch, matchIdx) => (
+                            <div key={bracketMatch.match.id} className="relative">
+                              {renderMatch(bracketMatch, matchIdx, roundIdx, false, false)}
+                              
+                              {/* Connection lines to next round */}
+                              {roundIdx < Object.entries(rounds).filter(([key]) => key.startsWith('losers-')).length - 1 && (
+                                <div className="absolute top-1/2 -right-8 w-16 h-0.5 bg-red-500 transform -translate-y-1/2 z-10"></div>
+                              )}
+                              
+                              {/* Vertical connection lines for pairs */}
+                              {roundMatches.length > 1 && matchIdx % 2 === 0 && matchIdx + 1 < roundMatches.length && (
+                                <div className="absolute top-1/2 left-1/2 w-0.5 h-8 bg-red-500 transform -translate-x-1/2 translate-y-4 z-10"></div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {/* Grand Finals Tab */}
+              {activeTab === 'grand-finals' && rounds['grand-final'] && (
                 <div className="flex justify-center">
-                  <div className="flex flex-col items-center min-w-[220px] px-2 relative">
-                    {/* Grand Finals Header */}
-                    <div className="text-center mb-4 w-full">
-                      <div className="bg-yellow-900/30 border border-yellow-500 rounded-lg px-3 py-1 mb-2">
-                        <span className="text-yellow-400 font-bold text-sm">GRAND FINALS</span>
-                      </div>
+                  <div className="flex flex-col items-center">
+                    <div className="text-center mb-6">
+                      <h3 className="text-2xl font-bold text-white mb-2">Grand Finals</h3>
+                      <div className="w-full h-2 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600"></div>
                     </div>
                     
-                    {/* Round Header */}
-                    <div className="text-center mb-2 w-full">
-                      <h3 className="text-base font-semibold text-white mb-1 tracking-wide">
-                        Grand Finals
-                      </h3>
-                      <div className="w-full h-1 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600"></div>
-                    </div>
-
-                    {/* Matches */}
-                    <div className="space-y-8 relative">
-                      {rounds['grand-final'].map((bracketMatch, matchIdx) => renderMatch(bracketMatch, matchIdx, 0, false, true))}
+                    <div className="space-y-4">
+                      {rounds['grand-final'].map((bracketMatch, matchIdx) => (
+                        <div key={bracketMatch.match.id} className="relative">
+                          {renderMatch(bracketMatch, matchIdx, 0, false, true)}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -533,11 +566,11 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
             </div>
           ) : (
             /* Single Elimination Layout - Keep existing code */
-            <div className="flex space-x-8 min-w-max items-stretch">
+            <div className="flex space-x-16 min-w-max items-stretch">
               {Object.entries(rounds).map(([roundKey, roundMatches], roundIdx) => (
                 <div key={roundKey} className="flex flex-col items-center min-w-[220px] px-2 relative">
                   {/* Round Header */}
-                  <div className="text-center mb-2 w-full">
+                  <div className="text-center mb-8 w-full">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex-1"></div>
                       <h3 className="text-base font-semibold text-white tracking-wide">
@@ -566,7 +599,21 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
 
                   {/* Matches */}
                   <div className="space-y-8 relative">
-                    {roundMatches.map((bracketMatch, matchIdx) => renderMatch(bracketMatch, matchIdx, roundIdx, false, false))}
+                    {roundMatches.map((bracketMatch, matchIdx) => (
+                      <div key={bracketMatch.match.id} className="relative">
+                        {renderMatch(bracketMatch, matchIdx, roundIdx, false, false)}
+                        
+                        {/* Connection lines to next round */}
+                        {roundIdx < Object.entries(rounds).length - 1 && (
+                          <div className="absolute top-1/2 -right-8 w-16 h-0.5 bg-primary-500 transform -translate-y-1/2 z-10"></div>
+                        )}
+                        
+                        {/* Vertical connection lines for pairs */}
+                        {roundMatches.length > 1 && matchIdx % 2 === 0 && matchIdx + 1 < roundMatches.length && (
+                          <div className="absolute top-1/2 left-1/2 w-0.5 h-8 bg-primary-500 transform -translate-x-1/2 translate-y-4 z-10"></div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}

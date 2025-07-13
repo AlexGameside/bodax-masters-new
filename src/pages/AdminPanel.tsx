@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Team, Match, User, Tournament } from '../types/tournament';
-import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink, MessageCircle, FileText, Activity, RefreshCw, User as UserIcon } from 'lucide-react';
+import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink, MessageCircle, FileText, Activity, RefreshCw, User as UserIcon, BarChart3 } from 'lucide-react';
 import { getAllUsers, updateUserAdminStatus, createTestScenario, clearTestData, createTestUsersWithAuth, getTestUsers, migrateAllTeams, updateAllInvitationsExpiration, sendDiscordNotificationToUser, getUsersWithDiscord, getSignupLogs, getGeneralLogs, logAdminAction, type AdminLog } from '../services/firebaseService';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { toast } from 'react-hot-toast';
+import AdminStats from './AdminStats';
 
 interface AdminPanelProps {
   teams: Team[];
@@ -33,7 +34,7 @@ const AdminPanel = ({
   onGenerateFinalBracket
 }: AdminPanelProps) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs' | 'users'>('tournaments');
+  const [activeTab, setActiveTab] = useState<'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs' | 'users' | 'stats'>('tournaments');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -688,11 +689,12 @@ const AdminPanel = ({
             { id: 'notifications', label: 'Notifications', icon: MessageSquare },
             { id: 'signup-logs', label: 'Signup Logs', icon: FileText },
             { id: 'general-logs', label: 'General Logs', icon: Activity },
-            { id: 'users', label: 'Users', icon: Users }
+            { id: 'users', label: 'Users', icon: Users },
+            { id: 'stats', label: 'Statistics', icon: BarChart3 }
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs' | 'users')}
+              onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg'
@@ -1671,6 +1673,13 @@ const AdminPanel = ({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Statistics Tab */}
+        {activeTab === 'stats' && (
+          <div className="card">
+            <AdminStats />
           </div>
         )}
       </div>

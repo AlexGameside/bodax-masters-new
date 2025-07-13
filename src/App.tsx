@@ -17,6 +17,7 @@ import TournamentCreation from './pages/TournamentCreation';
 import TournamentDetail from './pages/TournamentDetail';
 import TournamentManagement from './pages/TournamentManagement';
 import TournamentInfo from './pages/TournamentInfo';
+import BracketReveal from './pages/BracketReveal';
 import ConnectionStatus from './components/ConnectionStatus';
 // Footer pages
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -28,6 +29,7 @@ import HelpCenter from './pages/HelpCenter';
 import FAQ from './pages/FAQ';
 import TournamentRules from './pages/TournamentRules';
 import DiscordCallback from './pages/DiscordCallback';
+import AdminStats from './pages/AdminStats';
 import type { User, Team, Match, TeamInvitation } from './types/tournament';
 import { 
   getTeams, 
@@ -381,6 +383,8 @@ function App() {
             <Route path="/admin/tournaments" element={isAdmin ? <Navigate to="/admin/tournaments/manage" /> : <Navigate to="/" />} />
             <Route path="/admin/tournaments/create" element={isAdmin ? <TournamentCreation /> : <Navigate to="/" />} />
             <Route path="/admin/tournaments/manage" element={isAdmin ? <TournamentManagement /> : <Navigate to="/" />} />
+            <Route path="/admin/bracket-reveal/:id" element={isAdmin ? <BracketReveal currentUser={currentUser} /> : <Navigate to="/" />} />
+            <Route path="/admin/stats" element={isAdmin ? <AdminStats /> : <Navigate to="/" />} />
           </Routes>
         </main>
         <Footer />

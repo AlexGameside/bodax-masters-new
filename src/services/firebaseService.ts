@@ -2740,18 +2740,33 @@ export const completeMatch = async (matchId: string, team1Score: number, team2Sc
   console.log('✅ DEBUG: Match completed successfully');
   
   // If this is a tournament match, advance the winner to the next round
-    if (matchData.tournamentId) {
-    console.log('🚀 DEBUG: Calling advanceWinnerToNextRound with:', {
+  if (matchData.tournamentId) {
+    console.log('🚀 DEBUG: Calling advancement logic with:', {
       tournamentId: matchData.tournamentId,
       currentRound: matchData.round,
       currentMatchNumber: matchData.matchNumber,
-      winnerId
+      winnerId,
+      tournamentType: matchData.tournamentType
     });
     
-    await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
+    // Determine the loser
+    const loserId = winnerId === matchData.team1Id ? matchData.team2Id : matchData.team1Id;
     
-    // Check if this round is complete and if we should advance to the next round
-    await checkAndAdvanceRound(matchData.tournamentId, matchData.round);
+    if (matchData.tournamentType === 'double-elim') {
+          // Use double elimination advancement logic
+    if (matchData.bracketType) {
+      await advanceDoubleEliminationMatch(matchData.tournamentId, matchData as Match, winnerId, loserId);
+    } else {
+      // Fallback to single elimination logic
+      await advanceWinnerToNextMatch(matchData.tournamentId, matchData.nextMatchId || '', winnerId);
+    }
+    } else {
+      // Use single elimination advancement logic
+      await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
+      
+      // Check if this round is complete and if we should advance to the next round
+      await checkAndAdvanceRound(matchData.tournamentId, matchData.round);
+    }
   } else {
     console.log('⚠️ DEBUG: No tournamentId found, skipping advancement');
   }
@@ -3725,13 +3740,13 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
     
     if (round === 1) {
       // First losers round: half the teams (losers from winners round 1)
-      matchesInRound = Math.floor(teamIds.length / 4);
+      matchesInRound = Math.floor(teamIds.length / 2);
     } else if (round === 2) {
       // Second losers round: quarter of teams (winners from losers round 1 + losers from winners round 2)
-      matchesInRound = Math.floor(teamIds.length / 4);
+      matchesInRound = Math.floor(teamIds.length / 2);
     } else {
       // Subsequent rounds: half of previous round
-      matchesInRound = Math.max(1, Math.floor(teamIds.length / Math.pow(2, round + 1)));
+      matchesInRound = Math.max(1, Math.floor(teamIds.length / Math.pow(2, round)));
     }
     
     for (let match = 1; match <= matchesInRound; match++) {
@@ -4808,4 +4823,660 @@ export const cancelTeamInvitation = async (invitationId: string): Promise<void> 
     data: { teamId: invitationData.teamId },
     isRead: false
   });
+};
+
+// Manual Seeding Functions
+export const setManualSeeding = async (tournamentId: string, teamRankings: { teamId: string; seed: number }[]): Promise<void> => {
+  try {
+    console.log('🔍 DEBUG: setManualSeeding called with:', { tournamentId, teamRankings });
+    
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    const tournamentDoc = await getDoc(tournamentRef);
+    
+    if (!tournamentDoc.exists()) {
+      throw new Error('Tournament not found');
+    }
+    
+    const tournament = tournamentDoc.data() as Tournament;
+    
+    // Validate that all teams in rankings are registered for the tournament
+    const registeredTeamIds = tournament.teams || [];
+    const rankingTeamIds = teamRankings.map(r => r.teamId);
+    
+    const invalidTeams = rankingTeamIds.filter(teamId => !registeredTeamIds.includes(teamId));
+    if (invalidTeams.length > 0) {
+      throw new Error(`Teams not registered for tournament: ${invalidTeams.join(', ')}`);
+    }
+    
+    // Validate that all registered teams are included in rankings
+    const missingTeams = registeredTeamIds.filter(teamId => !rankingTeamIds.includes(teamId));
+    if (missingTeams.length > 0) {
+      throw new Error(`Missing teams in rankings: ${missingTeams.join(', ')}`);
+    }
+    
+    // Validate seed numbers are unique and sequential
+    const seeds = teamRankings.map(r => r.seed).sort((a, b) => a - b);
+    const expectedSeeds = Array.from({ length: teamRankings.length }, (_, i) => i + 1);
+    if (JSON.stringify(seeds) !== JSON.stringify(expectedSeeds)) {
+      throw new Error('Seed numbers must be unique and sequential from 1 to N');
+    }
+    
+    // Update tournament with manual seeding
+    await updateDoc(tournamentRef, {
+      seeding: {
+        method: 'manual',
+        rankings: teamRankings,
+      },
+      updatedAt: serverTimestamp()
+    });
+    
+    console.log('✅ DEBUG: Manual seeding set successfully');
+  } catch (error) {
+    console.error('❌ DEBUG: Error setting manual seeding:', error);
+    throw error;
+  }
+};
+
+export const generateBracketWithManualSeeding = async (tournamentId: string): Promise<void> => {
+  try {
+    console.log('🔍 DEBUG: generateBracketWithManualSeeding called with:', { tournamentId });
+    
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    const tournamentDoc = await getDoc(tournamentRef);
+    
+    if (!tournamentDoc.exists()) {
+      throw new Error('Tournament not found');
+    }
+    
+    const tournament = tournamentDoc.data() as Tournament;
+    
+    if (tournament.seeding.method !== 'manual') {
+      throw new Error('Tournament does not have manual seeding configured');
+    }
+    
+    if (!tournament.seeding.rankings || tournament.seeding.rankings.length === 0) {
+      throw new Error('No manual seeding rankings found');
+    }
+    
+    // Sort teams by their seed number
+    const sortedTeams = [...tournament.seeding.rankings]
+      .sort((a, b) => a.seed - b.seed)
+      .map(r => r.teamId);
+    
+    console.log('🔍 DEBUG: Teams sorted by manual seeding:', sortedTeams);
+    
+    // Delete existing matches for this tournament
+    const existingMatches = await getTournamentMatches(tournamentId);
+    console.log('🔍 DEBUG: Deleting existing matches:', existingMatches.length);
+    for (const match of existingMatches) {
+      await deleteMatch(match.id);
+    }
+    
+    // Generate bracket based on tournament type
+    if (tournament.format.type === 'double-elimination') {
+      await generateDoubleEliminationBracketWithSeeding(tournamentId, sortedTeams);
+    } else {
+      await generateSingleEliminationBracketWithSeeding(tournamentId, sortedTeams);
+    }
+    
+    console.log('✅ DEBUG: Bracket generated with manual seeding successfully');
+  } catch (error) {
+    console.error('❌ DEBUG: Error generating bracket with manual seeding:', error);
+    throw error;
+  }
+};
+
+export const generateSingleEliminationBracketWithSeeding = async (tournamentId: string, seededTeams: string[]): Promise<void> => {
+  try {
+    console.log('🔍 DEBUG: generateSingleEliminationBracketWithSeeding called with:', { tournamentId, seededTeams });
+    
+    if (seededTeams.length < 2) {
+      throw new Error('Need at least 2 teams to generate bracket');
+    }
+
+    // Validate team count for single elimination
+    const validTeamSizes = [2, 4, 8, 16, 32];
+    if (!validTeamSizes.includes(seededTeams.length)) {
+      throw new Error(`Single elimination requires 2, 4, 8, 16, or 32 teams. Got ${seededTeams.length} teams.`);
+    }
+    
+    const matches: Omit<Match, 'id'>[] = [];
+    let matchNumber = 1;
+    
+    // Special case: 2 teams, just one match (the final)
+    if (seededTeams.length === 2) {
+      const match: Omit<Match, 'id'> = {
+        team1Id: seededTeams[0],
+        team2Id: seededTeams[1],
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        round: 1,
+        matchNumber: matchNumber++,
+        isComplete: false,
+        tournamentId,
+        tournamentType: 'single-elim',
+        createdAt: new Date(),
+        matchState: 'ready_up',
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+        bannedMaps: {
+          team1: [],
+          team2: []
+        },
+        team1Ready: false,
+        team2Ready: false,
+        team1MapBans: [],
+        team2MapBans: []
+      };
+      matches.push(match);
+      console.log(`🔍 DEBUG: Created final match: ${match.team1Id} vs ${match.team2Id}`);
+    } else {
+      // Calculate total rounds needed
+      const totalRounds = Math.ceil(Math.log2(seededTeams.length));
+      console.log('🔍 DEBUG: Total rounds needed:', totalRounds);
+      
+      // Generate first round matches using seeded bracket placement
+      console.log('🔍 DEBUG: Generating first round matches with seeding...');
+      const firstRoundMatches = generateSeededFirstRound(seededTeams);
+      
+      for (const [team1Id, team2Id] of firstRoundMatches) {
+        const match: Omit<Match, 'id'> = {
+          team1Id,
+          team2Id,
+          team1Score: 0,
+          team2Score: 0,
+          winnerId: null,
+          round: 1,
+          matchNumber: matchNumber++,
+          isComplete: false,
+          tournamentId,
+          tournamentType: 'single-elim',
+          createdAt: new Date(),
+          matchState: 'ready_up',
+          mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+          bannedMaps: {
+            team1: [],
+            team2: []
+          },
+          team1Ready: false,
+          team2Ready: false,
+          team1MapBans: [],
+          team2MapBans: []
+        };
+        matches.push(match);
+        console.log(`🔍 DEBUG: Created round 1 match ${match.matchNumber}: ${match.team1Id} vs ${match.team2Id}`);
+      }
+      
+      // Generate subsequent rounds (semifinals, finals, etc.)
+      console.log('🔍 DEBUG: Generating subsequent rounds...');
+      for (let round = 2; round <= totalRounds; round++) {
+        const matchesInRound = Math.pow(2, totalRounds - round);
+        console.log(`🔍 DEBUG: Round ${round} will have ${matchesInRound} matches`);
+        
+        for (let match = 1; match <= matchesInRound; match++) {
+          const newMatch: Omit<Match, 'id'> = {
+            team1Id: null,
+            team2Id: null,
+            team1Score: 0,
+            team2Score: 0,
+            winnerId: null,
+            round,
+            matchNumber: matchNumber++,
+            isComplete: false,
+            tournamentId,
+            tournamentType: 'single-elim',
+            createdAt: new Date(),
+            matchState: 'ready_up',
+            mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+            bannedMaps: {
+              team1: [],
+              team2: []
+            },
+            team1Ready: false,
+            team2Ready: false,
+            team1MapBans: [],
+            team2MapBans: []
+          };
+          matches.push(newMatch);
+          console.log(`🔍 DEBUG: Created round ${round} match ${newMatch.matchNumber}: TBD vs TBD`);
+        }
+      }
+    }
+    
+    console.log('🔍 DEBUG: Final matches array:', matches.map(m => ({
+      round: m.round,
+      matchNumber: m.matchNumber,
+      team1Id: m.team1Id,
+      team2Id: m.team2Id
+    })));
+    
+    // Add all matches to Firebase
+    console.log('🔍 DEBUG: Adding matches to Firebase...');
+    for (const match of matches) {
+      await addMatch(match);
+    }
+    
+    console.log(`✅ DEBUG: Generated ${matches.length} matches with manual seeding for tournament ${tournamentId}`);
+  } catch (error) {
+    console.error('❌ DEBUG: Error generating single elimination bracket with seeding:', error);
+    throw error;
+  }
+};
+
+// Helper function to generate seeded first round matches
+const generateSeededFirstRound = (seededTeams: string[]): [string, string][] => {
+  const matches: [string, string][] = [];
+  const n = seededTeams.length;
+  
+  // Standard tournament seeding pattern:
+  // Seed 1 vs Seed N, Seed 2 vs Seed N-1, etc.
+  for (let i = 0; i < n / 2; i++) {
+    const team1Index = i;
+    const team2Index = n - 1 - i;
+    matches.push([seededTeams[team1Index], seededTeams[team2Index]]);
+  }
+  
+  return matches;
+};
+
+export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: string, seededTeams: string[]): Promise<void> => {
+  if (!seededTeams || seededTeams.length < 2) throw new Error('At least 2 teams required');
+
+  // Validate team count for double elimination
+  const validTeamSizes = [4, 8, 16, 32];
+  if (!validTeamSizes.includes(seededTeams.length)) {
+    throw new Error(`Double elimination requires 4, 8, 16, or 32 teams. Got ${seededTeams.length} teams.`);
+  }
+
+  console.log(`🔍 DEBUG: Generating double elimination bracket with seeding for ${seededTeams.length} teams`);
+
+  const matches: Omit<Match, 'id'>[] = [];
+  let matchNumber = 1;
+
+  // Calculate rounds needed
+  const totalRounds = Math.ceil(Math.log2(seededTeams.length));
+  console.log(`🔍 DEBUG: Total rounds needed: ${totalRounds}`);
+
+  // Generate Winners Bracket with seeding
+  console.log('🔍 DEBUG: Generating winners bracket with seeding...');
+  
+  // Winners Round 1 - use seeded bracket placement
+  const firstRoundMatches = generateSeededFirstRound(seededTeams);
+  for (const [team1Id, team2Id] of firstRoundMatches) {
+    matches.push({
+      team1Id,
+      team2Id,
+      team1Score: 0,
+      team2Score: 0,
+      winnerId: null,
+      isComplete: false,
+      round: 1,
+      matchNumber: matchNumber++,
+      tournamentId,
+      tournamentType: 'double-elim',
+      bracketType: 'winners',
+      matchState: 'ready_up',
+      mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+      bannedMaps: { team1: [], team2: [] },
+      team1Ready: false,
+      team2Ready: false,
+      team1MapBans: [],
+      team2MapBans: [],
+      createdAt: new Date()
+    });
+  }
+
+  // Generate subsequent winners rounds
+  for (let round = 2; round <= totalRounds; round++) {
+    const matchesInRound = Math.pow(2, totalRounds - round);
+    for (let match = 1; match <= matchesInRound; match++) {
+      matches.push({
+        team1Id: null,
+        team2Id: null,
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        isComplete: false,
+        round,
+        matchNumber: matchNumber++,
+        tournamentId,
+        tournamentType: 'double-elim',
+        bracketType: 'winners',
+        matchState: 'ready_up',
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+        bannedMaps: { team1: [], team2: [] },
+        team1Ready: false,
+        team2Ready: false,
+        team1MapBans: [],
+        team2MapBans: [],
+        createdAt: new Date()
+      });
+    }
+  }
+
+  // Generate Losers Bracket
+  console.log('🔍 DEBUG: Generating losers bracket...');
+  
+  // Losers bracket has more rounds than winners bracket
+  const losersRounds = totalRounds * 2 - 1;
+  
+  for (let round = 1; round <= losersRounds; round++) {
+    // Calculate matches in this losers round
+    let matchesInRound: number;
+    
+    if (round === 1) {
+      // First losers round: half the teams (losers from winners round 1)
+      matchesInRound = Math.floor(seededTeams.length / 2);
+    } else if (round === 2) {
+      // Second losers round: quarter of teams (winners from losers round 1 + losers from winners round 2)
+      matchesInRound = Math.floor(seededTeams.length / 2);
+    } else {
+      // Subsequent rounds: half of previous round
+      matchesInRound = Math.max(1, Math.floor(seededTeams.length / Math.pow(2, round)));
+    }
+    
+    for (let match = 1; match <= matchesInRound; match++) {
+      matches.push({
+        team1Id: null,
+        team2Id: null,
+        team1Score: 0,
+        team2Score: 0,
+        winnerId: null,
+        isComplete: false,
+        round,
+        matchNumber: matchNumber++,
+        tournamentId,
+        tournamentType: 'double-elim',
+        bracketType: 'losers',
+        matchState: 'ready_up',
+        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+        bannedMaps: { team1: [], team2: [] },
+        team1Ready: false,
+        team2Ready: false,
+        team1MapBans: [],
+        team2MapBans: [],
+        createdAt: new Date()
+      });
+    }
+  }
+
+  // Generate Grand Finals (winners bracket finalist vs losers bracket finalist)
+  console.log('🔍 DEBUG: Generating grand finals...');
+  matches.push({
+    team1Id: null, // Winners bracket finalist
+    team2Id: null, // Losers bracket finalist
+    team1Score: 0,
+    team2Score: 0,
+    winnerId: null,
+    isComplete: false,
+    round: totalRounds + 1,
+    matchNumber: matchNumber++,
+    tournamentId,
+    tournamentType: 'double-elim',
+    bracketType: 'grand_final',
+    matchState: 'ready_up',
+    mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+    bannedMaps: { team1: [], team2: [] },
+    team1Ready: false,
+    team2Ready: false,
+    team1MapBans: [],
+    team2MapBans: [],
+    createdAt: new Date()
+  });
+
+  // If needed, generate a second grand final match (if losers bracket finalist wins first match)
+  if (seededTeams.length >= 8) {
+    matches.push({
+      team1Id: null, // Winners bracket finalist
+      team2Id: null, // Losers bracket finalist (if they won the first grand final)
+      team1Score: 0,
+      team2Score: 0,
+      winnerId: null,
+      isComplete: false,
+      round: totalRounds + 1,
+      matchNumber: matchNumber++,
+      tournamentId,
+      tournamentType: 'double-elim',
+      bracketType: 'grand_final',
+      matchState: 'ready_up',
+      mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+      bannedMaps: { team1: [], team2: [] },
+      team1Ready: false,
+      team2Ready: false,
+      team1MapBans: [],
+      team2MapBans: [],
+      createdAt: new Date()
+    });
+  }
+
+  console.log(`🔍 DEBUG: Generated ${matches.length} matches for double elimination bracket with seeding`);
+  console.log(`🔍 DEBUG: Winners bracket: ${matches.filter(m => m.bracketType === 'winners').length} matches`);
+  console.log(`🔍 DEBUG: Losers bracket: ${matches.filter(m => m.bracketType === 'losers').length} matches`);
+  console.log(`🔍 DEBUG: Grand finals: ${matches.filter(m => m.bracketType === 'grand_final').length} matches`);
+
+  // Add all matches to Firebase
+  for (const match of matches) {
+    await addMatch(match);
+  }
+
+  console.log(`✅ DEBUG: Double elimination bracket with seeding generated successfully for tournament ${tournamentId}`);
+};
+
+// New comprehensive double elimination advancement function
+export const advanceDoubleEliminationMatch = async (tournamentId: string, match: Match, winnerId: string, loserId: string): Promise<void> => {
+  try {
+    console.log('🔍 DEBUG: advanceDoubleEliminationMatch called with:', {
+      tournamentId,
+      matchId: match.id,
+      winnerId,
+      loserId,
+      bracketType: match.bracketType,
+      round: match.round,
+      matchNumber: match.matchNumber
+    });
+
+    // Get all matches for this tournament
+    const allMatches = await getTournamentMatches(tournamentId);
+    
+    if (match.bracketType === 'winners') {
+      // Handle winners bracket advancement
+      await advanceWinnersBracketMatch(tournamentId, match, winnerId, loserId, allMatches);
+    } else if (match.bracketType === 'losers') {
+      // Handle losers bracket advancement
+      await advanceLosersBracketMatch(tournamentId, match, winnerId, allMatches);
+    } else if (match.bracketType === 'grand_final') {
+      // Handle grand finals
+      await advanceGrandFinalMatch(tournamentId, match, winnerId, allMatches);
+    }
+  } catch (error) {
+    console.error('❌ DEBUG: Error in advanceDoubleEliminationMatch:', error);
+    throw error;
+  }
+};
+
+// Advance winners bracket match
+const advanceWinnersBracketMatch = async (tournamentId: string, match: Match, winnerId: string, loserId: string, allMatches: Match[]): Promise<void> => {
+  console.log('🔍 DEBUG: Advancing winners bracket match');
+  
+  // 1. Advance winner to next winners bracket match
+  const nextWinnersRound = match.round + 1;
+  const nextWinnersMatchNumber = Math.ceil(match.matchNumber / 2);
+  
+  const nextWinnersMatch = allMatches.find(m => 
+    m.tournamentId === tournamentId && 
+    m.bracketType === 'winners' && 
+    m.round === nextWinnersRound && 
+    m.matchNumber === nextWinnersMatchNumber
+  );
+  
+  if (nextWinnersMatch) {
+    const nextMatchRef = doc(db, 'matches', nextWinnersMatch.id);
+    const isFirstSlot = match.matchNumber % 2 === 1;
+    
+    await updateDoc(nextMatchRef, {
+      [isFirstSlot ? 'team1Id' : 'team2Id']: winnerId,
+      updatedAt: new Date()
+    });
+    console.log(`✅ DEBUG: Advanced winner ${winnerId} to winners bracket match ${nextWinnersMatch.id}`);
+  }
+  
+  // 2. Send loser to losers bracket
+  await sendLoserToLosersBracket(tournamentId, match, loserId, allMatches);
+};
+
+// Send loser to losers bracket
+const sendLoserToLosersBracket = async (tournamentId: string, match: Match, loserId: string, allMatches: Match[]): Promise<void> => {
+  console.log('🔍 DEBUG: Sending loser to losers bracket:', loserId);
+  
+  // Calculate which losers bracket match this loser should go to
+  const losersBracketMatch = findLosersBracketMatch(tournamentId, match, allMatches);
+  
+  if (losersBracketMatch) {
+    const losersMatchRef = doc(db, 'matches', losersBracketMatch.id);
+    const isFirstSlot = !losersBracketMatch.team1Id;
+    
+    await updateDoc(losersMatchRef, {
+      [isFirstSlot ? 'team1Id' : 'team2Id']: loserId,
+      updatedAt: new Date()
+    });
+    console.log(`✅ DEBUG: Sent loser ${loserId} to losers bracket match ${losersBracketMatch.id}`);
+  } else {
+    console.warn('⚠️ DEBUG: No available losers bracket match found for loser:', loserId);
+  }
+};
+
+// Find the appropriate losers bracket match for a loser
+const findLosersBracketMatch = (tournamentId: string, match: Match, allMatches: Match[]): Match | null => {
+  const winnersRound = match.round;
+  const winnersMatchNumber = match.matchNumber;
+  
+  // For double elimination, the losers bracket structure is:
+  // LB Round 1: Losers from WB Round 1
+  // LB Round 2: Winners from LB Round 1 + Losers from WB Round 2
+  // LB Round 3: Winners from LB Round 2 + Losers from WB Round 3
+  // etc.
+  
+  if (winnersRound === 1) {
+    // First round losers go to first losers bracket round
+    const losersRound = 1;
+    const losersMatchNumber = Math.ceil(winnersMatchNumber / 2);
+    
+    return allMatches.find(m => 
+      m.tournamentId === tournamentId && 
+      m.bracketType === 'losers' && 
+      m.round === losersRound && 
+      m.matchNumber === losersMatchNumber
+    ) || null;
+  } else {
+    // Later round losers go to later losers bracket rounds
+    // The formula is: losersRound = (winnersRound - 1) * 2 + 1
+    // This ensures proper losers bracket progression
+    const losersRound = (winnersRound - 1) * 2 + 1;
+    const losersMatchNumber = Math.ceil(winnersMatchNumber / 2);
+    
+    return allMatches.find(m => 
+      m.tournamentId === tournamentId && 
+      m.bracketType === 'losers' && 
+      m.round === losersRound && 
+      m.matchNumber === losersMatchNumber
+    ) || null;
+  }
+};
+
+// Advance losers bracket match
+const advanceLosersBracketMatch = async (tournamentId: string, match: Match, winnerId: string, allMatches: Match[]): Promise<void> => {
+  console.log('🔍 DEBUG: Advancing losers bracket match');
+  
+  const nextLosersRound = match.round + 1;
+  const nextLosersMatchNumber = Math.ceil(match.matchNumber / 2);
+  
+  const nextLosersMatch = allMatches.find(m => 
+    m.tournamentId === tournamentId && 
+    m.bracketType === 'losers' && 
+    m.round === nextLosersRound && 
+    m.matchNumber === nextLosersMatchNumber
+  );
+  
+  if (nextLosersMatch) {
+    const nextMatchRef = doc(db, 'matches', nextLosersMatch.id);
+    const isFirstSlot = match.matchNumber % 2 === 1;
+    
+    await updateDoc(nextMatchRef, {
+      [isFirstSlot ? 'team1Id' : 'team2Id']: winnerId,
+      updatedAt: new Date()
+    });
+    console.log(`✅ DEBUG: Advanced winner ${winnerId} to next losers bracket match ${nextLosersMatch.id}`);
+  } else {
+    // This might be the losers bracket final, check if we need to advance to grand finals
+    const isLosersFinal = isLosersBracketFinal(tournamentId, match, allMatches);
+    if (isLosersFinal) {
+      await advanceToGrandFinals(tournamentId, winnerId, allMatches);
+    }
+  }
+};
+
+// Check if this is the losers bracket final
+const isLosersBracketFinal = (tournamentId: string, match: Match, allMatches: Match[]): boolean => {
+  const losersMatches = allMatches.filter(m => 
+    m.tournamentId === tournamentId && 
+    m.bracketType === 'losers'
+  );
+  
+  const maxLosersRound = Math.max(...losersMatches.map(m => m.round));
+  return match.round === maxLosersRound;
+};
+
+// Advance to grand finals
+const advanceToGrandFinals = async (tournamentId: string, losersBracketWinner: string, allMatches: Match[]): Promise<void> => {
+  console.log('🔍 DEBUG: Advancing to grand finals');
+  
+  const grandFinalMatch = allMatches.find(m => 
+    m.tournamentId === tournamentId && 
+    m.bracketType === 'grand_final' && 
+    m.round === Math.max(...allMatches.map(m => m.round))
+  );
+  
+  if (grandFinalMatch) {
+    const grandFinalRef = doc(db, 'matches', grandFinalMatch.id);
+    
+    // The losers bracket winner goes to team2 slot in grand finals
+    await updateDoc(grandFinalRef, {
+      team2Id: losersBracketWinner,
+      updatedAt: new Date()
+    });
+    console.log(`✅ DEBUG: Advanced losers bracket winner ${losersBracketWinner} to grand finals`);
+  }
+};
+
+// Advance grand final match
+const advanceGrandFinalMatch = async (tournamentId: string, match: Match, winnerId: string, allMatches: Match[]): Promise<void> => {
+  console.log('🔍 DEBUG: Advancing grand final match');
+  
+  // Check if there's a second grand final match (reset bracket)
+  const grandFinalMatches = allMatches.filter(m => 
+    m.tournamentId === tournamentId && 
+    m.bracketType === 'grand_final'
+  );
+  
+  if (grandFinalMatches.length > 1) {
+    // There's a second grand final match
+    const secondGrandFinal = grandFinalMatches.find(m => m.id !== match.id);
+    if (secondGrandFinal && !secondGrandFinal.isComplete) {
+      // If the losers bracket winner won the first grand final, they need to win one more
+      const losersBracketWinner = match.team2Id;
+      if (winnerId === losersBracketWinner) {
+        // Losers bracket winner won, they need to win the second match too
+        const secondGrandFinalRef = doc(db, 'matches', secondGrandFinal.id);
+        await updateDoc(secondGrandFinalRef, {
+          team1Id: match.team1Id, // Winners bracket finalist
+          team2Id: winnerId, // Losers bracket winner
+          updatedAt: new Date()
+        });
+        console.log(`✅ DEBUG: Set up second grand final match`);
+      }
+    }
+  }
+  
+  // Mark tournament as completed
+  await checkAndMarkTournamentCompleted(tournamentId);
 };

@@ -29,6 +29,19 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
   const [showTeamMemberSelection, setShowTeamMemberSelection] = useState(false);
   const [selectedTeamForRegistration, setSelectedTeamForRegistration] = useState<Team | null>(null);
 
+  // Helper function to format dates
+  const formatDate = (date: Date | string) => {
+    if (!date) return 'TBD';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
+  };
+
   // Check if user is admin
   const isAdmin = currentUser?.isAdmin === true;
 
@@ -413,6 +426,12 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
 
                   {/* Tournament Details with tech styling */}
                   <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-400 font-mono">START:</span>
+                      <span className="text-white font-medium font-mono">
+                        {formatDate(tournament.schedule?.startDate)}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-400 font-mono">FORMAT:</span>
                       <span className="text-white font-medium font-mono">
