@@ -1,19 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, ExternalLink, AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getDiscordAuthUrl } from '../services/discordService';
+import { useAuth } from '../hooks/useAuth';
 
 interface DiscordLinkBannerProps {
   discordLinked: boolean;
   inDiscordServer: boolean;
   onDismiss?: () => void;
+  onDiscordLinked?: () => void;
 }
 
 const DISCORD_INVITE = 'https://discord.gg/MZzEyX3peN';
 
-const DiscordLinkBanner: React.FC<DiscordLinkBannerProps> = ({ discordLinked, inDiscordServer, onDismiss }) => {
+const DiscordLinkBanner: React.FC<DiscordLinkBannerProps> = ({ 
+  discordLinked, 
+  inDiscordServer, 
+  onDismiss,
+  onDiscordLinked 
+}) => {
   const [isDismissed, setIsDismissed] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   // Show modal if Discord requirements not met and banner not dismissed
   useEffect(() => {
@@ -35,7 +44,8 @@ const DiscordLinkBanner: React.FC<DiscordLinkBannerProps> = ({ discordLinked, in
   };
 
   const handleLinkDiscord = () => {
-    navigate('/profile');
+    // Use OAuth flow instead of manual linking
+    window.location.href = getDiscordAuthUrl();
   };
 
   const handleJoinServer = () => {
@@ -87,50 +97,48 @@ const DiscordLinkBanner: React.FC<DiscordLinkBannerProps> = ({ discordLinked, in
 
       {/* Annoying modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-gradient-to-br from-red-900 to-red-800 border-4 border-red-500 rounded-xl p-8 max-w-2xl mx-4 shadow-2xl animate-pulse">
-            <div className="text-center">
-              <AlertTriangle className="w-16 h-16 text-red-300 mx-auto mb-4 animate-bounce" />
-              <h2 className="text-3xl font-bold text-red-100 mb-4">🚨 DISCORD SETUP REQUIRED 🚨</h2>
-              <p className="text-red-200 text-lg mb-6">
-                You <strong>CANNOT</strong> participate in tournaments without linking your Discord account and joining our server!
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-8 shadow-lg max-w-2xl w-full">
+            <div className="text-center mb-8">
+              <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+              <h2 className="text-3xl font-bold text-white mb-4">⚠️ DISCORD SETUP REQUIRED</h2>
+              <p className="text-xl text-gray-300 mb-6">
+                You <strong>CANNOT</strong> participate in tournaments without Discord!
               </p>
-              
-              <div className="space-y-4 mb-6">
-                <div className="bg-red-800/50 p-4 rounded-lg">
-                  <h3 className="font-bold text-red-100 mb-2">What you need to do:</h3>
-                  <ul className="text-red-200 text-left space-y-1">
-                    <li>• Link your Discord account in your profile</li>
-                    <li>• Join our Discord server</li>
-                    <li>• Verify you're a member of our server</li>
-                  </ul>
-                </div>
-              </div>
+            </div>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button
-                  onClick={handleLinkDiscord}
-                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 text-lg font-bold transition-colors"
-                >
-                  <ExternalLink className="w-5 h-5" />
-                  Link Discord Account
-                </button>
-                <button
-                  onClick={handleJoinServer}
-                  className="bg-gray-700 hover:bg-gray-800 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 text-lg font-bold transition-colors"
-                >
-                  <ExternalLink className="w-5 h-5" />
-                  Join Discord Server
-                </button>
-              </div>
+            <div className="bg-red-900/50 border border-red-700 rounded-lg p-6 mb-8">
+              <h3 className="text-lg font-bold text-red-300 mb-3">What you need to do:</h3>
+              <ul className="text-red-200 space-y-2 text-left">
+                <li>• Link your Discord account to receive notifications</li>
+                <li>• Join our Discord server for tournament communication</li>
+                <li>• Stay connected for match updates and team coordination</li>
+              </ul>
+            </div>
 
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
-                onClick={handleDismiss}
-                className="mt-6 text-red-300 hover:text-white text-sm underline"
+                onClick={handleLinkDiscord}
+                className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 text-lg font-bold transition-colors"
               >
-                I'll do this later (but you won't be able to join tournaments!)
+                <ExternalLink className="w-5 h-5" />
+                Link Discord Account
+              </button>
+              <button
+                onClick={handleJoinServer}
+                className="bg-gray-700 hover:bg-gray-800 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 text-lg font-bold transition-colors"
+              >
+                <ExternalLink className="w-5 h-5" />
+                Join Discord Server
               </button>
             </div>
+
+            <button
+              onClick={handleDismiss}
+              className="mt-6 text-red-300 hover:text-white text-sm underline"
+            >
+              I'll do this later (but you won't be able to join tournaments!)
+            </button>
           </div>
         </div>
       )}

@@ -89,7 +89,14 @@ const BracketReveal: React.FC<BracketRevealProps> = ({ currentUser }) => {
 
   // Get all matches in reveal order
   const getAllMatches = () => {
-    const matches = [];
+    const matches: Array<{
+      id: string;
+      team1: string;
+      team2: string;
+      revealed: boolean;
+      round: number;
+      type: 'round1' | 'round2' | 'round3' | 'final';
+    }> = [];
     
     // Round 1 matches first
     bracket.round1.forEach(match => {

@@ -8,15 +8,16 @@ import {
   deleteTeam, 
   inviteTeamMember, 
   getUserTeams, 
-  getUserMatches,
   getAllUsers,
   onUserTeamsChange
 } from '../services/firebaseService';
 import { resetPassword } from '../services/authService';
+import { useRealtimeUserMatches } from '../hooks/useRealtimeData';
 import type { User, Match, Team } from '../types/tournament';
 import { Shield, Users, Trophy, Settings, UserPlus, LogOut, Edit3, Save, X, Trash2, ExternalLink, MessageCircle, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getDiscordAuthUrl } from '../services/discordService';
+import TicketCreationModal from '../components/TicketCreationModal';
 
 const Profile = () => {
   const { currentUser, loading, refreshUser } = useAuth();
@@ -30,7 +31,8 @@ const Profile = () => {
     riotName: '',
     email: ''
   });
-  const [userMatches, setUserMatches] = useState<Match[]>([]);
+  // Use real-time hook for user matches
+  const { matches: userMatches, loading: matchesLoading, error: matchesError } = useRealtimeUserMatches(currentUser?.id || '');
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [message, setMessage] = useState('');
   const [showResetPassword, setShowResetPassword] = useState(false);
@@ -38,6 +40,8 @@ const Profile = () => {
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState('');
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+  const [showTicketModal, setShowTicketModal] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -55,11 +59,6 @@ const Profile = () => {
     if (!currentUser) return;
     
     try {
-      const [matches] = await Promise.all([
-        getUserMatches(currentUser.id)
-      ]);
-      setUserMatches(matches);
-      
       // Load all users for team member display
       const users = await getAllUsers();
       setAllUsers(users);
@@ -124,14 +123,22 @@ const Profile = () => {
     if (!currentUser) return;
     
     try {
+      console.log('Starting Discord unlink for user:', currentUser.id);
       await unlinkDiscordAccount(currentUser.id);
+      console.log('Discord unlink successful, refreshing user data...');
+      
       // Refresh user data to reflect the unlink
       await refreshUser();
+      console.log('User data refreshed after Discord unlink');
+      
       setMessage('Discord account unlinked successfully!');
       setTimeout(() => setMessage(''), 3000);
+      setShowUnlinkConfirm(false);
     } catch (error) {
+      console.error('Error unlinking Discord account:', error);
       setError('Failed to unlink Discord account');
       setTimeout(() => setError(''), 5000);
+      setShowUnlinkConfirm(false);
     }
   };
 
@@ -173,55 +180,55 @@ const Profile = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden">
-      {/* Subtle grid/code background */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
-        {/* Header */}
-        <div className="bg-black/60 border border-gray-700 rounded-lg shadow-lg p-6 mb-6">
+    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
+      {/* Unity League Header */}
+      <div className="bg-black/20 backdrop-blur-sm border-b border-white/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-xl font-bold">
+              <div className="w-16 h-16 bg-gradient-to-r from-pink-600 to-pink-500 rounded-full flex items-center justify-center border border-pink-400/50 shadow-lg">
+                <span className="text-white text-xl font-bold font-mono tracking-tight">
                   {currentUser.username?.charAt(0).toUpperCase() || 'U'}
                 </span>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">
+                <h1 className="text-2xl font-bold text-white font-mono tracking-tight">
                   {currentUser.username || 'User'}
                 </h1>
-                <p className="text-gray-400">
+                <p className="text-white/80 font-mono tracking-tight">
                   {currentUser.email}
                 </p>
                 {currentUser.isAdmin && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900/50 text-red-300 border border-red-700">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-pink-900/50 text-pink-300 border border-pink-400/50 font-mono tracking-tight">
                     <Shield className="w-3 h-3 mr-1" />
-                    Admin
+                    ADMIN
                   </span>
                 )}
               </div>
             </div>
             <button
               onClick={() => navigate('/create-team')}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors border border-red-800"
+              className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors font-medium font-mono tracking-tight"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Create Team</span>
+              <span>CREATE TEAM</span>
             </button>
           </div>
         </div>
+      </div>
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Message */}
         {message && (
-          <div className="mb-6 p-4 bg-green-900/50 border border-green-700 text-green-300 rounded-lg">
+          <div className="mb-6 p-4 bg-green-900/50 border border-green-400/30 text-green-200 rounded-xl backdrop-blur-sm font-mono tracking-tight">
             {message}
           </div>
         )}
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-900/50 border border-red-700 text-red-300 rounded-lg">
+          <div className="mb-6 p-4 bg-red-900/50 border border-red-400/30 text-red-200 rounded-xl backdrop-blur-sm font-mono tracking-tight">
             {error}
           </div>
         )}
@@ -355,7 +362,7 @@ const Profile = () => {
                           {currentUser.discordUsername || 'Discord User'}
                         </span>
                         <button
-                          onClick={handleUnlinkDiscord}
+                          onClick={() => setShowUnlinkConfirm(true)}
                           className="text-red-400 hover:text-red-300 text-sm transition-colors"
                         >
                           Unlink
@@ -380,6 +387,36 @@ const Profile = () => {
                     <p className="text-xs text-gray-500 mt-1">
                       Link your Discord account to receive tournament notifications and match reminders.
                     </p>
+                    
+                    {/* Support Tickets Section */}
+                    {currentUser.discordLinked && (
+                      <div className="mt-4 pt-4 border-t border-gray-700">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                              Support Tickets
+                            </label>
+                            <p className="text-xs text-gray-500">
+                              Create support tickets and report match disputes
+                            </p>
+                          </div>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => navigate('/tickets')}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-blue-800"
+                            >
+                              View Tickets
+                            </button>
+                            <button
+                              onClick={() => setShowTicketModal(true)}
+                              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-green-800"
+                            >
+                              Create Ticket
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -473,7 +510,17 @@ const Profile = () => {
                                 {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
                               </h3>
                               <p className="text-gray-400">
-                                {new Date(match.createdAt).toLocaleDateString()}
+                                {(() => {
+                                  try {
+                                    const date = new Date(match.createdAt);
+                                    if (isNaN(date.getTime())) {
+                                      return 'Invalid date';
+                                    }
+                                    return date.toLocaleDateString();
+                                  } catch (error) {
+                                    return 'Error displaying date';
+                                  }
+                                })()}
                               </p>
                               <div className="flex items-center space-x-4 mt-2">
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -570,6 +617,50 @@ const Profile = () => {
             </div>
           </div>
         )}
+
+        {/* Discord Unlink Confirmation Modal */}
+        {showUnlinkConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-black/90 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-medium text-white mb-4">
+                Unlink Discord Account
+              </h3>
+              <p className="text-gray-400 mb-6">
+                Are you sure you want to unlink your Discord account? 
+                You will no longer receive tournament notifications and match reminders.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleUnlinkDiscord}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors border border-red-800"
+                >
+                  Unlink Discord
+                </button>
+                <button
+                  onClick={() => setShowUnlinkConfirm(false)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors border border-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Ticket Creation Modal */}
+        <TicketCreationModal
+          isOpen={showTicketModal}
+          onClose={() => setShowTicketModal(false)}
+          currentUser={currentUser}
+        />
+      </div>
+      
+      {/* Unity League Footer */}
+      <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
+          <span>&gt; USER PROFILE</span>
+          <span className="text-cyan-400">// Unity League 2025</span>
+        </div>
       </div>
     </div>
   );

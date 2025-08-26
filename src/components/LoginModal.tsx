@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Mail, Lock, UserPlus, TestTube } from 'lucide-react';
+import { X, Mail, Lock, UserPlus, TestTube, User } from 'lucide-react';
 import { loginUser, registerUser } from '../services/authService';
 
 interface LoginModalProps {
@@ -12,6 +12,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
   if (!isOpen) return null;
 
   const [isLogin, setIsLogin] = useState(true);
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,21 +32,43 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
 
     try {
       if (isLogin) {
-        const user = await loginUser(email, password);
-        onLoginSuccess(user);
+        // For login, use either username or email
+        const loginIdentifier = username || email;
+        if (!loginIdentifier) {
+          setError('Please enter your username or email');
+          setLoading(false);
+          return;
+        }
+        
+        await loginUser(loginIdentifier, password);
+        // The useAuth hook will automatically detect the user via onAuthStateChanged
         onClose();
       } else {
+        // For registration, require both username and email
+        if (!username.trim()) {
+          setError('Username is required');
+          setLoading(false);
+          return;
+        }
+        
+        if (!email.trim()) {
+          setError('Email is required');
+          setLoading(false);
+          return;
+        }
+
         const userData = {
-          username: email.split('@')[0], // Use email prefix as username
-          email,
+          username: username.trim(),
+          email: email.trim(),
           riotId: '',
           discordUsername: '',
           teamIds: [],
           isAdmin: false,
           password
         };
+        
         await registerUser(userData);
-        onLoginSuccess(userData);
+        // The useAuth hook will automatically detect the user via onAuthStateChanged
         onClose();
       }
     } catch (error: any) {
@@ -64,8 +87,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
       setLoading(true);
       setError('');
 
-      const user = await loginUser(testEmail, testPassword);
-      onLoginSuccess(user);
+      await loginUser(testEmail, testPassword);
       onClose();
       
       // Clear the test login data after successful login
@@ -77,6 +99,18 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
     }
   };
 
+  const resetForm = () => {
+    setUsername('');
+    setEmail('');
+    setPassword('');
+    setError('');
+  };
+
+  const toggleMode = () => {
+    setIsLogin(!isLogin);
+    resetForm();
+  };
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-2xl shadow-2xl border border-gray-700 max-w-md w-full">
@@ -85,10 +119,10 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-2xl font-bold text-white">
-                {isLogin ? 'Welcome Back' : 'Join Bodax Masters'}
+                {isLogin ? 'Willkommen zurück' : 'Unity League beitreten'}
               </h2>
               <p className="text-gray-400 mt-1">
-                {isLogin ? 'Sign in to your account' : 'Create your account'}
+                {isLogin ? 'Melde dich in deinem Konto an' : 'Erstelle dein Konto'}
               </p>
             </div>
             <button
@@ -103,23 +137,69 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
         {/* Form */}
         <div className="p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-gray-300 font-medium mb-2">Email Address</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                  placeholder="Enter your email"
-                  required
-                />
+            {isLogin ? (
+              // Login form - username OR email field
+              <div>
+                <label className="block text-gray-300 font-medium mb-2">Benutzername oder E-Mail</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={username || email}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Clear both fields and set the one being typed in
+                      if (value.includes('@')) {
+                        setEmail(value);
+                        setUsername('');
+                      } else {
+                        setUsername(value);
+                        setEmail('');
+                      }
+                    }}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                    placeholder="Benutzername oder E-Mail eingeben"
+                    required
+                  />
+                </div>
               </div>
-            </div>
+            ) : (
+              // Registration form - separate username and email fields
+              <>
+                <div>
+                  <label className="block text-gray-300 font-medium mb-2">Benutzername</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                      placeholder="Deinen Benutzernamen eingeben"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 font-medium mb-2">E-Mail Adresse</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                      placeholder="Deine E-Mail eingeben"
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             <div>
-              <label className="block text-gray-300 font-medium mb-2">Password</label>
+              <label className="block text-gray-300 font-medium mb-2">Passwort</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
@@ -127,7 +207,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                  placeholder="Enter your password"
+                  placeholder="Dein Passwort eingeben"
                   required
                 />
               </div>
@@ -147,10 +227,10 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
               {loading ? (
                 <div className="flex items-center justify-center space-x-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>{isLogin ? 'Signing In...' : 'Creating Account...'}</span>
+                  <span>{isLogin ? 'Anmelden...' : 'Konto erstellen...'}</span>
                 </div>
               ) : (
-                isLogin ? 'Sign In' : 'Create Account'
+                isLogin ? 'Anmelden' : 'Konto erstellen'
               )}
             </button>
           </form>
@@ -158,12 +238,12 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
           {/* Toggle between login/register */}
           <div className="mt-6 text-center">
             <button
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={toggleMode}
               className="text-primary-400 hover:text-primary-300 font-medium flex items-center justify-center space-x-2 mx-auto transition-colors"
             >
               <UserPlus className="w-4 h-4" />
               <span>
-                {isLogin ? "Don't have an account? Register" : 'Already have an account? Sign In'}
+                {isLogin ? "Noch kein Konto? Registrieren" : 'Bereits ein Konto? Anmelden'}
               </span>
             </button>
           </div>
@@ -177,7 +257,7 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
                 className="text-gray-400 hover:text-gray-300 font-medium flex items-center justify-center space-x-2 mx-auto transition-colors disabled:opacity-50"
               >
                 <TestTube className="w-4 h-4" />
-                <span>Use Test Login</span>
+                <span>Test Login verwenden</span>
               </button>
             </div>
           )}

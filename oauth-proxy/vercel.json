@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "functions": {
+    "api/discord/token.js": {
+      "maxDuration": 10
+    }
+  }
+} 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Mail, MessageSquare, Clock, MapPin, Send } from 'lucide-react';
+import { ArrowLeft, Mail, MessageSquare, Clock, Send, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const ContactUs = () => {
@@ -29,122 +29,116 @@ const ContactUs = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <div className="container-modern py-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white font-sans relative overflow-hidden">
+      {/* Subtle background pattern */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-5" 
+           style={{
+             backgroundImage: `
+               radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+               radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+               radial-gradient(circle at 40% 40%, rgba(120, 119, 255, 0.3) 0%, transparent 50%)
+             `
+           }} />
+      
+      {/* Floating elements */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <div className="absolute top-20 right-20 w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+        <div className="absolute top-40 left-20 w-1 h-1 bg-cyan-400 rounded-full animate-pulse delay-1000"></div>
+        <div className="absolute bottom-40 right-40 w-1.5 h-1.5 bg-pink-400 rounded-full animate-pulse delay-2000"></div>
+      </div>
+
+      <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-12">
           <Link 
             to="/" 
-            className="inline-flex items-center text-primary-400 hover:text-primary-300 transition-colors mb-4"
+            className="inline-flex items-center text-purple-400 hover:text-purple-300 transition-colors mb-6 group"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Home
+            <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+            Zurück zur Startseite
           </Link>
-          <h1 className="text-3xl font-bold text-white mb-4">Contact Us</h1>
-          <p className="text-gray-400">Get in touch with our team for support, questions, or feedback</p>
+          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">Kontaktiere uns</h1>
+          <p className="text-xl text-gray-300">Hast du Fragen zu Unity League? Wir sind hier, um zu helfen!</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           {/* Contact Information */}
-          <div className="space-y-6">
-            <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-semibold text-white mb-6">Get in Touch</h2>
-              
-              <div className="space-y-4">
-                <div className="flex items-start space-x-4">
-                  <div className="w-10 h-10 bg-primary-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium">Email Support</h3>
-                    <p className="text-gray-300 text-sm">support@bodax.dev</p>
-                    <p className="text-gray-400 text-xs">For general inquiries and support</p>
-                  </div>
+          <div className="space-y-8">
+            {/* Unity League Info */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-white" />
                 </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <MessageSquare className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium">Discord</h3>
-                    <p className="text-gray-300 text-sm">Join our Discord server</p>
-                    <p className="text-gray-400 text-xs">For real-time support and community</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Clock className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium">Response Time</h3>
-                    <p className="text-gray-300 text-sm">Within 24 hours</p>
-                    <p className="text-gray-400 text-xs">We aim to respond to all inquiries quickly</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium">Location</h3>
-                    <p className="text-gray-300 text-sm">Greece</p>
-                    <p className="text-gray-400 text-xs">European Union</p>
-                  </div>
-                </div>
+                <h2 className="text-2xl font-bold text-white">Unity League Support</h2>
               </div>
+              <p className="text-gray-300">
+                Unser Team steht dir bei allen Fragen zu Turnieren, Team-Management und der Plattform zur Verfügung.
+              </p>
             </div>
 
-            <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-semibold text-white mb-4">Frequently Asked Questions</h2>
+            {/* Contact Methods */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
+              <h2 className="text-xl font-semibold text-white mb-6">Kontaktmöglichkeiten</h2>
               
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-white font-medium text-sm">How do I register for a tournament?</h3>
-                  <p className="text-gray-400 text-xs">Create an account, form a team, and register through the tournament page.</p>
+              <div className="space-y-6">
+                <div className="flex items-start space-x-4 group">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                    <Mail className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-medium">E-Mail Support</h3>
+                    <p className="text-purple-300 text-sm">support@unityleague.com</p>
+                    <p className="text-gray-400 text-xs">Für allgemeine Anfragen und Support</p>
+                  </div>
                 </div>
-                
-                <div>
-                  <h3 className="text-white font-medium text-sm">What are the tournament rules?</h3>
-                  <p className="text-gray-400 text-xs">Check our Terms of Service and tournament-specific rules for detailed information.</p>
+
+                <div className="flex items-start space-x-4 group">
+                  <div className="w-12 h-12 bg-gradient-to-br from-cyan-600 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                    <MessageSquare className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-medium">Discord Community</h3>
+                    <p className="text-cyan-300 text-sm">Unity League Discord</p>
+                    <p className="text-gray-400 text-xs">Für Echtzeit-Support und Community</p>
+                  </div>
                 </div>
-                
-                <div>
-                  <h3 className="text-white font-medium text-sm">How are prizes distributed?</h3>
-                  <p className="text-gray-400 text-xs">Prizes are awarded to winning teams and distributed through team captains.</p>
-                </div>
-                
-                <div>
-                  <h3 className="text-white font-medium text-sm">Can I change my team after registration?</h3>
-                  <p className="text-gray-400 text-xs">Team changes are subject to tournament rules and admin approval.</p>
+
+                <div className="flex items-start space-x-4 group">
+                  <div className="w-12 h-12 bg-gradient-to-br from-pink-600 to-red-600 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                    <Clock className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-medium">Antwortzeit</h3>
+                    <p className="text-pink-300 text-sm">Innerhalb von 24 Stunden</p>
+                    <p className="text-gray-400 text-xs">Wir antworten schnell auf alle Anfragen</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Contact Form */}
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-white mb-6">Send us a Message</h2>
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
+            <h2 className="text-2xl font-bold text-white mb-6">Sende uns eine Nachricht</h2>
             
             {submitStatus === 'success' && (
-              <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4 mb-6">
+              <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-4 mb-6">
                 <p className="text-green-200 text-sm">
-                  Thank you for your message! We'll get back to you within 24 hours.
+                  Vielen Dank für deine Nachricht! Wir melden uns innerhalb von 24 Stunden bei dir.
                 </p>
               </div>
             )}
 
             {submitStatus === 'error' && (
-              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-6">
+              <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-4 mb-6">
                 <p className="text-red-200 text-sm">
-                  There was an error sending your message. Please try again or contact us directly via email.
+                  Beim Senden deiner Nachricht ist ein Fehler aufgetreten. Bitte versuche es erneut oder kontaktiere uns direkt per E-Mail.
                 </p>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-200 mb-2">
                   Name *
@@ -155,14 +149,14 @@ const ContactUs = () => {
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white placeholder-gray-400"
-                  placeholder="Your full name"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400 backdrop-blur-sm"
+                  placeholder="Dein vollständiger Name"
                 />
               </div>
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-200 mb-2">
-                  Email *
+                  E-Mail *
                 </label>
                 <input
                   type="email"
@@ -170,35 +164,35 @@ const ContactUs = () => {
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white placeholder-gray-400"
-                  placeholder="your.email@example.com"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400 backdrop-blur-sm"
+                  placeholder="deine.email@beispiel.com"
                 />
               </div>
 
               <div>
                 <label htmlFor="subject" className="block text-sm font-medium text-gray-200 mb-2">
-                  Subject *
+                  Betreff *
                 </label>
                 <select
                   id="subject"
                   value={formData.subject}
                   onChange={(e) => handleInputChange('subject', e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white backdrop-blur-sm"
                 >
-                  <option value="">Select a subject</option>
-                  <option value="general">General Inquiry</option>
-                  <option value="support">Technical Support</option>
-                  <option value="tournament">Tournament Question</option>
-                  <option value="billing">Billing/Payment</option>
-                  <option value="partnership">Partnership</option>
-                  <option value="other">Other</option>
+                  <option value="">Wähle einen Betreff</option>
+                  <option value="general">Allgemeine Anfrage</option>
+                  <option value="support">Technischer Support</option>
+                  <option value="tournament">Turnier-Frage</option>
+                  <option value="team">Team-Management</option>
+                  <option value="partnership">Partnerschaft</option>
+                  <option value="other">Sonstiges</option>
                 </select>
               </div>
 
               <div>
                 <label htmlFor="message" className="block text-sm font-medium text-gray-200 mb-2">
-                  Message *
+                  Nachricht *
                 </label>
                 <textarea
                   id="message"
@@ -206,41 +200,41 @@ const ContactUs = () => {
                   onChange={(e) => handleInputChange('message', e.target.value)}
                   required
                   rows={6}
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-white placeholder-gray-400 resize-none"
-                  placeholder="Please describe your inquiry in detail..."
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-white placeholder-gray-400 resize-none backdrop-blur-sm"
+                  placeholder="Beschreibe deine Anfrage im Detail..."
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-600 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center space-x-2 transform hover:scale-105 disabled:transform-none"
               >
                 {isSubmitting ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Sending...</span>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Wird gesendet...</span>
                   </>
                 ) : (
                   <>
-                    <Send className="w-4 h-4" />
-                    <span>Send Message</span>
+                    <Send className="w-5 h-5" />
+                    <span>Nachricht senden</span>
                   </>
                 )}
               </button>
             </form>
 
-            <div className="mt-6 pt-6 border-t border-gray-700">
+            <div className="mt-8 pt-6 border-t border-white/20">
               <p className="text-gray-400 text-sm">
-                By submitting this form, you agree to our{' '}
-                <Link to="/privacy-policy" className="text-primary-400 hover:text-primary-300">
-                  Privacy Policy
+                Durch das Absenden dieses Formulars stimmst du unserer{' '}
+                <Link to="/privacy-policy" className="text-purple-400 hover:text-purple-300">
+                  Datenschutzerklärung
                 </Link>{' '}
-                and{' '}
-                <Link to="/terms-of-service" className="text-primary-400 hover:text-primary-300">
-                  Terms of Service
+                und unseren{' '}
+                <Link to="/terms-of-service" className="text-purple-400 hover:text-purple-300">
+                  Nutzungsbedingungen
                 </Link>
-                .
+                zu.
               </p>
             </div>
           </div>

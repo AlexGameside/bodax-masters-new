@@ -212,9 +212,7 @@ const AdminPanel = ({
   const loadSignupLogs = async () => {
     setLoadingLogs(true);
     try {
-      console.log('🔍 DEBUG: Loading signup logs...');
       const logs = await getSignupLogs(50);
-      console.log('🔍 DEBUG: Signup logs loaded:', logs);
       setSignupLogs(logs);
     } catch (error) {
       console.error('Error loading signup logs:', error);
@@ -226,9 +224,7 @@ const AdminPanel = ({
   const loadGeneralLogs = async () => {
     setLoadingLogs(true);
     try {
-      console.log('🔍 DEBUG: Loading general logs...');
       const logs = await getGeneralLogs(50);
-      console.log('🔍 DEBUG: General logs loaded:', logs);
       setGeneralLogs(logs);
     } catch (error) {
       console.error('Error loading general logs:', error);
@@ -453,7 +449,7 @@ const AdminPanel = ({
       for (const user of usersToLoad) {
         const userMatches = await getUserMatches(user.id);
         const active = userMatches.filter(match => 
-          ['ready_up', 'map_banning', 'side_selection', 'playing', 'waiting_results', 'disputed'].includes(match.matchState)
+          ['ready_up', 'map_banning', 'side_selection_map1', 'side_selection_map2', 'side_selection_decider', 'playing', 'waiting_results', 'disputed'].includes(match.matchState)
         );
         const history = userMatches.filter(match => match.isComplete);
         
@@ -672,33 +668,39 @@ const AdminPanel = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 section-padding">
-      <div className="container-modern">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-white mb-4">Admin Panel</h1>
-          <p className="text-xl text-gray-300">Tournament Management Dashboard</p>
+    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
+      {/* Unity League Header */}
+      <div className="bg-black/20 backdrop-blur-sm border-b border-white/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-white mb-4 font-mono tracking-tight">ADMIN PANEL</h1>
+            <p className="text-xl text-white/80 font-mono tracking-tight">TOURNAMENT MANAGEMENT DASHBOARD</p>
+          </div>
         </div>
+      </div>
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Navigation Tabs */}
-        <div className="flex space-x-1 bg-gray-800 rounded-xl p-1 shadow-lg mb-8 border border-gray-700">
+        <div className="flex space-x-1 bg-black/40 rounded-xl p-1 shadow-lg mb-8 border border-white/20 backdrop-blur-sm overflow-x-auto">
           {[
-            { id: 'tournaments', label: 'Tournaments', icon: Trophy },
-            { id: 'teams', label: 'Teams', icon: Users },
-            { id: 'matches', label: 'Matches', icon: Calendar },
-            { id: 'disputes', label: 'Disputes', icon: AlertTriangle },
-            { id: 'notifications', label: 'Notifications', icon: MessageSquare },
-            { id: 'signup-logs', label: 'Signup Logs', icon: FileText },
-            { id: 'general-logs', label: 'General Logs', icon: Activity },
-            { id: 'users', label: 'Users', icon: Users },
-            { id: 'stats', label: 'Statistics', icon: BarChart3 }
+            { id: 'tournaments', label: 'TOURNAMENTS', icon: Trophy },
+            { id: 'teams', label: 'TEAMS', icon: Users },
+            { id: 'matches', label: 'MATCHES', icon: Calendar },
+            { id: 'disputes', label: 'DISPUTES', icon: AlertTriangle },
+            { id: 'notifications', label: 'NOTIFICATIONS', icon: MessageSquare },
+            { id: 'signup-logs', label: 'SIGNUP LOGS', icon: FileText },
+            { id: 'general-logs', label: 'GENERAL LOGS', icon: Activity },
+            { id: 'users', label: 'USERS', icon: Users },
+            { id: 'stats', label: 'STATISTICS', icon: BarChart3 }
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 ${
+              className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-mono tracking-tight whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg'
-                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                  ? 'bg-gradient-to-r from-pink-600 to-pink-700 text-white shadow-lg'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -1024,80 +1026,22 @@ const AdminPanel = ({
               </h2>
             </div>
 
-            <div className="space-y-6">
-              <div className="p-6 border border-gray-600 rounded-lg bg-gray-700">
-                <h3 className="text-lg font-bold text-white mb-3">Send Test Notification</h3>
-                <p className="text-gray-300 mb-4">Send a test Discord notification to a user with Discord linked.</p>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Select User
-                    </label>
-                    <select
-                      value={selectedDiscordUser}
-                      onChange={(e) => setSelectedDiscordUser(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">Choose a user...</option>
-                      {discordUsers.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.username} ({user.discordUsername})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Message
-                    </label>
-                    <textarea
-                      value={notificationMessage}
-                      onChange={(e) => setNotificationMessage(e.target.value)}
-                      placeholder="Enter your test message here..."
-                      rows={4}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleSendDiscordNotification}
-                    disabled={sendingNotification || !selectedDiscordUser || !notificationMessage.trim()}
-                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {sendingNotification ? 'Sending...' : 'Send Notification'}
-                  </button>
-
-                  {notificationResult && (
-                    <div className={`p-4 rounded-md ${
-                      notificationResult.success 
-                        ? 'bg-green-900/50 border border-green-700 text-green-300' 
-                        : 'bg-red-900/50 border border-red-700 text-red-300'
-                    }`}>
-                      {notificationResult.message}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="p-6 border border-gray-600 rounded-lg bg-gray-700">
-                <h3 className="text-lg font-bold text-white mb-3">Users with Discord Linked</h3>
-                <div className="space-y-2">
-                  {discordUsers.length === 0 ? (
-                    <p className="text-gray-400">No users have Discord linked yet.</p>
-                  ) : (
-                    discordUsers.map((user) => (
-                      <div key={user.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-md">
-                        <div>
-                          <span className="text-white font-medium">{user.username}</span>
-                          <span className="text-gray-400 ml-2">({user.discordUsername})</span>
-                        </div>
-                        <span className="text-green-400 text-sm">Discord Linked</span>
+            <div className="p-6 border border-gray-600 rounded-lg bg-gray-700">
+              <h3 className="text-lg font-bold text-white mb-3">Users with Discord Linked</h3>
+              <div className="space-y-2">
+                {discordUsers.length === 0 ? (
+                  <p className="text-gray-400">No users have Discord linked yet.</p>
+                ) : (
+                  discordUsers.map((user) => (
+                    <div key={user.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-md">
+                      <div>
+                        <span className="text-white font-medium">{user.username}</span>
+                        <span className="text-gray-400 ml-2">({user.discordUsername})</span>
                       </div>
-                    ))
-                  )}
-                </div>
+                      <span className="text-green-400 text-sm">Discord Linked</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -1112,13 +1056,7 @@ const AdminPanel = ({
                 Signup Logs ({signupLogs.length})
               </h2>
               <div className="flex space-x-2">
-                <button
-                  onClick={createTestLogs}
-                  className="btn-secondary"
-                >
-                  <TestTube className="w-4 h-4 mr-2" />
-                  Create Test Logs
-                </button>
+
                 <button
                   onClick={loadSignupLogs}
                   disabled={loadingLogs}
@@ -1190,13 +1128,7 @@ const AdminPanel = ({
                 General Logs ({generalLogs.length})
               </h2>
               <div className="flex space-x-2">
-                <button
-                  onClick={createTestLogs}
-                  className="btn-secondary"
-                >
-                  <TestTube className="w-4 h-4 mr-2" />
-                  Create Test Logs
-                </button>
+
                 <button
                   onClick={loadGeneralLogs}
                   disabled={loadingLogs}
@@ -1682,6 +1614,14 @@ const AdminPanel = ({
             <AdminStats />
           </div>
         )}
+      </div>
+      
+      {/* Unity League Footer */}
+      <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
+          <span>&gt; ADMIN PANEL</span>
+          <span className="text-cyan-400">// Unity League 2025</span>
+        </div>
       </div>
     </div>
   );

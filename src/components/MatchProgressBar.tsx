@@ -10,27 +10,25 @@ interface MatchProgressBarProps {
 }
 
 const MatchProgressBar: React.FC<MatchProgressBarProps> = ({ match, isTeam1, isTeam2, isAdmin = false }) => {
-  const getCurrentStage = () => {
-    switch (match.matchState) {
-      case 'ready_up':
-        return 1;
-      case 'map_banning':
-        return 2;
-      case 'side_selection':
-        return 3;
-      case 'playing':
-        return 4;
-      case 'waiting_results':
-      case 'disputed':
-      case 'completed':
-        return 5;
-      default:
-        return 1;
-    }
+  const getCurrentStep = () => {
+    if (!match) return 0;
+    
+    const states = [
+      'ready_up',
+      'map_banning', 
+      'side_selection_map1',
+      'side_selection_map2', 
+      'side_selection_decider',
+      'playing',
+      'waiting_results',
+      'completed'
+    ];
+    
+    return states.indexOf(match.matchState) + 1;
   };
 
-  const currentStage = getCurrentStage();
-  const totalStages = 5;
+  const currentStage = getCurrentStep();
+  const totalStages = 4;
 
   const stages = [
     {
@@ -49,16 +47,9 @@ const MatchProgressBar: React.FC<MatchProgressBarProps> = ({ match, isTeam1, isT
       completed: match.matchState !== 'ready_up' && match.matchState !== 'map_banning',
       current: match.matchState === 'map_banning'
     },
+
     {
       id: 3,
-      name: 'Side Selection',
-      icon: Gamepad2,
-      description: 'Teams choose attack/defense sides',
-      completed: match.matchState !== 'ready_up' && match.matchState !== 'map_banning' && match.matchState !== 'side_selection',
-      current: match.matchState === 'side_selection'
-    },
-    {
-      id: 4,
       name: 'Playing',
       icon: Gamepad2,
       description: 'Match in progress',
@@ -66,7 +57,7 @@ const MatchProgressBar: React.FC<MatchProgressBarProps> = ({ match, isTeam1, isT
       current: match.matchState === 'playing'
     },
     {
-      id: 5,
+      id: 4,
       name: 'Result',
       icon: Trophy,
       description: 'Match completed',
@@ -116,7 +107,7 @@ const MatchProgressBar: React.FC<MatchProgressBarProps> = ({ match, isTeam1, isT
       </div>
 
       {/* Stage Indicators */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {stages.map((stage, index) => {
           const status = getStageStatus(stage);
           const Icon = stage.icon;
@@ -174,11 +165,7 @@ const MatchProgressBar: React.FC<MatchProgressBarProps> = ({ match, isTeam1, isT
                   Map Selection Phase
                 </div>
               )}
-              {match.matchState === 'side_selection' && (
-                <div className="text-blue-400">
-                  Side Selection Phase
-                </div>
-              )}
+
               {match.matchState === 'playing' && (
                 <div className="text-green-400">
                   Match in Progress

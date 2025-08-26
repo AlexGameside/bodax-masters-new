@@ -1,292 +1,618 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { banMap, selectMap } from '../services/firebaseService';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 interface MapBanningProps {
   match: any;
-  userTeam: any;
+  userTeam: any | null;
   team1?: any;
   team2?: any;
   onMapBanningComplete: () => void;
 }
 
 const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, onMapBanningComplete }) => {
-  const [selectedMap, setSelectedMap] = useState<string>('');
   const [banningLoading, setBanningLoading] = useState(false);
+  const [localMatch, setLocalMatch] = useState(match);
 
+  // Listen for real-time match updates
+  useEffect(() => {
+    if (!match?.id) return;
+
+    const matchRef = doc(db, 'matches', match.id);
+    const unsubscribe = onSnapshot(matchRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const updatedMatch = { ...docSnap.data(), id: docSnap.id };
+        setLocalMatch(updatedMatch);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [match?.id]);
+
+  // Use localMatch for all calculations instead of the prop
+  const currentMatch = localMatch || match;
+
+  // Check if userTeam exists
+  if (!userTeam) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-gray-400 mb-4">No team information available</div>
+        <div className="text-sm text-gray-500">Please ensure you are part of a team in this match</div>
+      </div>
+    );
+  }
+
+  // Check if user is part of either team in this match
+  if (userTeam.id !== currentMatch.team1Id && userTeam.id !== currentMatch.team2Id) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-gray-400 mb-4">Not part of this match</div>
+        <div className="text-sm text-gray-500">You are not a member of either team in this match</div>
+      </div>
+    );
+  }
+
+  // Updated map pool as specified
   const maps = [
-    'Corrode',
-    'Ascent',
-    'Bind',
+    'Abyss',
+    'Bind', 
     'Haven',
-    'Icebox',
-    'Lotus',
-    'Sunset'
+    'Ascent',
+    'Sunset',
+    'Corrode',
+    'Lotus'
   ];
 
-  const isTeam1 = userTeam?.id === match.team1Id;
-  const isTeam2 = userTeam?.id === match.team2Id;
+  const isTeam1 = userTeam.id === currentMatch.team1Id;
+  const isTeam2 = userTeam.id === currentMatch.team2Id;
   
   // Get current banned maps
-  const bannedMaps = match.bannedMaps || { team1: [], team2: [] };
+  const bannedMaps = currentMatch.bannedMaps || { team1: [], team2: [] };
   const allBannedMaps = [...bannedMaps.team1, ...bannedMaps.team2];
   
-  // Available maps (not banned)
-  const availableMaps = maps.filter(map => !allBannedMaps.includes(map));
-  
-  // Calculate whose turn it is
-  const totalBans = allBannedMaps.length;
-  const isTeam1Turn = totalBans % 2 === 0; // Even ban count = Team 1's turn
-  const isMapSelectionPhase = totalBans >= 5; // After 5 bans, 2 maps remain for selection (7-5=2)
-  
-  // Determine if it's the current user's team's turn
-  const isUserTeamTurn = (isTeam1 && isTeam1Turn) || (isTeam2 && !isTeam1Turn);
-  
-  // Determine which team should pick the map based on ban sequence
-  // The team that banned last should NOT be the one to select
-  let teamThatShouldSelect: 'team1' | 'team2';
-  
-  const banSequence = match.banSequence || [];
-  
-  if (banSequence.length > 0) {
-    const lastBan = banSequence[banSequence.length - 1];
-    const lastBanTeamId = lastBan.teamId;
-    
-    // If Team 1 banned last, Team 2 should select
-    // If Team 2 banned last, Team 1 should select
-    if (lastBanTeamId === match.team1Id) {
-      teamThatShouldSelect = 'team2';
-    } else if (lastBanTeamId === match.team2Id) {
-      teamThatShouldSelect = 'team1';
-    } else {
-      // Fallback to count-based logic if ban sequence is corrupted
-      if (totalBans === 5) {
-        teamThatShouldSelect = 'team1';
-      } else if (totalBans === 6) {
-        teamThatShouldSelect = 'team2';
-      } else if (totalBans === 7) {
-        teamThatShouldSelect = 'team1';
-      } else {
-        teamThatShouldSelect = 'team2';
-      }
-    }
-  } else {
-    // Fallback to count-based logic if no ban sequence
-    // After 5 bans: Team 1 has 3 bans, Team 2 has 2 bans
-    // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1
-    // Team 1 banned last, so Team 2 should select
-    if (totalBans === 5) {
-      teamThatShouldSelect = 'team2';
-    } else if (totalBans === 6) {
-      // After 6 bans: Team 1 has 3 bans, Team 2 has 3 bans
-      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
-      // Team 2 banned last, so Team 1 should select
-      teamThatShouldSelect = 'team1';
-    } else if (totalBans === 7) {
-      // After 7 bans: Team 1 has 4 bans, Team 2 has 3 bans
-      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1
-      // Team 1 banned last, so Team 2 should select
-      teamThatShouldSelect = 'team2';
-    } else {
-      // After 8 bans: Team 1 has 4 bans, Team 2 has 4 bans
-      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
-      // Team 2 banned last, so Team 1 should select
-      teamThatShouldSelect = 'team1';
-    }
-  }
-  
-  const isMapSelectionTurn = isMapSelectionPhase && (
-    (teamThatShouldSelect === 'team1' && isTeam1) || 
-    (teamThatShouldSelect === 'team2' && isTeam2)
+  // Available maps (not banned AND not picked)
+  const availableMaps = maps.filter(map => 
+    !allBannedMaps.includes(map) && 
+    map !== currentMatch.map1 && 
+    map !== currentMatch.map2 && 
+    map !== currentMatch.deciderMap
   );
 
-  const handleBanMap = async (mapName: string) => {
-    if (!match || !userTeam) {
-      toast.error('Match or team not available');
-      return;
-    }
+  // BO3 Phase Logic - Corrected and simplified
+  const totalBans = allBannedMaps.length;
+  
+  // Determine current phase and what needs to happen
+  let phaseInfo: {
+    phase: string;
+    description: string;
+    isBanPhase: boolean;
+    isMapSelectionPhase: boolean;
+    isSideSelectionPhase: boolean;
+    isUserTeamTurn: boolean;
+    actionText: string;
+    currentStep: string;
+  };
+  
+  // BO3 Flow Logic (German rules):
+  // 1. Team A bans 1 map (7 → 6 maps)
+  // 2. Team B bans 1 map (6 → 5 maps) 
+  // 3. Team A picks Map 1 from 5 remaining maps
+  // 4. Team B picks side for Map 1
+  // 5. Team B picks Map 2 from 5 remaining maps (immediately, no more banning yet)
+  // 6. Team A picks side for Map 2
+  // 7. Team A bans 1 map (5 → 4 maps)
+  // 8. Team B bans 1 map (4 → 3 maps)
+  // 9. Remaining map = Decider Map (automatically)
+  // 10. Team A picks side for Decider Map
 
-    if (!isUserTeamTurn) {
-      toast.error("It's not your team's turn to ban. Please wait for the other team.");
-      return;
+  if (!currentMatch.map1) {
+    // Phase 1: Map 1 Selection
+    if (totalBans < 2) {
+      // Still banning maps for Map 1
+      const isTeam1Turn = totalBans === 0; // Team A bans first, then Team B
+      const isUserTeamTurn = (isTeam1 && isTeam1Turn) || (isTeam2 && !isTeam1Turn);
+      
+      phaseInfo = {
+        phase: 'Map 1 Banning',
+        description: 'Ban maps until 5 remain for Map 1 selection',
+        isBanPhase: true,
+        isMapSelectionPhase: false,
+        isSideSelectionPhase: false,
+        isUserTeamTurn,
+        actionText: totalBans === 0 ? 'Ban first map' : 'Ban second map',
+        currentStep: totalBans === 0 ? 'Team A bans 1 map' : 'Team B bans 1 map'
+      };
+    } else if (totalBans >= 2) {
+      // Map 1 selection phase - after 2 bans, 5 maps remain
+      // Team A should pick Map 1 (they banned first)
+      const isUserTeamTurn = currentMatch.team1Id === userTeam.id;
+      
+      phaseInfo = {
+        phase: 'Map 1 Selection',
+        description: 'Choose Map 1 from remaining maps',
+        isBanPhase: false,
+        isMapSelectionPhase: true,
+        isSideSelectionPhase: false,
+        isUserTeamTurn,
+        actionText: 'Select Map 1',
+        currentStep: 'Team A picks Map 1'
+      };
+    } else {
+      // Fallback case
+      phaseInfo = {
+        phase: 'Unknown',
+        description: 'Unknown state',
+        isBanPhase: false,
+        isMapSelectionPhase: false,
+        isSideSelectionPhase: false,
+        isUserTeamTurn: false,
+        actionText: 'Unknown',
+        currentStep: 'Unknown state'
+      };
     }
-
-    setBanningLoading(true);
+  } else if (currentMatch.map1 && !currentMatch.map1Side) {
+    // Side selection for Map 1
+    const isUserTeamTurn = currentMatch.team2Id === userTeam.id; // Team B picks side for Map 1
     
+    phaseInfo = {
+      phase: 'Map 1 Side Selection',
+      description: 'Select side for Map 1',
+      isBanPhase: false,
+      isMapSelectionPhase: false,
+      isSideSelectionPhase: true,
+      isUserTeamTurn,
+      actionText: 'Pick side for Map 1',
+      currentStep: 'Team B picks side for Map 1'
+    };
+  } else if (currentMatch.map1 && currentMatch.map1Side && !currentMatch.map2) {
+    // Map 2 selection phase - Team B picks Map 2 immediately after Map 1 side selection
+    // Team B should pick Map 2 from 5 remaining maps
+    const isUserTeamTurn = currentMatch.team2Id === userTeam.id;
+    
+    phaseInfo = {
+      phase: 'Map 2 Selection',
+      description: 'Choose Map 2 from remaining maps',
+      isBanPhase: false,
+      isMapSelectionPhase: true,
+      isSideSelectionPhase: false,
+      isUserTeamTurn,
+      actionText: 'Select Map 2',
+      currentStep: 'Team B picks Map 2'
+    };
+  } else if (currentMatch.map2 && !currentMatch.map2Side) {
+    // Side selection for Map 2
+    const isUserTeamTurn = currentMatch.team1Id === userTeam.id; // Team A picks side for Map 2
+    
+    phaseInfo = {
+      phase: 'Map 2 Side Selection',
+      description: 'Select side for Map 2',
+      isBanPhase: false,
+      isMapSelectionPhase: false,
+      isSideSelectionPhase: true,
+      isUserTeamTurn,
+      actionText: 'Pick side for Map 2',
+      currentStep: 'Team A picks side for Map 2'
+    };
+  } else if (currentMatch.map2 && currentMatch.map2Side && !currentMatch.deciderMap) {
+    // Phase 3: Ban 2 more maps for Decider
+    if (totalBans < 4) {
+      // Still banning maps for Decider
+      const isTeam1Turn = totalBans === 2; // Team A bans first for Decider, then Team B
+      const isUserTeamTurn = (isTeam1 && isTeam1Turn) || (isTeam2 && !isTeam1Turn);
+      
+      phaseInfo = {
+        phase: 'Decider Banning',
+        description: 'Ban maps until 3 remain for Decider selection',
+        isBanPhase: true,
+        isMapSelectionPhase: false,
+        isSideSelectionPhase: false,
+        isUserTeamTurn,
+        actionText: totalBans === 2 ? 'Ban third map' : 'Ban fourth map',
+        currentStep: totalBans === 2 ? 'Team A bans 1 map' : 'Team B bans 1 map'
+      };
+    } else if (totalBans >= 4) {
+      // Decider map selection - after 4 bans, 3 maps remain
+      // Remaining map automatically becomes Decider
+      const remainingMaps = maps.filter(map => 
+        !allBannedMaps.includes(map) && 
+        map !== currentMatch.map1 && 
+        map !== currentMatch.map2
+      );
+      
+      if (remainingMaps.length === 1) {
+        // Automatically set decider map
+        const deciderMap = remainingMaps[0];
+        // Update the match with decider map
+        updateDoc(doc(db, 'matches', currentMatch.id), {
+          deciderMap: deciderMap
+        });
+        
+        phaseInfo = {
+          phase: 'Decider Side Selection',
+          description: 'Select side for Decider Map',
+          isBanPhase: false,
+          isMapSelectionPhase: false,
+          isSideSelectionPhase: true,
+          isUserTeamTurn: currentMatch.team1Id === userTeam.id, // Team A picks side for Decider
+          actionText: 'Pick side for Decider',
+          currentStep: 'Team A picks side for Decider Map'
+        };
+      } else {
+        // Should not happen, but fallback
+        phaseInfo = {
+          phase: 'Decider Selection',
+          description: 'Selecting Decider Map',
+          isBanPhase: false,
+          isMapSelectionPhase: true,
+          isSideSelectionPhase: false,
+          isUserTeamTurn: false,
+          actionText: 'Select Decider',
+          currentStep: 'Select Decider Map'
+        };
+      }
+    } else {
+      // Fallback case
+      phaseInfo = {
+        phase: 'Unknown',
+        description: 'Unknown state',
+        isBanPhase: false,
+        isMapSelectionPhase: false,
+        isSideSelectionPhase: false,
+        isUserTeamTurn: false,
+        actionText: 'Unknown',
+        currentStep: 'Unknown state'
+      };
+    }
+  } else if (currentMatch.deciderMap && !currentMatch.deciderMapSide) {
+    // Side selection for Decider Map
+    const isUserTeamTurn = currentMatch.team1Id === userTeam.id; // Team A picks side for Decider
+    
+    phaseInfo = {
+      phase: 'Decider Side Selection',
+      description: 'Select side for Decider Map',
+      isBanPhase: false,
+      isMapSelectionPhase: false,
+      isSideSelectionPhase: true,
+      isUserTeamTurn,
+      actionText: 'Pick side for Decider',
+      currentStep: 'Team A picks side for Decider Map'
+    };
+  } else {
+    // All phases complete
+    phaseInfo = {
+      phase: 'Complete',
+      description: 'All maps and sides selected',
+      isBanPhase: false,
+      isMapSelectionPhase: false,
+      isSideSelectionPhase: false,
+      isUserTeamTurn: false,
+      actionText: 'Complete',
+      currentStep: 'All phases complete'
+    };
+  }
+
+  const getTurnIndicator = () => {
+    if (phaseInfo.isBanPhase) {
+      return phaseInfo.isUserTeamTurn 
+        ? `🎯 Your turn to BAN a map` 
+        : `⏳ Waiting for ${isTeam1 ? 'Team B' : 'Team A'} to ban a map`;
+    } else if (phaseInfo.isMapSelectionPhase) {
+      return phaseInfo.isUserTeamTurn 
+        ? `🎯 Your turn to SELECT a map` 
+        : `⏳ Waiting for ${isTeam1 ? 'Team A' : 'Team B'} to select a map`;
+    } else if (phaseInfo.isSideSelectionPhase) {
+      return phaseInfo.isUserTeamTurn 
+        ? `🎯 Your turn to pick ATTACK or DEFENSE` 
+        : `⏳ Waiting for ${isTeam1 ? 'Team B' : 'Team A'} to pick their side`;
+    }
+    return '⏳ Waiting...';
+  };
+
+  const getActionButtonText = (mapName: string) => {
+    if (phaseInfo.isBanPhase) {
+      return 'BAN';
+    } else if (phaseInfo.isMapSelectionPhase) {
+      return 'SELECT';
+    }
+    return '';
+  };
+
+  const handleBanMap = async (mapName: string) => {
+    if (!phaseInfo.isBanPhase || !phaseInfo.isUserTeamTurn) return;
+    
+    setBanningLoading(true);
     try {
-      await banMap(match.id, userTeam.id, mapName);
+      await banMap(currentMatch.id, userTeam.id, mapName);
       toast.success(`Banned ${mapName}`);
     } catch (error: any) {
       toast.error(error.message || 'Failed to ban map');
-      console.error('Error banning map:', error);
     } finally {
       setBanningLoading(false);
     }
   };
 
   const handleSelectMap = async (mapName: string) => {
-    if (!match || !userTeam) {
-      toast.error('Match or team not available');
-      return;
-    }
-
-    if (!isMapSelectionTurn) {
-      const otherTeamName = teamThatShouldSelect === 'team1' ? 'Team 1' : 'Team 2';
-      toast.error(`Only ${otherTeamName} can select the final map at this time.`);
-      return;
-    }
-
-    setBanningLoading(true);
+    if (!phaseInfo.isMapSelectionPhase || !phaseInfo.isUserTeamTurn) return;
     
+    setBanningLoading(true);
     try {
-      await selectMap(match.id, userTeam.id, mapName);
-      toast.success(`Selected ${mapName} as the match map`);
-      onMapBanningComplete();
+      await selectMap(currentMatch.id, userTeam.id, mapName);
+      toast.success(`Selected ${mapName}`);
     } catch (error: any) {
       toast.error(error.message || 'Failed to select map');
-      console.error('Error selecting map:', error);
     } finally {
       setBanningLoading(false);
     }
   };
 
-  const getTurnIndicator = () => {
-    if (isMapSelectionPhase) {
-      const selectingTeamName = teamThatShouldSelect === 'team1' ? 'Team 1' : 'Team 2';
-      return `${selectingTeamName}'s turn to select the final map`;
-    } else {
-      if (isTeam1Turn) {
-        return "Team 1's turn to ban a map";
-      } else {
-        return "Team 2's turn to ban a map";
+  const handleSideSelection = async (side: string) => {
+    if (!phaseInfo.isSideSelectionPhase || !phaseInfo.isUserTeamTurn) return;
+    
+    setBanningLoading(true);
+    try {
+      const updateData: any = {};
+      
+      if (phaseInfo.phase === 'Map 1 Side Selection') {
+        updateData.map1Side = side;
+      } else if (phaseInfo.phase === 'Map 2 Side Selection') {
+        updateData.map2Side = side;
+      } else if (phaseInfo.phase === 'Decider Side Selection') {
+        updateData.deciderMapSide = side;
       }
-    }
-  };
-
-  const getActionButtonText = (mapName: string) => {
-    if (isMapSelectionPhase) {
-      if (isMapSelectionTurn) {
-        return `Select ${mapName}`;
-      } else {
-        const selectingTeamName = teamThatShouldSelect === 'team1' ? 'Team 1' : 'Team 2';
-        return `${mapName} (Waiting for ${selectingTeamName})`;
-      }
-    } else {
-      if (isUserTeamTurn) {
-        return `Ban ${mapName}`;
-      } else {
-        return `${mapName} (Not your turn)`;
-      }
+      
+      await updateDoc(doc(db, 'matches', currentMatch.id), updateData);
+      toast.success(`Selected ${side} side`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to select side');
+    } finally {
+      setBanningLoading(false);
     }
   };
 
   const isButtonDisabled = (mapName: string) => {
     if (banningLoading) return true;
-    if (isMapSelectionPhase) {
-      return !isMapSelectionTurn;
-    } else {
-      return !isUserTeamTurn;
+    if (phaseInfo.isBanPhase || phaseInfo.isMapSelectionPhase) {
+      return !phaseInfo.isUserTeamTurn;
     }
+    return false;
   };
 
   const handleMapAction = (mapName: string) => {
-    if (isMapSelectionPhase) {
-      handleSelectMap(mapName);
-    } else {
+    if (phaseInfo.isBanPhase) {
       handleBanMap(mapName);
+    } else if (phaseInfo.isMapSelectionPhase) {
+      handleSelectMap(mapName);
     }
   };
 
-  return (
-    <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-6 mb-8">
-      <div className="text-center">
-        <h3 className="text-xl font-semibold mb-4">Map Banning Phase</h3>
-        
-        {/* Turn Indicator */}
-        <div className="mb-4 p-3 bg-blue-800/30 border border-blue-500/50 rounded-lg">
-          <p className="text-blue-200 font-medium">{getTurnIndicator()}</p>
-          <p className="text-sm text-gray-300 mt-1">
-            {isMapSelectionPhase 
-              ? `${availableMaps.length} maps remaining - ${teamThatShouldSelect === 'team1' ? 'Team 1' : 'Team 2'} select one`
-              : `${totalBans}/5 bans completed - ${availableMaps.length} maps remaining`
-            }
-          </p>
-        </div>
-
-        {/* Banned Maps Display */}
-        <div className="mb-6">
-          <h4 className="font-medium mb-2">Banned Maps:</h4>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {allBannedMaps.length > 0 ? (
-              allBannedMaps.map((map: string) => (
-                <span
-                  key={map}
-                  className="bg-red-600/20 border border-red-500/30 px-3 py-1 rounded text-sm"
-                >
-                  {map} ❌
-                </span>
-              ))
-            ) : (
-              <span className="text-gray-400">No maps banned yet</span>
-            )}
+  // Don't render if all phases are complete
+  if (phaseInfo.phase === 'Complete') {
+    return (
+      <div className="bg-gradient-to-br from-green-500/10 via-emerald-600/10 to-green-700/10 backdrop-blur-sm rounded-2xl p-6 border border-green-400/30 shadow-2xl">
+        <div className="text-center">
+          <h3 className="text-2xl font-bold text-white mb-2">✅ Map Banning Complete!</h3>
+          <div className="text-green-200 text-lg mb-4">All maps and sides have been selected</div>
+          <div className="text-white text-sm">
+            <div>Map 1: {currentMatch.map1} ({currentMatch.map1Side})</div>
+            <div>Map 2: {currentMatch.map2} ({currentMatch.map2Side})</div>
+            <div>Decider: {currentMatch.deciderMap} ({currentMatch.deciderMapSide})</div>
           </div>
         </div>
+      </div>
+    );
+  }
 
-        {/* Available Maps */}
-        <div className="mb-6">
-          <h4 className="font-medium mb-2">
-            {isMapSelectionPhase ? 'Select Final Map:' : 'Available Maps:'}
-          </h4>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {availableMaps.map((map) => (
-              <button
-                key={map}
-                onClick={() => handleMapAction(map)}
-                disabled={isButtonDisabled(map)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  isButtonDisabled(map)
-                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                    : isMapSelectionPhase
-                    ? 'bg-green-700 hover:bg-green-600 text-white'
-                    : 'bg-gray-700 hover:bg-gray-600 text-white'
+  return (
+    <div className="bg-gradient-to-br from-blue-500/10 via-cyan-600/10 to-blue-700/10 backdrop-blur-sm rounded-2xl p-6 border border-blue-400/30 shadow-2xl">
+      {/* MAP SUMMARY - Always visible at the top */}
+      <div className="mb-6 p-4 bg-gray-800/50 rounded-xl border border-gray-600/30">
+        <h4 className="text-white font-bold mb-3 text-center">🗺️ Map & Side Summary</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+          <div className={`p-3 rounded-lg ${currentMatch.map1 && currentMatch.map1Side ? 'bg-green-600/20 border border-green-500/30' : 'bg-gray-700/20 border border-gray-600/30'}`}>
+            <div className="text-sm text-gray-400 mb-1">Map 1</div>
+            <div className="text-white font-bold">{currentMatch.map1 || 'Not Selected'}</div>
+            <div className="text-sm text-gray-300">{currentMatch.map1Side || 'No Side'}</div>
+          </div>
+          <div className={`p-3 rounded-lg ${currentMatch.map2 && currentMatch.map2Side ? 'bg-green-600/20 border border-green-500/30' : 'bg-gray-700/20 border border-gray-600/30'}`}>
+            <div className="text-sm text-gray-400 mb-1">Map 2</div>
+            <div className="text-white font-bold">{currentMatch.map2 || 'Not Selected'}</div>
+            <div className="text-sm text-gray-300">{currentMatch.map2Side || 'No Side'}</div>
+          </div>
+          <div className={`p-3 rounded-lg ${currentMatch.deciderMap && currentMatch.deciderMapSide ? 'bg-green-600/20 border border-green-500/30' : 'bg-gray-700/20 border border-gray-600/30'}`}>
+            <div className="text-sm text-gray-400 mb-1">Decider</div>
+            <div className="text-white font-bold">{currentMatch.deciderMap || 'Not Selected'}</div>
+            <div className="text-sm text-gray-300">{currentMatch.deciderMapSide || 'No Side'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="text-center mb-6">
+        <h3 className="text-2xl font-bold text-white mb-2">BO3 Map Banning Phase</h3>
+        <div className="text-blue-200 text-lg mb-4">{phaseInfo.description}</div>
+        
+        {/* PHASE INDICATOR - Enhanced with colors */}
+        <div className={`text-xl font-bold p-3 rounded-lg ${
+          phaseInfo.isBanPhase 
+            ? 'bg-red-600/20 text-red-300 border border-red-500/30' 
+            : phaseInfo.isMapSelectionPhase 
+            ? 'bg-green-600/20 text-green-300 border border-green-500/30'
+            : 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
+        }`}>
+          {phaseInfo.isBanPhase && '🚫 BANNING PHASE'}
+          {phaseInfo.isMapSelectionPhase && '✅ MAP SELECTION PHASE'}
+          {phaseInfo.isSideSelectionPhase && '🎯 SIDE SELECTION PHASE'}
+        </div>
+        
+        <div className="text-yellow-400 text-xl font-bold mt-3">{getTurnIndicator()}</div>
+      </div>
+
+      {/* Phase Progress */}
+      <div className="flex justify-center mb-6">
+        <div className="flex space-x-2">
+          {['Map 1', 'Map 2', 'Decider'].map((phase, index) => {
+            let isActive = false;
+            let isComplete = false;
+            
+            if (phase === 'Map 1') {
+              isComplete = currentMatch.map1 && currentMatch.map1Side;
+              isActive = !isComplete && (!currentMatch.map1 || !currentMatch.map1Side);
+            } else if (phase === 'Map 2') {
+              isComplete = currentMatch.map2 && currentMatch.map2Side;
+              isActive = !isComplete && currentMatch.map1 && currentMatch.map1Side && (!currentMatch.map2 || !currentMatch.map2Side);
+            } else if (phase === 'Decider') {
+              isComplete = currentMatch.deciderMap && currentMatch.deciderMapSide;
+              isActive = !isComplete && currentMatch.map1 && currentMatch.map1Side && currentMatch.map2 && currentMatch.map2Side;
+            }
+            
+            return (
+              <div
+                key={phase}
+                className={`w-4 h-4 rounded-full ${
+                  isComplete
+                    ? 'bg-green-500'
+                    : isActive
+                    ? 'bg-blue-500 animate-pulse'
+                    : 'bg-gray-500'
                 }`}
+                title={phase}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Available Maps - Enhanced with better visual distinction */}
+      <div className="mb-6">
+        <h4 className="text-white font-bold mb-3 text-center">
+          {phaseInfo.isBanPhase ? '🚫 Available Maps to Ban' : '✅ Available Maps to Select'}
+        </h4>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {availableMaps.map((mapName) => (
+            <button
+              key={mapName}
+              onClick={() => handleMapAction(mapName)}
+              disabled={isButtonDisabled(mapName)}
+              className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                phaseInfo.isBanPhase || phaseInfo.isMapSelectionPhase
+                  ? phaseInfo.isUserTeamTurn
+                    ? phaseInfo.isBanPhase
+                      ? 'border-red-400 bg-red-600/20 hover:bg-red-600/30 text-white'
+                      : 'border-green-400 bg-green-600/20 hover:bg-green-600/30 text-white'
+                    : 'border-gray-500 bg-gray-600/20 text-gray-400 cursor-not-allowed'
+                  : 'border-gray-500 bg-gray-600/20 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <div className="text-lg font-bold">{mapName}</div>
+              <div className={`text-sm font-bold ${
+                phaseInfo.isBanPhase ? 'text-red-300' : 'text-green-300'
+              }`}>
+                {getActionButtonText(mapName)}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Side Selection for Current Phase */}
+      {phaseInfo.isSideSelectionPhase && phaseInfo.isUserTeamTurn && (
+        <div className="text-center mb-6 p-4 bg-purple-600/20 rounded-xl border border-purple-500/30">
+          {/* CURRENT MAP DISPLAY - Make it super clear which map */}
+          <div className="mb-4 p-3 bg-purple-700/30 rounded-lg border border-purple-500/50">
+            <div className="text-purple-200 text-sm mb-1">Currently Selecting Sides For:</div>
+            <div className="text-white text-2xl font-bold">
+              {phaseInfo.phase === 'Map 1 Side Selection' && currentMatch.map1 ? currentMatch.map1 : 
+               phaseInfo.phase === 'Map 2 Side Selection' && currentMatch.map2 ? currentMatch.map2 : 
+               phaseInfo.phase === 'Decider Side Selection' && currentMatch.deciderMap ? currentMatch.deciderMap : 
+               'Unknown Map'}
+            </div>
+            <div className="text-purple-300 text-sm mt-1">
+              {phaseInfo.phase === 'Map 1 Side Selection' ? 'Map 1' : 
+               phaseInfo.phase === 'Map 2 Side Selection' ? 'Map 2' : 
+               'Decider Map'}
+            </div>
+          </div>
+          
+          <div className="text-white text-lg mb-4">
+            🎯 Select your side for {
+              phaseInfo.phase === 'Map 1 Side Selection' ? 'Map 1' : 
+              phaseInfo.phase === 'Map 2 Side Selection' ? 'Map 2' : 
+              'Decider Map'
+            }
+          </div>
+          <div className="flex justify-center space-x-4">
+            <button
+              onClick={() => handleSideSelection('attack')}
+              disabled={banningLoading}
+              className="px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
+            >
+              Attack
+            </button>
+            <button
+              onClick={() => handleSideSelection('defense')}
+              disabled={banningLoading}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
+            >
+              Defense
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Show waiting message for team that's not picking the side */}
+      {phaseInfo.isSideSelectionPhase && !phaseInfo.isUserTeamTurn && (
+        <div className="text-center mb-6 p-4 bg-yellow-600/20 rounded-xl border border-yellow-500/30">
+          {/* CURRENT MAP DISPLAY - Show which map they're waiting for */}
+          <div className="mb-3 p-3 bg-yellow-700/30 rounded-lg border border-yellow-500/50">
+            <div className="text-yellow-200 text-sm mb-1">Waiting for sides to be selected for:</div>
+            <div className="text-white text-xl font-bold">
+              {phaseInfo.phase === 'Map 1 Side Selection' && currentMatch.map1 ? currentMatch.map1 : 
+               phaseInfo.phase === 'Map 2 Side Selection' && currentMatch.map2 ? currentMatch.map2 : 
+               phaseInfo.phase === 'Decider Side Selection' && currentMatch.deciderMap ? currentMatch.deciderMap : 
+               'Unknown Map'}
+            </div>
+            <div className="text-yellow-300 text-sm mt-1">
+              {phaseInfo.phase === 'Map 1 Side Selection' ? 'Map 1' : 
+               phaseInfo.phase === 'Map 2 Side Selection' ? 'Map 2' : 
+               'Decider Map'}
+            </div>
+          </div>
+          
+          <div className="text-yellow-400 text-lg">
+            ⏳ Waiting for {
+              phaseInfo.phase === 'Map 1 Side Selection' ? 'Team B' : 
+              phaseInfo.phase === 'Map 2 Side Selection' ? 'Team A' : 
+              'Team B'
+            } to pick their side...
+          </div>
+        </div>
+      )}
+
+      {/* Banned Maps Display */}
+      {allBannedMaps.length > 0 && (
+        <div className="mt-6 p-4 bg-gray-800/50 rounded-xl border border-gray-600/30">
+          <h4 className="text-white font-bold mb-3">🚫 Banned Maps</h4>
+          <div className="flex flex-wrap gap-2">
+            {allBannedMaps.map((mapName: string) => (
+              <span
+                key={mapName}
+                className="px-3 py-1 bg-red-600/20 text-red-400 border border-red-500/30 rounded-full text-sm"
               >
-                {getActionButtonText(map)}
-              </button>
+                {mapName}
+              </span>
             ))}
           </div>
         </div>
+      )}
 
-        {/* Instructions */}
-        <div className="text-sm text-gray-400">
-          {isMapSelectionPhase ? (
-            <div>
-              <p><strong>DEBUG:</strong> Total bans: {totalBans}, Team 1 bans: {bannedMaps.team1.length}, Team 2 bans: {bannedMaps.team2.length}</p>
-              <p><strong>DEBUG:</strong> Team that should select: {teamThatShouldSelect}</p>
-              <p><strong>DEBUG:</strong> Is map selection turn: {isMapSelectionTurn ? 'Yes' : 'No'}</p>
-              <p><strong>DEBUG:</strong> Current user team ID: {userTeam?.id}</p>
-              <p><strong>DEBUG:</strong> Match Team 1 ID: {match.team1Id}</p>
-              <p><strong>DEBUG:</strong> Match Team 2 ID: {match.team2Id}</p>
-              <p><strong>DEBUG:</strong> Is Team 1: {isTeam1 ? 'Yes' : 'No'}</p>
-              <p><strong>DEBUG:</strong> Is Team 2: {isTeam2 ? 'Yes' : 'No'}</p>
-              <p><strong>DEBUG:</strong> User team name: {userTeam?.name}</p>
-              <p><strong>DEBUG:</strong> Team 1 name: {team1?.name}</p>
-              <p><strong>DEBUG:</strong> Team 2 name: {team2?.name}</p>
-              <p><strong>DEBUG:</strong> Ban sequence length: {banSequence.length}</p>
-              {banSequence.length > 0 && (
-                <p><strong>DEBUG:</strong> Last ban: Team {banSequence[banSequence.length - 1].teamId === match.team1Id ? '1' : '2'} banned {banSequence[banSequence.length - 1].mapName}</p>
-              )}
-              <p>{teamThatShouldSelect === 'team1' ? 'Team 1' : 'Team 2'} selects the final map from the 2 remaining options.</p>
-              <p>After selection, {teamThatShouldSelect === 'team1' ? 'Team 2' : 'Team 1'} will choose to start on attack or defense.</p>
-            </div>
-          ) : (
-            <div>
-              <p>Teams take turns banning maps. Ban order: Team 1 → Team 2 → Team 1 → Team 2 → Team 1 → Team 2 → Team 1 → Team 2</p>
-              <p>After 5 bans, the team that did NOT ban last will select the final map from the 2 remaining options.</p>
-            </div>
-          )}
+      {/* Loading State */}
+      {banningLoading && (
+        <div className="text-center mt-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto"></div>
+          <p className="text-blue-200 mt-2">Processing...</p>
         </div>
-      </div>
+      )}
     </div>
   );
 };

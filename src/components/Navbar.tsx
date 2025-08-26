@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut, User, LogIn, Shield, Trophy, Users, Home, Settings, Bell, Gamepad2 } from 'lucide-react';
+import { Menu, X, LogOut, User, LogIn, Shield, Trophy, Users, Home, Settings, Bell, Gamepad2, Clock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useRealtimeUserMatches } from '../hooks/useRealtimeData';
 import type { User as UserType, Match } from '../types/tournament';
 import NotificationBell from './NotificationBell';
-import { onUserMatchesChange } from '../services/firebaseService';
 
 interface NavbarProps {
   currentUser: UserType | null;
@@ -41,7 +41,10 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const [activeMatches, setActiveMatches] = useState<Match[]>([]);
+  
+  // Use real-time hook for user matches
+  const { matches: userMatches, loading: matchesLoading, error: matchesError } = useRealtimeUserMatches(currentUser?.id || '');
+  
   const [loading, setLoading] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const profileDropdownRef = React.useRef<HTMLDivElement>(null);
@@ -50,62 +53,55 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
 
   const isActive = (path: string) => location.pathname === path;
 
+  // Filter active matches from real-time data
+  const activeMatches = userMatches.filter(match => 
+    !match.isComplete && (match.matchState === 'ready_up' || match.matchState === 'playing')
+  );
+
   useEffect(() => {
     if (!currentUser) {
-      setActiveMatches([]);
       previousActiveMatchesRef.current = [];
       setHasNewMatch(false);
       return;
     }
 
-    // Set up real-time listener for user matches
-    const unsubscribe = onUserMatchesChange(currentUser.id, (matches) => {
-      console.log('🔄 Real-time match update:', matches.length, 'active matches');
+    // Only show notifications if we had previous matches (not on initial load)
+    const hadPreviousMatches = previousActiveMatchesRef.current.length > 0;
+    
+    // Check if there are new active matches
+    const previousMatchIds = new Set(previousActiveMatchesRef.current.map(m => m.id));
+    const newMatches = activeMatches.filter(match => !previousMatchIds.has(match.id));
+    
+    // Show toast notification and play sound for new active matches
+    // Only if we had previous matches (to avoid showing on initial page load)
+    if (newMatches.length > 0 && hadPreviousMatches) {
+      // Play notification sound
+      playNotificationSound();
       
-      // Only show notifications if we had previous matches (not on initial load)
-      const hadPreviousMatches = previousActiveMatchesRef.current.length > 0;
+      // Set new match flag for visual enhancement
+      setHasNewMatch(true);
       
-      // Check if there are new active matches
-      const previousMatchIds = new Set(previousActiveMatchesRef.current.map(m => m.id));
-      const newMatches = matches.filter(match => !previousMatchIds.has(match.id));
+      // Clear the new match flag after 10 seconds
+      setTimeout(() => setHasNewMatch(false), 10000);
       
-      // Show toast notification and play sound for new active matches
-      // Only if we had previous matches (to avoid showing on initial page load)
-      if (newMatches.length > 0 && hadPreviousMatches) {
-        // Play notification sound
-        playNotificationSound();
-        
-        // Set new match flag for visual enhancement
-        setHasNewMatch(true);
-        
-        // Clear the new match flag after 10 seconds
-        setTimeout(() => setHasNewMatch(false), 10000);
-        
-        newMatches.forEach(match => {
-          toast.success(
-            `🎮 Match Active! Your team has a new match ready.`,
-            {
-              duration: 8000,
-              icon: '🎮',
-              style: {
-                background: '#10B981',
-                color: '#fff',
-                fontWeight: 'bold',
-              },
-            }
-          );
-        });
-      }
-      
-      setActiveMatches(matches);
-      previousActiveMatchesRef.current = matches;
-    });
-
-    // Cleanup function
-    return () => {
-      unsubscribe();
-    };
-  }, [currentUser]);
+      newMatches.forEach(match => {
+        toast.success(
+          `🎮 Match Active! Your team has a new match ready.`,
+          {
+            duration: 8000,
+            icon: '🎮',
+            style: {
+              background: '#10B981',
+              color: '#fff',
+              fontWeight: 'bold',
+            },
+          }
+        );
+      });
+    }
+    
+    previousActiveMatchesRef.current = activeMatches;
+  }, [currentUser, activeMatches]);
 
   const handleLogout = async () => {
     try {
@@ -128,45 +124,34 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
   };
 
   return (
-    <nav className="bg-black/80 shadow-sm border-b border-gray-700 sticky top-0 z-40 transition-colors duration-200 backdrop-blur-sm">
+    <nav className="bg-black/80 shadow-sm border-b border-pink-400/30 sticky top-0 z-40 transition-colors duration-200 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link to="/" className="flex items-center space-x-3">
-            <img 
-              src="/bodax-pfp.png" 
-              alt="Bodax Masters" 
-              className="w-8 h-8"
-              onError={(e) => {
-                console.error('Failed to load logo:', e);
-                e.currentTarget.style.display = 'none';
-              }}
-            />
-            <span className="text-xl font-bold text-white hidden sm:block transition-colors duration-200">Bodax Masters</span>
+            <span className="text-xl font-bold text-white hidden sm:block transition-colors duration-200">Unity League</span>
           </Link>
 
           <div className="hidden lg:flex items-center space-x-8">
             <Link
               to="/"
               className={`text-sm font-medium transition-colors duration-200 ${
-                isActive('/') ? 'text-red-400' : 'text-gray-300 hover:text-white'
+                isActive('/') ? 'text-cyan-400' : 'text-pink-200 hover:text-white'
               }`}
             >
               Home
             </Link>
-            <Link
-              to="/tournaments"
-              className={`text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
-                isActive('/tournaments') ? 'text-red-400' : 'text-gray-300 hover:text-white'
-              }`}
-            >
-              <Trophy className="w-4 h-4" />
-              <span>Tournaments</span>
-            </Link>
+            {/* Coming Soon Notice */}
+            <div className="text-sm text-blue-200 bg-gradient-to-r from-blue-900/40 to-purple-900/40 border border-blue-500/40 rounded-lg px-4 py-2 backdrop-blur-sm shadow-lg">
+              <div className="flex items-center space-x-2">
+                <span className="text-blue-300">🚀</span>
+                <span className="font-medium">Vorbereitungsphase läuft!</span>
+              </div>
+            </div>
             {isAdmin && (
               <Link
                 to="/admin"
                 className={`text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
-                  isActive('/admin') ? 'text-red-400' : 'text-gray-300 hover:text-white'
+                  isActive('/admin') ? 'text-cyan-400' : 'text-pink-200 hover:text-white'
                 }`}
               >
                 <Shield className="w-4 h-4" />
@@ -177,7 +162,7 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
               <Link
                 to="/admin/tournaments"
                 className={`text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
-                  isActive('/admin/tournaments') ? 'text-red-400' : 'text-gray-300 hover:text-white'
+                  isActive('/admin') ? 'text-cyan-400' : 'text-pink-200 hover:text-white'
                 }`}
               >
                 <Trophy className="w-4 h-4" />
@@ -189,24 +174,12 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
           <div className="hidden lg:flex items-center space-x-4">
             {currentUser ? (
               <div className="flex items-center space-x-3 relative">
-                {/* Active Match Button */}
+                {/* Active Match Button - Coming Soon */}
                 {activeMatches.length > 0 && (
-                  <button
-                    onClick={handleMatchClick}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
-                      hasNewMatch
-                        ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg animate-pulse'
-                        : 'bg-green-700 hover:bg-green-600 text-white'
-                    }`}
-                  >
-                    <Gamepad2 className="w-4 h-4" />
-                    <span>Active Match</span>
-                    {activeMatches.length > 1 && (
-                      <span className="bg-green-800 text-green-100 text-xs px-2 py-1 rounded-full">
-                        {activeMatches.length}
-                      </span>
-                    )}
-                  </button>
+                  <div className="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm bg-gradient-to-r from-orange-600 to-red-600 text-orange-100 shadow-lg backdrop-blur-sm">
+                    <Clock className="w-4 h-4" />
+                    <span>⏳ Matches starten bald</span>
+                  </div>
                 )}
                 <NotificationBell userId={currentUser.id} />
                 {/* Profile Dropdown */}
@@ -281,71 +254,24 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
               >
                 Home
               </Link>
-              <Link
-                to="/tournaments"
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
-                  isActive('/tournaments') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
-                }`}
-                onClick={() => setIsOpen(false)}
-              >
-                Tournaments
-              </Link>
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 ${
-                    isActive('/admin') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
-                  }`}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Shield className="w-4 h-4" />
-                  <span>Admin</span>
-                </Link>
-              )}
-              {isAdmin && (
-                <Link
-                  to="/admin/tournaments"
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 ${
-                    isActive('/admin/tournaments') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
-                  }`}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Trophy className="w-4 h-4" />
-                  <span>Tournament Management</span>
-                </Link>
-              )}
+              {/* Coming Soon Notice */}
+              <div className="px-3 py-3 text-sm text-blue-200 bg-gradient-to-r from-blue-900/40 to-purple-900/40 border border-blue-500/40 rounded-lg backdrop-blur-sm shadow-lg">
+                <div className="flex items-center space-x-2">
+                  <span className="text-blue-300">🚀</span>
+                  <span className="font-medium">Vorbereitungsphase läuft!</span>
+                </div>
+              </div>
               {currentUser ? (
                 <>
-                  {/* Active Match Button for Mobile */}
+                  {/* Active Match Button for Mobile - Coming Soon */}
                   {activeMatches.length > 0 && (
-                    <button
-                      onClick={() => {
-                        handleMatchClick();
-                        setIsOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 flex items-center space-x-2 ${
-                        hasNewMatch
-                          ? 'text-green-400 bg-green-900/20 animate-pulse'
-                          : 'text-green-400 hover:bg-green-900/20'
-                      }`}
-                    >
-                      <Gamepad2 className="w-4 h-4" />
-                      <span>Active Match</span>
-                      {activeMatches.length > 1 && (
-                        <span className="bg-green-800 text-green-100 text-xs px-2 py-1 rounded-full ml-auto">
-                          {activeMatches.length}
-                        </span>
-                      )}
-                    </button>
+                    <div className="px-3 py-3 text-sm text-orange-200 bg-gradient-to-r from-orange-900/40 to-red-900/40 border border-orange-500/40 rounded-lg backdrop-blur-sm shadow-lg">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-orange-300">⏳</span>
+                        <span className="font-medium">Matches starten bald</span>
+                      </div>
+                    </div>
                   )}
-                  <Link
-                    to="/dashboard"
-                    className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 flex items-center space-x-2 ${
-                      isActive('/dashboard') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
-                    }`}
-                  >
-                    <span>Dashboard</span>
-                  </Link>
                   <Link
                     to="/profile"
                     className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 flex items-center space-x-2 ${
@@ -362,6 +288,14 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
                   >
                     <span>Team Management</span>
                   </Link>
+                  {currentUser?.discordLinked && (
+                    <div className="px-3 py-3 text-sm text-orange-200 bg-gradient-to-r from-orange-900/40 to-red-900/40 border border-orange-500/40 rounded-lg backdrop-blur-sm shadow-lg">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-orange-300">⏳</span>
+                        <span className="font-medium">Support Tickets starten bald</span>
+                      </div>
+                    </div>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors duration-200 flex items-center space-x-2"

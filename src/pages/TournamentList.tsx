@@ -2,9 +2,10 @@
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Users, Calendar, ArrowRight, Clock, CheckCircle, Zap, X, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getTournaments, signupTeamForTournament, getUserTeams, fillTournamentWithDemoTeams, startTournament, deleteAllTournaments, getTeamsInActiveMatches } from '../services/firebaseService';
+import { signupTeamForTournament, getUserTeams, fillTournamentWithDemoTeams, startTournament, deleteAllTournaments, getTeamsInActiveMatches } from '../services/firebaseService';
 import { registerTeamForTournamentWithVerification } from '../services/tournamentService';
 import { checkUserInDiscordServer } from '../services/discordService';
+import { useRealtimeTournaments } from '../hooks/useRealtimeData';
 import type { Tournament, Team, User } from '../types/tournament';
 import TeamMemberSelection from '../components/TeamMemberSelection';
 
@@ -14,7 +15,10 @@ interface TournamentListProps {
 
 const TournamentList = ({ currentUser }: TournamentListProps) => {
   const navigate = useNavigate();
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  
+  // Use real-time hook for tournaments
+  const { tournaments, loading: tournamentsLoading, error: tournamentsError } = useRealtimeTournaments();
+  
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,16 +34,41 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
   const [selectedTeamForRegistration, setSelectedTeamForRegistration] = useState<Team | null>(null);
 
   // Helper function to format dates
-  const formatDate = (date: Date | string) => {
+  const formatDate = (date: Date | string | any | undefined) => {
     if (!date) return 'TBD';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false 
-    });
+    
+    try {
+      let dateObj: Date;
+      
+      // Handle Firestore Timestamp objects
+      if (date && typeof date === 'object' && date.seconds !== undefined) {
+        dateObj = new Date(date.seconds * 1000);
+      } else if (typeof date === 'string') {
+        dateObj = new Date(date);
+      } else if (date instanceof Date) {
+        dateObj = date;
+      } else {
+        console.warn('Unsupported date type received:', date);
+        return 'TBD';
+      }
+      
+      // Check if the date is valid
+      if (isNaN(dateObj.getTime())) {
+        console.warn('Invalid date received:', date);
+        return 'TBD';
+      }
+      
+      return dateObj.toLocaleDateString('de-DE', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: 'Europe/Berlin'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error, 'Date value:', date);
+      return 'TBD';
+    }
   };
 
   // Check if user is admin
@@ -53,23 +82,37 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
     loadData();
   }, []);
 
+  // Update loading state based on tournaments loading
+  useEffect(() => {
+    if (tournamentsLoading) {
+      setLoading(true);
+    } else {
+      setLoading(false);
+    }
+  }, [tournamentsLoading]);
+
+  // Handle tournaments error
+  useEffect(() => {
+    if (tournamentsError) {
+      setError(`Tournaments error: ${tournamentsError}`);
+    }
+  }, [tournamentsError]);
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const [allTournaments, teams, activeMatchesData] = await Promise.all([
-        getTournaments(),
+      const [teams, activeMatchesData] = await Promise.all([
         currentUser ? getUserTeams(currentUser.id) : Promise.resolve([]),
         getTeamsInActiveMatches()
       ]);
       
-      setTournaments(allTournaments);
       setUserTeams(teams);
       setTeamsInActiveMatches(activeMatchesData);
       // Set the first team as selected by default
       setSelectedTeam(teams.length > 0 ? teams[0] : null);
     } catch (error) {
-      console.error('Error loading tournaments:', error);
-      setError('Failed to load tournaments');
+      console.error('Error loading data:', error);
+      setError('Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -319,43 +362,50 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden">
-      {/* Tech background with grid and glow effects */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-20" style={{backgroundImage: 'repeating-linear-gradient(0deg, #ff000011 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #ff000011 0 1px, transparent 1px 40px)'}} />
-      <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-br from-red-500/5 via-transparent to-purple-500/5" />
-      
-      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 relative z-10">
-        {/* Header with tech styling */}
-        <div className="text-center mb-12">
-          <div className="inline-block mb-6">
-            <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-red-500 to-purple-600 mb-2 tracking-wider">
-              TOURNAMENTS
-            </h1>
-            <div className="h-1 bg-gradient-to-r from-red-400 via-red-500 to-purple-600 rounded-full"></div>
-          </div>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto font-light">
-            <span className="text-red-400">[</span> Find and join tournaments to compete with other teams <span className="text-red-400">]</span>
-          </p>
-          {isAdmin && (
-            <div className="mt-8">
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 text-white px-8 py-4 rounded-lg flex items-center space-x-3 transition-all duration-300 border border-red-500/50 shadow-lg hover:shadow-red-500/25 mx-auto font-mono text-sm tracking-wider"
-                disabled={clearing}
-              >
-                <Trash2 className="w-5 h-5" />
-                <span>{clearing ? 'CLEARING...' : 'CLEAR ALL TOURNAMENTS'}</span>
-              </button>
+    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
+      {/* Unity League Header */}
+      <div className="bg-black/20 backdrop-blur-sm border-b border-white/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white font-mono tracking-tight">TOURNAMENTS</h1>
+              <p className="text-white/80 font-mono tracking-tight">FIND AND JOIN TOURNAMENTS</p>
             </div>
-          )}
+            {isAdmin && (
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => navigate('/tournaments/create')}
+                  className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-lg transition-colors font-medium font-mono tracking-tight"
+                >
+                  CREATE TOURNAMENT
+                </button>
+                <button
+                  onClick={() => navigate('/admin')}
+                  className="bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-lg transition-colors font-medium font-mono tracking-tight"
+                >
+                  ADMIN PANEL
+                </button>
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors font-medium font-mono tracking-tight"
+                  disabled={clearing}
+                >
+                  {clearing ? 'CLEARING...' : 'CLEAR ALL'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
+      </div>
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        {/* Error Message with tech styling */}
+        {/* Error Message */}
         {error && (
-          <div className="mb-8 p-6 bg-red-900/30 border border-red-500/50 rounded-lg max-w-2xl mx-auto backdrop-blur-sm">
+          <div className="mb-8 p-6 bg-red-900/50 border border-red-400/30 rounded-xl max-w-2xl mx-auto backdrop-blur-sm">
             <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
-              <p className="text-red-300 text-center font-mono">{error}</p>
+              <div className="w-3 h-3 bg-red-400 rounded-full animate-pulse"></div>
+              <p className="text-red-200 text-center font-mono tracking-tight">{error}</p>
             </div>
           </div>
         )}
@@ -376,21 +426,18 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
             {tournaments.map((tournament) => (
               <div
                 key={tournament.id}
-                className="group bg-gradient-to-br from-gray-900/80 via-gray-800/80 to-gray-900/80 rounded-2xl border border-gray-700/50 shadow-2xl hover:shadow-red-500/20 transition-all duration-500 hover:scale-105 overflow-hidden backdrop-blur-sm relative"
+                className="unity-card-pink group hover:scale-105 transition-all duration-300 overflow-hidden"
               >
-                {/* Glow effect on hover */}
-                <div className="absolute inset-0 bg-gradient-to-r from-red-500/0 via-red-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                
                 {/* Tournament Header */}
-                <div className="p-6 border-b border-gray-700/50 relative z-10">
+                <div className="p-6 border-b border-pink-400/30 relative z-10">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-4">
-                      <div className="w-14 h-14 bg-gradient-to-r from-red-600 to-red-500 rounded-xl flex items-center justify-center border border-red-500/50 shadow-lg">
+                      <div className="w-14 h-14 bg-gradient-to-r from-pink-600 to-pink-500 rounded-xl flex items-center justify-center border border-pink-400/50 shadow-lg">
                         <Trophy className="w-7 h-7 text-white" />
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-white font-mono tracking-wide">{tournament.name}</h3>
-                        <p className="text-sm text-red-400 font-mono">[{tournament.region}]</p>
+                        <h3 className="text-xl font-bold text-white font-mono tracking-tight">{tournament.name}</h3>
+                        <p className="text-pink-300 font-mono text-sm tracking-tight">[{tournament.region}]</p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -399,7 +446,7 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
                   </div>
                   
                   {tournament.description && (
-                    <p className="text-gray-300 text-sm leading-relaxed font-mono">
+                    <p className="text-pink-200 text-sm leading-relaxed font-mono tracking-tight">
                       {tournament.description.length > 120 
                         ? `${tournament.description.substring(0, 120)}...` 
                         : tournament.description}
@@ -679,6 +726,14 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
           maxPlayers={5}
         />
       )}
+      
+      {/* Unity League Footer */}
+      <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
+          <span>&gt; TOURNAMENTS LIST</span>
+          <span className="text-cyan-400">// Unity League 2025</span>
+        </div>
+      </div>
     </div>
   );
 };

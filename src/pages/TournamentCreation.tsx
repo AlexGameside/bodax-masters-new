@@ -13,9 +13,28 @@ import type {
   TournamentFormat,
   TournamentRules,
   TournamentSchedule,
-  PrizePool
+  PrizePool,
+  RegistrationRequirements
 } from '../types/tournament';
 import { createTournament, publishTournament } from '../services/tournamentService';
+
+// Helper function to clean objects for Firestore (remove undefined values)
+const cleanForFirestore = (obj: any): any => {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(cleanForFirestore).filter(item => item !== null);
+  }
+  
+  const cleaned: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      cleaned[key] = cleanForFirestore(value);
+    }
+  }
+  return cleaned;
+};
 
 const TournamentCreation = () => {
   const { currentUser } = useAuth();
@@ -30,9 +49,14 @@ const TournamentCreation = () => {
   const [region, setRegion] = useState<string>('Global');
 
   // Tournament format
-  const [tournamentType, setTournamentType] = useState<'single-elimination' | 'double-elimination'>('single-elimination');
+  const [tournamentType, setTournamentType] = useState<'single-elimination' | 'double-elimination' | 'swiss-system'>('single-elimination');
   const [matchFormat, setMatchFormat] = useState<'BO1' | 'BO3' | 'BO5'>('BO3');
   const [seedingMethod, setSeedingMethod] = useState<'random' | 'manual'>('random');
+  
+  // Swiss system specific
+  const [swissRounds, setSwissRounds] = useState<number>(5);
+  const [teamsAdvanceToPlayoffs, setTeamsAdvanceToPlayoffs] = useState<number>(8);
+  const [schedulingWindow, setSchedulingWindow] = useState<number>(7);
 
   // Schedule
   const [startDate, setStartDate] = useState<string>('');
@@ -48,6 +72,15 @@ const TournamentCreation = () => {
   const [requireRankVerification, setRequireRankVerification] = useState<boolean>(false);
   const [minimumRank, setMinimumRank] = useState<string>('');
   const [entryFee, setEntryFee] = useState<number>(0);
+  
+  // Team composition
+  const [minMainPlayers, setMinMainPlayers] = useState<number>(5);
+  const [maxMainPlayers, setMaxMainPlayers] = useState<number>(5);
+  const [minSubstitutes, setMinSubstitutes] = useState<number>(0);
+  const [maxSubstitutes, setMaxSubstitutes] = useState<number>(2);
+  const [allowCoaches, setAllowCoaches] = useState<boolean>(true);
+  const [allowAssistantCoaches, setAllowAssistantCoaches] = useState<boolean>(true);
+  const [allowManagers, setAllowManagers] = useState<boolean>(true);
 
   // Valid team sizes for elimination tournaments
   const validTeamSizes = [2, 4, 8, 16, 32];
@@ -65,9 +98,31 @@ const TournamentCreation = () => {
       return;
     }
 
+    // Validate team composition settings
+    if (minMainPlayers < 1 || maxMainPlayers < minMainPlayers) {
+      setError('Invalid main player configuration');
+      return;
+    }
+
+    if (minSubstitutes < 0 || maxSubstitutes < minSubstitutes) {
+      setError('Invalid substitute configuration');
+      return;
+    }
+
+    if (maxMainPlayers + maxSubstitutes > 10) {
+      setError('Total team size cannot exceed 10 members');
+      return;
+    }
+
     // Validate team size for elimination tournaments
-    if (!validTeamSizes.includes(maxTeams)) {
+    if (tournamentType !== 'swiss-system' && !validTeamSizes.includes(maxTeams)) {
       setError(`Team size must be 2, 4, 8, 16, or 32 for ${tournamentType} tournaments`);
+      return;
+    }
+    
+    // Validate team size for Swiss system tournaments
+    if (tournamentType === 'swiss-system' && maxTeams < 4) {
+      setError('Swiss system tournaments require at least 4 teams');
       return;
     }
 
@@ -87,7 +142,15 @@ const TournamentCreation = () => {
         matchFormat,
         mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
         sideSelection: 'coin-flip',
-        seedingMethod: seedingMethod
+        seedingMethod: seedingMethod,
+        ...(tournamentType === 'swiss-system' && {
+          swissConfig: {
+            rounds: swissRounds,
+            teamsAdvanceToPlayoffs,
+            tiebreakerMethod: 'buchholz' as const,
+            schedulingWindow
+          }
+        })
       };
 
       const rules: TournamentRules = {
@@ -127,11 +190,59 @@ const TournamentCreation = () => {
         taxInfo: 'Prizes are subject to applicable taxes.'
       };
 
-      const tournamentId = await createTournament({
+      const requirements: RegistrationRequirements = {
+        minPlayers: minMainPlayers + minSubstitutes,
+        maxPlayers: maxMainPlayers + maxSubstitutes + (allowCoaches ? 1 : 0) + (allowAssistantCoaches ? 1 : 0) + (allowManagers ? 1 : 0),
+        requiredRoles: ['owner', 'captain'],
+        requireDiscord: false,
+        requireRiotId: requireRiotId,
+        requireRankVerification: requireRankVerification,
+        minimumRank: minimumRank || null,
+        entryFee: entryFee || null,
+        approvalProcess: 'automatic',
+        maxTeams: maxTeams,
+        registrationDeadline: endDate ? new Date(endDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        teamValidationRules: ['All team members must be verified', 'Team must have valid roster'],
+        
+        // Team composition requirements
+        minMainPlayers,
+        maxMainPlayers,
+        minSubstitutes,
+        maxSubstitutes,
+        allowCoaches,
+        allowAssistantCoaches,
+        allowManagers
+      };
+
+      // Clean requirements object to remove undefined values for Firestore
+      const cleanRequirements: RegistrationRequirements = {
+        minPlayers: requirements.minPlayers,
+        maxPlayers: requirements.maxPlayers,
+        requiredRoles: requirements.requiredRoles,
+        requireDiscord: requirements.requireDiscord,
+        requireRiotId: requirements.requireRiotId,
+        requireRankVerification: requirements.requireRankVerification,
+        minimumRank: requirements.minimumRank || null,
+        entryFee: requirements.entryFee || null,
+        approvalProcess: requirements.approvalProcess,
+        maxTeams: requirements.maxTeams,
+        registrationDeadline: requirements.registrationDeadline,
+        teamValidationRules: requirements.teamValidationRules,
+        minMainPlayers: requirements.minMainPlayers,
+        maxMainPlayers: requirements.maxMainPlayers,
+        minSubstitutes: requirements.minSubstitutes,
+        maxSubstitutes: requirements.maxSubstitutes,
+        allowCoaches: requirements.allowCoaches,
+        allowAssistantCoaches: requirements.allowAssistantCoaches,
+        allowManagers: requirements.allowManagers
+      };
+
+      const tournamentData = {
         name,
         description,
         format,
         rules,
+        requirements: cleanRequirements,
         schedule,
         prizePool,
         region,
@@ -140,7 +251,15 @@ const TournamentCreation = () => {
         tags: [tournamentType, region],
         createdBy: currentUser.id,
         adminIds: [currentUser.id]
-      }, currentUser.id);
+      };
+
+      // Clean the entire tournament data for Firestore
+      const cleanTournamentData = cleanForFirestore(tournamentData);
+
+      // Debug: Log what we're sending to Firestore
+      console.log('Tournament data being sent to Firestore:', cleanTournamentData);
+
+      const tournamentId = await createTournament(cleanTournamentData, currentUser.id);
 
       await publishTournament(tournamentId);
 
@@ -250,6 +369,83 @@ const TournamentCreation = () => {
                     <option value="OCE">Oceania</option>
                   </select>
                 </div>
+                
+                {/* Swiss System Configuration */}
+                {tournamentType === 'swiss-system' && (
+                  <div className="col-span-2 space-y-4">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label htmlFor="swissRounds" className="block text-sm font-medium text-gray-200">
+                          Swiss Rounds
+                        </label>
+                        <select
+                          id="swissRounds"
+                          value={swissRounds}
+                          onChange={(e) => setSwissRounds(Number(e.target.value))}
+                          className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        >
+                          <option value={3}>3 Rounds</option>
+                          <option value={4}>4 Rounds</option>
+                          <option value={5}>5 Rounds</option>
+                          <option value={6}>6 Rounds</option>
+                          <option value={7}>7 Rounds</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-400">
+                          Number of Swiss rounds before playoffs
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="teamsAdvanceToPlayoffs" className="block text-sm font-medium text-gray-200">
+                          Teams to Playoffs
+                        </label>
+                        <select
+                          id="teamsAdvanceToPlayoffs"
+                          value={teamsAdvanceToPlayoffs}
+                          onChange={(e) => setTeamsAdvanceToPlayoffs(Number(e.target.value))}
+                          className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        >
+                          <option value={4}>4 Teams</option>
+                          <option value={8}>8 Teams</option>
+                          <option value={16}>16 Teams</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-400">
+                          Top teams advance to playoff bracket
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="schedulingWindow" className="block text-sm font-medium text-gray-200">
+                          Scheduling Window (Days)
+                        </label>
+                        <select
+                          id="schedulingWindow"
+                          value={schedulingWindow}
+                          onChange={(e) => setSchedulingWindow(Number(e.target.value))}
+                          className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        >
+                          <option value={5}>5 Days</option>
+                          <option value={7}>7 Days</option>
+                          <option value={10}>10 Days</option>
+                          <option value={14}>14 Days</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-400">
+                          Time teams have to schedule each match
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
+                      <div className="text-blue-400 font-medium mb-2">Swiss System Features:</div>
+                      <ul className="text-blue-300 text-sm space-y-1">
+                        <li>• Teams play against opponents with similar records</li>
+                        <li>• Self-scheduling system for flexible match times</li>
+                        <li>• Top teams advance to single elimination playoffs</li>
+                        <li>• Automatic tiebreakers using Buchholz scoring</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -269,6 +465,7 @@ const TournamentCreation = () => {
                   >
                     <option value="single-elimination">Single Elimination</option>
                     <option value="double-elimination">Double Elimination</option>
+                    <option value="swiss-system">Swiss System + Playoffs</option>
                   </select>
                 </div>
 
@@ -346,6 +543,137 @@ const TournamentCreation = () => {
               </div>
             </div>
 
+            {/* Team Composition */}
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Team Composition</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label htmlFor="minMainPlayers" className="block text-sm font-medium text-gray-200">
+                    Min Main Players
+                  </label>
+                  <input
+                    type="number"
+                    id="minMainPlayers"
+                    value={minMainPlayers}
+                    onChange={(e) => setMinMainPlayers(parseInt(e.target.value) || 5)}
+                    min={1}
+                    max={10}
+                    className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="maxMainPlayers" className="block text-sm font-medium text-gray-200">
+                    Max Main Players
+                  </label>
+                  <input
+                    type="number"
+                    id="maxMainPlayers"
+                    value={maxMainPlayers}
+                    onChange={(e) => setMaxMainPlayers(parseInt(e.target.value) || 5)}
+                    min={minMainPlayers}
+                    max={10}
+                    className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="minSubstitutes" className="block text-sm font-medium text-gray-200">
+                    Min Substitutes
+                  </label>
+                  <input
+                    type="number"
+                    id="minSubstitutes"
+                    value={minSubstitutes}
+                    onChange={(e) => setMinSubstitutes(parseInt(e.target.value) || 0)}
+                    min={0}
+                    max={5}
+                    className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="maxSubstitutes" className="block text-sm font-medium text-gray-200">
+                    Max Substitutes
+                  </label>
+                  <input
+                    type="number"
+                    id="maxSubstitutes"
+                    value={maxSubstitutes}
+                    onChange={(e) => setMaxSubstitutes(parseInt(e.target.value) || 2)}
+                    min={minSubstitutes}
+                    max={5}
+                    className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-4 grid grid-cols-3 gap-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="allowCoaches"
+                    checked={allowCoaches}
+                    onChange={(e) => setAllowCoaches(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="allowCoaches" className="ml-2 text-sm text-gray-200">
+                    Allow Coaches
+                  </label>
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="allowAssistantCoaches"
+                    checked={allowAssistantCoaches}
+                    onChange={(e) => setAllowAssistantCoaches(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="allowAssistantCoaches" className="ml-2 text-sm text-gray-200">
+                    Allow Assistant Coaches
+                  </label>
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="allowManagers"
+                    checked={allowManagers}
+                    onChange={(e) => setAllowManagers(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="allowManagers" className="ml-2 text-sm text-gray-200">
+                    Allow Managers
+                  </label>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-4 bg-gray-700 rounded-lg">
+                <div className="text-gray-300 text-sm">
+                  <div className="font-medium mb-2">Team Composition Summary:</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                    <div>
+                      <span className="text-gray-400">Main Players:</span>
+                      <div className="text-white">{minMainPlayers}-{maxMainPlayers}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Substitutes:</span>
+                      <div className="text-white">{minSubstitutes}-{maxSubstitutes}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Coaches:</span>
+                      <div className="text-white">{allowCoaches ? 'Yes' : 'No'}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Managers:</span>
+                      <div className="text-white">{allowManagers ? 'Yes' : 'No'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Registration & Prize Pool */}
             <div>
               <h2 className="text-xl font-semibold mb-4">Registration & Prize Pool</h2>
@@ -354,21 +682,37 @@ const TournamentCreation = () => {
                   <label htmlFor="maxTeams" className="block text-sm font-medium text-gray-200">
                     Max Teams *
                   </label>
-                  <select
-                    id="maxTeams"
-                    value={maxTeams}
-                    onChange={(e) => setMaxTeams(parseInt(e.target.value))}
-                    className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    required
-                  >
-                    <option value={2}>2 Teams</option>
-                    <option value={4}>4 Teams</option>
-                    <option value={8}>8 Teams</option>
-                    <option value={16}>16 Teams</option>
-                    <option value={32}>32 Teams</option>
-                  </select>
+                  {tournamentType === 'swiss-system' ? (
+                    <input
+                      type="number"
+                      id="maxTeams"
+                      value={maxTeams}
+                      onChange={(e) => setMaxTeams(parseInt(e.target.value) || 4)}
+                      min={4}
+                      max={64}
+                      className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      required
+                    />
+                  ) : (
+                    <select
+                      id="maxTeams"
+                      value={maxTeams}
+                      onChange={(e) => setMaxTeams(parseInt(e.target.value))}
+                      className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      required
+                    >
+                      <option value={2}>2 Teams</option>
+                      <option value={4}>4 Teams</option>
+                      <option value={8}>8 Teams</option>
+                      <option value={16}>16 Teams</option>
+                      <option value={32}>32 Teams</option>
+                    </select>
+                  )}
                   <p className="mt-1 text-xs text-gray-400">
-                    Valid sizes for {tournamentType} tournaments
+                    {tournamentType === 'swiss-system' 
+                      ? 'Any number of teams (4-64) supported for Swiss system'
+                      : `Valid sizes for ${tournamentType} tournaments`
+                    }
                   </p>
                 </div>
 

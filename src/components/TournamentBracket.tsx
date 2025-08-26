@@ -64,7 +64,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
         return 'border-yellow-500 bg-yellow-900/20';
       case 'map_banning':
         return 'border-blue-500 bg-blue-900/20';
-      case 'side_selection':
+      case 'ready_up':
         return 'border-purple-500 bg-purple-900/20';
       case 'playing':
         return 'border-green-500 bg-green-900/20';
@@ -81,7 +81,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
         return 'Ready Up';
       case 'map_banning':
         return 'Map Banning';
-      case 'side_selection':
+      case 'ready_up':
         return 'Side Selection';
       case 'playing':
         return 'In Progress';
@@ -98,7 +98,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
         return <Clock className="w-4 h-4 text-yellow-400" />;
       case 'map_banning':
         return <Zap className="w-4 h-4 text-blue-400" />;
-      case 'side_selection':
+      case 'ready_up':
         return <Users className="w-4 h-4 text-purple-400" />;
       case 'playing':
         return <Zap className="w-4 h-4 text-green-400" />;
@@ -672,16 +672,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
                   <div className="bg-red-900/20 border border-red-500 rounded-lg p-4">
                     <div className="text-red-400 font-bold text-sm mb-3">ADMIN: COMPLETE MATCH</div>
                     
-                    {/* Debug Info */}
-                    <div className="bg-black/40 rounded-lg p-2 mb-3">
-                      <div className="text-gray-300 text-xs space-y-1">
-                        <div>Match ID: {selectedMatch.id}</div>
-                        <div>Team 1: {getTeamById(selectedMatch.team1Id)?.name} ({selectedMatch.team1Id})</div>
-                        <div>Team 2: {getTeamById(selectedMatch.team2Id)?.name} ({selectedMatch.team2Id})</div>
-                        <div>Round: {selectedMatch.round}</div>
-                        <div>Match Number: {selectedMatch.matchNumber}</div>
-                      </div>
-                    </div>
+
                     
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-2">
@@ -736,12 +727,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
                           const team2Score = parseInt((document.getElementById('team2Score') as HTMLInputElement).value);
                           const winnerId = (document.getElementById('winnerSelect') as HTMLSelectElement).value;
                           
-                          console.log('🔍 DEBUG: Completing match manually:', {
-                            matchId: selectedMatch.id,
-                            team1Score,
-                            team2Score,
-                            winnerId
-                          });
+
                           
                           if (!winnerId) {
                             alert('Please select a winner');
@@ -758,7 +744,7 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
                               await onCompleteMatch(selectedMatch.id, winnerId, team1Score, team2Score);
                               setSelectedMatch(null);
                             } catch (error) {
-                              console.error('❌ DEBUG: Error completing match:', error);
+
                               alert('Failed to complete match');
                             }
                           }

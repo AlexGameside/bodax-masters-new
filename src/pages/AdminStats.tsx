@@ -58,7 +58,7 @@ const AdminStats: React.FC = () => {
   const loadStats = async () => {
     try {
       setLoading(true);
-      console.log('🔍 Loading admin stats...');
+
       
       // Fetch all data
       const [users, teams, matches, tournaments] = await Promise.all([
@@ -68,16 +68,11 @@ const AdminStats: React.FC = () => {
         getTournaments()
       ]);
 
-      console.log('📊 Data fetched:', {
-        users: users.length,
-        teams: teams.length,
-        matches: matches.length,
-        tournaments: tournaments.length
-      });
+      
 
       // Calculate live matches (all active states)
       const liveMatches = matches.filter(match => 
-        ['ready_up', 'map_banning', 'side_selection', 'playing', 'waiting_results', 'disputed'].includes(match.matchState || '')
+        ['ready_up', 'map_banning', 'side_selection_map1', 'side_selection_map2', 'side_selection_decider', 'playing', 'waiting_results', 'disputed'].includes(match.matchState || '')
       );
 
       // Calculate completed matches
@@ -93,7 +88,7 @@ const AdminStats: React.FC = () => {
       const matchStates = [
         { state: 'Ready Up', count: matches.filter(m => m.matchState === 'ready_up').length, color: 'bg-yellow-500' },
         { state: 'Map Banning', count: matches.filter(m => m.matchState === 'map_banning').length, color: 'bg-blue-500' },
-        { state: 'Side Selection', count: matches.filter(m => m.matchState === 'side_selection').length, color: 'bg-purple-500' },
+        { state: 'Side Selection', count: matches.filter(m => m.matchState === 'ready_up').length, color: 'bg-purple-500' },
         { state: 'Playing', count: matches.filter(m => m.matchState === 'playing').length, color: 'bg-green-500' },
         { state: 'Waiting Results', count: matches.filter(m => m.matchState === 'waiting_results').length, color: 'bg-orange-500' },
         { state: 'Disputed', count: matches.filter(m => m.matchState === 'disputed').length, color: 'bg-red-500' },
@@ -143,7 +138,7 @@ const AdminStats: React.FC = () => {
         recentActivity
       };
 
-      console.log('✅ Stats calculated:', statsData);
+      
       setStats(statsData);
       setLastUpdated(new Date());
     } catch (error) {

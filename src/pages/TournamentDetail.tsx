@@ -39,7 +39,7 @@ import {
   getTeamById, 
   startTournament, 
   getUserMatches, 
-  signupTeamForTournament, 
+ 
   getUserTeams, 
   checkAndMarkTournamentCompleted, 
   forceMarkTournamentCompleted, 
@@ -67,7 +67,7 @@ import {
 } from '../services/firebaseService';
 import { 
   getTournament,
-  registerTeamForTournamentWithVerification
+
 } from '../services/tournamentService';
 import { 
   generateGroups, 
@@ -78,6 +78,7 @@ import {
   advanceWinnerToNextRound,
   completeCurrentRound
 } from '../services/tournamentStageService';
+import { SwissTournamentService } from '../services/swissTournamentService';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { Tournament, Match, Team, User } from '../types/tournament';
@@ -85,15 +86,22 @@ import TournamentBracket from '../components/TournamentBracket';
 import GroupStageBracket from '../components/GroupStageBracket';
 import TournamentSchedule from '../components/TournamentSchedule';
 import TournamentLeaderboard from '../components/TournamentLeaderboard';
-import TeamMemberSelection from '../components/TeamMemberSelection';
+import EnhancedTeamRegistration from '../components/EnhancedTeamRegistration';
+import SwissStandings from '../components/SwissStandings';
+import AdminMatchdayCalendar from '../components/AdminMatchdayCalendar';
+import UpcomingMatches from '../components/UpcomingMatches';
+import PlayoffBracket from '../components/PlayoffBracket';
+import MatchSchedulingInterface from '../components/MatchSchedulingInterface';
+import UserMatches from '../components/UserMatches';
 import { useAuth } from '../hooks/useAuth';
+import { useRealtimeUserMatches } from '../hooks/useRealtimeData';
 import ManualSeedingInterface from '../components/ManualSeedingInterface';
 
 interface TournamentDetailProps {
   currentUser: User | null;
 }
 
-type TournamentView = 'overview' | 'bracket' | 'group-stage' | 'schedule' | 'standings';
+type TournamentView = 'overview' | 'bracket' | 'group-stage' | 'schedule' | 'standings' | 'swiss-standings' | 'matchday-management' | 'playoff-bracket';
 
 const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const { id } = useParams<{ id: string }>();
@@ -108,11 +116,14 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [signingUp, setSigningUp] = useState<string | null>(null);
+  // Use real-time hook for user matches
+  const { matches: userMatches, loading: userMatchesLoading, error: userMatchesError } = useRealtimeUserMatches(authUser?.id || '');
+  
   const [userActiveMatches, setUserActiveMatches] = useState<Match[]>([]);
   const [activeView, setActiveView] = useState<TournamentView>('overview');
   const [pendingTeams, setPendingTeams] = useState<Team[]>([]);
   const [approvedTeams, setApprovedTeams] = useState<Team[]>([]);
-  const [showTeamMemberSelection, setShowTeamMemberSelection] = useState(false);
+  const [showEnhancedTeamRegistration, setShowEnhancedTeamRegistration] = useState(false);
   const [selectedTeamForRegistration, setSelectedTeamForRegistration] = useState<Team | null>(null);
   const [selectedSignupTeamId, setSelectedSignupTeamId] = useState<string | null>(null);
   const [justStartedTournament, setJustStartedTournament] = useState(false);
@@ -133,17 +144,42 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const [showManualSeeding, setShowManualSeeding] = useState(false);
 
   // Helper function to format dates
-  const formatDate = (date: Date | string) => {
+  const formatDate = (date: Date | string | any | undefined) => {
     if (!date) return 'TBD';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric',
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false 
-    });
+    
+    try {
+      let dateObj: Date;
+      
+      // Handle Firestore Timestamp objects
+      if (date && typeof date === 'object' && date.seconds !== undefined) {
+        dateObj = new Date(date.seconds * 1000);
+      } else if (typeof date === 'string') {
+        dateObj = new Date(date);
+      } else if (date instanceof Date) {
+        dateObj = date;
+      } else {
+        console.warn('Unsupported date type received:', date);
+        return 'TBD';
+      }
+      
+      // Check if the date is valid
+      if (isNaN(dateObj.getTime())) {
+        console.warn('Invalid date received:', date);
+        return 'TBD';
+      }
+      
+      return dateObj.toLocaleDateString('de-DE', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric',
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: 'Europe/Berlin'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error, 'Date value:', date);
+      return 'TBD';
+    }
   };
 
   // Check Discord requirements
@@ -393,6 +429,35 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     }
   };
 
+  const handleStartSwissStage = async () => {
+    if (!tournament?.id) return;
+    
+    setStarting(true);
+    try {
+      console.log('🔍 DEBUG: Starting Swiss system tournament');
+      
+      // Initialize Swiss stage
+      if (tournament.format?.type === 'swiss-system' && tournament.format.swissConfig) {
+        // Generate Swiss rounds and first round pairings
+        // This will automatically close registration and set status to in-progress
+        await SwissTournamentService.generateSwissRounds(
+          tournament.id, 
+          tournament.teams || [], 
+          tournament.format.swissConfig.rounds
+        );
+      }
+      
+      await reloadTournamentData();
+      toast.success('Swiss system tournament started successfully!');
+      setJustStartedTournament(true);
+    } catch (error) {
+      console.error('❌ DEBUG: Error starting Swiss system:', error);
+      toast.error('Failed to start Swiss system tournament');
+    } finally {
+      setStarting(false);
+    }
+  };
+
   const handleStartSingleElimination = async () => {
     if (!tournament?.id) return;
     
@@ -406,11 +471,12 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
       }
       
       await reloadTournamentData();
-      toast.success(`${tournament.format?.type === 'double-elimination' ? 'Double elimination' : 'Single elimination'} tournament started!`);
+      toast.success(`${tournament.format?.type === 'double-elimination' ? 'Double elimination' : 'single elimination'} tournament started!`);
       setJustStartedTournament(true);
       // Fetch latest matches and update userActiveMatches
       const matchesData = await getMatches();
       const tournamentMatches = matchesData.filter(match => match.tournamentId === tournament.id);
+      // Fetch latest matches and update userActiveMatches
       const userTeamIds = userTeams.map(t => t.id);
       const activeMatch = tournamentMatches.find(match =>
         (match.team1Id && userTeamIds.includes(match.team1Id)) || (match.team2Id && userTeamIds.includes(match.team2Id))
@@ -611,59 +677,15 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
       return;
     }
 
-    // Show team member selection modal first
+    // Show enhanced team registration modal
     setSelectedTeamForRegistration(team);
-    setShowTeamMemberSelection(true);
+    setShowEnhancedTeamRegistration(true);
   };
 
-  const handleTeamMembersSelected = async (selectedUserIds: string[]) => {
-    if (!tournament || !authUser || !selectedTeamForRegistration) return;
-    
-    try {
-      setSigningUp(selectedTeamForRegistration.id);
-      console.log('Signing up team for tournament:', selectedTeamForRegistration.id, tournament.id);
-      
-      // Use the new verification system with selected members
-      const result = await registerTeamForTournamentWithVerification(
-        tournament.id, 
-        selectedTeamForRegistration.id, 
-        {
-          players: selectedUserIds,
-          captainId: selectedTeamForRegistration.captainId || '',
-          verificationStatus: 'pending'
-        }
-      );
-      
-      if (result.success) {
-        // Reload tournament data
-        await reloadTournamentData();
-        toast.success(result.message);
-        
-        // Show warnings if any
-        if (result.warnings && result.warnings.length > 0) {
-          toast.error(`Registration successful with warnings: ${result.warnings.join(', ')}`);
-        }
-      } else {
-        // Show detailed error messages
-        if (result.errors && result.errors.length > 0) {
-          const errorMessage = result.errors.join('\n');
-          toast.error(`Registration failed:\n${errorMessage}`);
-        } else {
-          toast.error(result.message || 'Failed to register team');
-        }
-      }
-    } catch (error) {
-      console.error('Error signing up team:', error);
-      toast.error('Failed to sign up team');
-    } finally {
-      setSigningUp(null);
-      setShowTeamMemberSelection(false);
-      setSelectedTeamForRegistration(null);
-    }
-  };
 
-  const handleCancelTeamMemberSelection = () => {
-    setShowTeamMemberSelection(false);
+
+  const handleCancelEnhancedTeamRegistration = () => {
+    setShowEnhancedTeamRegistration(false);
     setSelectedTeamForRegistration(null);
   };
 
@@ -1072,35 +1094,43 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden">
-      {/* Code/terminal style header overlay */}
-      <div className="absolute top-0 left-0 w-full px-4 pt-8 z-10 select-none pointer-events-none">
-        <div className="text-sm md:text-lg lg:text-2xl text-gray-400 tracking-tight">
-          <span className="text-gray-600">function</span> <span className="text-red-500 font-bold">TournamentDetail</span><span className="text-white">(&#123;id&#125;)</span> <span className="text-gray-600">&#123;</span>
-        </div>
+    <div className="min-h-screen text-white font-mono relative overflow-hidden">
+      {/* Unity League Background Pattern */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-20" 
+           style={{
+             backgroundImage: `
+               linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%),
+               linear-gradient(-45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%),
+               radial-gradient(circle at 25% 25%, rgba(6,182,212,0.1) 0 1px, transparent 1px 100px),
+               radial-gradient(circle at 75% 75%, rgba(236,72,153,0.1) 0 1px, transparent 1px 100px)
+             `
+           }} />
+      
+      {/* Diagonal accent lines like Unity League */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <div className="absolute top-0 right-0 w-32 h-1 bg-cyan-400 transform rotate-45 origin-top-right"></div>
+        <div className="absolute bottom-20 right-10 w-24 h-1 bg-cyan-400 transform -rotate-45 origin-bottom-right"></div>
+        <div className="absolute top-40 left-0 w-20 h-1 bg-pink-400 transform rotate-45 origin-top-left"></div>
       </div>
-
-      {/* Subtle grid/code background */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
 
       {/* Main Content */}
       <div className="relative z-20 container mx-auto px-4 pt-24 pb-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-center mb-2 tracking-tight bg-gradient-to-r from-red-500 to-white bg-clip-text text-transparent uppercase">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-center mb-2 tracking-tight bg-gradient-to-r from-cyan-400 via-pink-400 to-purple-400 bg-clip-text text-transparent uppercase">
             {tournament.name}
           </h1>
-          <div className="text-center text-gray-400 mb-6 text-base md:text-lg">
+          <div className="text-center text-pink-200 mb-6 text-base md:text-lg">
             {tournament.description}
           </div>
         </div>
 
         {/* Tournament Info Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
-            <div className="text-red-400 font-bold text-sm mb-2">STATUS</div>
-            <div className="text-gray-200 text-lg font-bold capitalize">{tournament.status.replace('-', ' ')}</div>
-            <div className="text-gray-400 text-xs mt-1">
+          <div className="unity-card-cyan">
+            <div className="text-cyan-400 font-bold text-sm mb-2">STATUS</div>
+            <div className="text-white text-lg font-bold capitalize">{tournament.status.replace('-', ' ')}</div>
+            <div className="text-cyan-200 text-xs mt-1">
               {tournament.status === 'registration-open' && 'Open for team registration'}
               {tournament.status === 'registration-closed' && 'Registration closed'}
               {tournament.status === 'in-progress' && 'Tournament in progress'}
@@ -1110,28 +1140,28 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
             </div>
           </div>
 
-          <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
-            <div className="text-red-400 font-bold text-sm mb-2">START TIME</div>
-            <div className="text-gray-200 text-lg font-bold">{formatDate(tournament.schedule?.startDate)}</div>
-            <div className="text-gray-400 text-xs mt-1">
+          <div className="unity-card-pink">
+            <div className="text-pink-400 font-bold text-sm mb-2">START TIME</div>
+            <div className="text-white text-lg font-bold">{formatDate(tournament.schedule?.startDate)}</div>
+            <div className="text-pink-200 text-xs mt-1">
               Tournament begins
             </div>
           </div>
 
-          <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
-            <div className="text-red-400 font-bold text-sm mb-2">TEAMS</div>
-            <div className="text-gray-200 text-lg font-bold">
+          <div className="unity-card-purple">
+            <div className="text-purple-400 font-bold text-sm mb-2">TEAMS</div>
+            <div className="text-white text-lg font-bold">
               {tournament.teams?.length || 0} / {tournament.format?.teamCount || 8}
             </div>
-            <div className="text-gray-400 text-xs mt-1">
+            <div className="text-purple-200 text-xs mt-1">
               {tournament.format?.teamCount || 8} teams maximum
             </div>
           </div>
 
-          <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
-            <div className="text-red-400 font-bold text-sm mb-2">PRIZE POOL</div>
-            <div className="text-gray-200 text-lg font-bold">€{tournament.prizePool?.total || 0}</div>
-            <div className="text-gray-400 text-xs mt-1">
+          <div className="unity-card">
+            <div className="text-pink-400 font-bold text-sm mb-2">PRIZE POOL</div>
+            <div className="text-white text-lg font-bold">€{tournament.prizePool?.total || 0}</div>
+            <div className="text-pink-200 text-xs mt-1">
               {prizeDistributionText}
             </div>
           </div>
@@ -1170,13 +1200,13 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
         {/* Signup Section */}
         {canSignupForUser && (
-          <div className="bg-black/60 border border-gray-700 rounded-lg p-4 mb-8">
-            <div className="text-red-400 font-bold text-sm mb-3">TEAM REGISTRATION</div>
+          <div className="unity-card mb-8">
+            <div className="text-pink-400 font-bold text-lg mb-4">TEAM REGISTRATION</div>
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div>
-                <div className="text-gray-200 mb-1">Select Your Team:</div>
+              <div className="flex-1">
+                <div className="text-pink-200 mb-2 font-medium">Select Your Team:</div>
                 <select
-                  className="bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 mb-2"
+                  className="w-full bg-black/40 text-white border border-pink-400/30 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-400"
                   value={selectedSignupTeamId || ''}
                   onChange={e => setSelectedSignupTeamId(e.target.value)}
                 >
@@ -1185,14 +1215,34 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                     <option key={team.id} value={team.id}>{team.name}</option>
                   ))}
                 </select>
-                <div className="text-gray-400 text-sm">Choose a team to register for this tournament</div>
+                <div className="text-pink-200 text-sm">Choose a team to register with enhanced role selection</div>
               </div>
               <button
                 onClick={() => { if (selectedSignupTeamId) handleSignup(selectedSignupTeamId); }}
                 disabled={!selectedSignupTeamId || !!signingUp}
-                className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg border border-red-800 transition-all duration-200"
+                className="unity-btn-primary disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
-                {signingUp ? 'Signing Up...' : 'Sign Up Team'}
+                {signingUp ? 'Registering...' : 'Register Team'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Start Swiss Stage Button */}
+        {isAdmin && tournament.format?.type === 'swiss-system' && tournament.status === 'registration-open' && (
+          <div className="unity-card-cyan mb-8">
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-cyan-400 mb-4">Ready to Start Swiss Stage?</h3>
+              <p className="text-cyan-200 mb-4">
+                Tournament has {tournament.teams?.length || 0} teams registered. 
+                Click below to start the Swiss system tournament.
+              </p>
+              <button
+                onClick={handleStartSwissStage}
+                disabled={starting}
+                className="unity-btn-primary disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                {starting ? 'Starting...' : 'Start Swiss Stage'}
               </button>
             </div>
           </div>
@@ -1200,20 +1250,21 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
         {/* Leave Tournament Button (formerly Withdraw) */}
         {tournament && userTeams && userTeams.length > 0 && userTeams.some(team => (tournament.teams || []).includes(team.id)) && (
-          userTeams.map(team => {
-            // Use both authUser.id and authUser.uid for compatibility
-            const userId = authUser?.uid || authUser?.id;
-            const isCaptainOrOwner = team.captainId === userId || team.ownerId === userId;
-            return (tournament.teams || []).includes(team.id) && isCaptainOrOwner ? (
+          userTeams
+            .filter(team => {
+              const userId = authUser?.uid || authUser?.id;
+              const isCaptainOrOwner = team.captainId === userId || team.ownerId === userId;
+              return (tournament.teams || []).includes(team.id) && isCaptainOrOwner;
+            })
+            .map(team => (
               <button
-                key={team.id}
+                key={`leave-${team.id}`}
                 onClick={() => handleWithdraw(team.id)}
                 className="bg-yellow-700 hover:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg shadow-lg border border-yellow-900 transition-all duration-200 mt-4 mb-8"
               >
                 Leave Tournament
               </button>
-            ) : null;
-          })
+            ))
         )}
 
         {/* Admin Tools (smaller, top-right) */}
@@ -1246,6 +1297,16 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   >
                     Fill Demo Teams
                   </button>
+                  {/* Swiss System Start Button */}
+                  {tournament.format?.type === 'swiss-system' && (
+                    <button
+                      onClick={handleStartSwissStage}
+                      disabled={starting}
+                      className="bg-cyan-700 hover:bg-cyan-800 text-white font-bold py-1 px-2 rounded text-xs border border-cyan-900 transition-all duration-200"
+                    >
+                      Start Swiss Stage
+                    </button>
+                  )}
                   <button
                     onClick={handleStartGroupStage}
                     disabled={starting}
@@ -1271,6 +1332,16 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   >
                     Reopen Registration
                   </button>
+                  {/* Swiss System Start Button */}
+                  {tournament.format?.type === 'swiss-system' && (
+                    <button
+                      onClick={handleStartSwissStage}
+                      disabled={starting}
+                      className="bg-cyan-700 hover:bg-cyan-800 text-white font-bold py-1 px-2 rounded text-xs border border-cyan-900 transition-all duration-200"
+                    >
+                      Start Swiss Stage
+                    </button>
+                  )}
                   <button
                     onClick={handleStartGroupStage}
                     disabled={starting}
@@ -1281,7 +1352,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   <button
                     onClick={handleStartSingleElimination}
                     disabled={starting}
-                    className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-1 px-2 rounded text-xs border border-purple-900 transition-all duration-200"
+                    className="bg-green-700 hover:bg-green-800 text-white font-bold py-1 px-2 rounded text-xs border border-green-900 transition-all duration-200"
                   >
                     Start {tournament.format?.type === 'double-elimination' ? 'Double Elim' : 'Single Elim'}
                   </button>
@@ -1322,43 +1393,65 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         {/* Removed for now */}
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-gray-700 mb-6">
-          {[
-            { key: 'overview', label: 'OVERVIEW' },
-            { key: 'bracket', label: 'BRACKET' }
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveView(tab.key as any)}
-              className={`px-6 py-3 font-bold text-sm transition-all duration-200 ${
-                activeView === tab.key
-                  ? 'text-red-500 border-b-2 border-red-500'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex border-b border-pink-400/30 mb-8 overflow-x-auto">
+          {(() => {
+            const baseTabs = [
+              { key: 'overview', label: 'OVERVIEW' }
+            ];
+            
+            // Add Swiss system tabs if tournament is Swiss system
+            if (tournament.format?.type === 'swiss-system') {
+              baseTabs.push(
+                { key: 'swiss-standings', label: 'SWISS STANDINGS' },
+                { key: 'matchday-management', label: 'UPCOMING MATCHES' }
+              );
+              
+              // Add playoff bracket tab only if playoffs are available
+              if (tournament.stageManagement?.playoffStage?.isActive && tournament.matches && tournament.matches.length > 0) {
+                baseTabs.push({ key: 'playoff-bracket', label: 'PLAYOFF BRACKET' });
+              }
+            } else {
+              // For non-Swiss tournaments, show regular bracket
+              baseTabs.push({ key: 'bracket', label: 'BRACKET' });
+            }
+            
+            return baseTabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveView(tab.key as any)}
+                className={`px-6 py-3 font-bold text-sm transition-all duration-200 whitespace-nowrap ${
+                  activeView === tab.key
+                    ? 'text-pink-400 border-b-2 border-pink-400'
+                    : 'text-pink-200 hover:text-white'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ));
+          })()}
         </div>
 
         {/* Tab Content */}
         <div className="min-h-96">
           {activeView === 'overview' && (
             <div className="space-y-6">
-            {/* Registered Teams */}
-              <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
-                <div className="text-red-400 font-bold text-sm mb-3">REGISTERED TEAMS</div>
+                        {/* Registered Teams */}
+            <div className="unity-card">
+              <div className="text-pink-400 font-bold text-lg mb-4">REGISTERED TEAMS</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {tournament.teams?.map(teamId => {
+                  {tournament.teams?.filter((teamId, index, array) => array.indexOf(teamId) === index) // Remove duplicates
+                    .map(teamId => {
                     const team = teams.find(t => t.id === teamId);
                     const isApproved = tournament.approvedTeams?.includes(teamId);
                     const isRejected = tournament.rejectedTeams?.includes(teamId);
                     const isPending = false; // pendingTeams doesn't exist in Tournament type
                     
                     return team ? (
-                      <div key={teamId} className="bg-black/40 border border-gray-600 rounded-lg p-3">
-                        <div className="text-gray-200 font-bold">{team.name}</div>
-                        <div className="text-gray-400 text-xs mb-2">{team.members?.length || 0} members</div>
+                      <div key={`team-${teamId}-${team.name}`} className="bg-black/40 border border-pink-400/30 rounded-lg p-3 hover:border-pink-400/60 transition-all duration-200">
+                        <div className="text-white font-bold cursor-pointer hover:text-pink-300 transition-colors" onClick={() => navigate(`/teams/${team.id}`)}>
+                          {team.name}
+                        </div>
+                        <div className="text-pink-200 text-xs mb-2">{team.members?.length || 0} members</div>
                         
                         {/* Status Badge */}
                         <div className="mb-2">
@@ -1424,7 +1517,9 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                       const team = teams.find(t => t.id === teamId);
                       return team ? (
                         <div key={teamId} className="bg-black/40 border border-green-600 rounded-lg p-3">
-                          <div className="text-gray-200 font-bold">{team.name}</div>
+                          <div className="text-gray-200 font-bold cursor-pointer hover:text-green-300 transition-colors" onClick={() => navigate(`/teams/${team.id}`)}>
+                            {team.name}
+                          </div>
                           <div className="text-gray-400 text-xs mb-2">{team.members?.length || 0} members</div>
                           <span className="bg-green-900/50 text-green-400 px-2 py-1 rounded text-xs">Approved</span>
                           
@@ -1463,7 +1558,9 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                       const team = teams.find(t => t.id === teamId);
                       return team ? (
                         <div key={teamId} className="bg-black/40 border border-red-600 rounded-lg p-3">
-                          <div className="text-gray-200 font-bold">{team.name}</div>
+                          <div className="text-gray-200 font-bold cursor-pointer hover:text-red-300 transition-colors" onClick={() => navigate(`/teams/${team.id}`)}>
+                            {team.name}
+                          </div>
                           <div className="text-gray-400 text-xs mb-2">{team.members?.length || 0} members</div>
                           <span className="bg-red-900/50 text-red-400 px-2 py-1 rounded text-xs">Rejected</span>
                           
@@ -1495,8 +1592,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               
               {/* Tournament Progress */}
               {matches.length > 0 && (
-                <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
-                  <div className="text-red-400 font-bold text-sm mb-3">TOURNAMENT PROGRESS</div>
+                <div className="unity-card">
+                  <div className="text-pink-400 font-bold text-lg mb-4">TOURNAMENT PROGRESS</div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
                       <span className="text-gray-400">Total Matches:</span>
@@ -1511,6 +1608,168 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                       <span className="text-gray-200 ml-2">{matches.filter(m => !m.isComplete).length}</span>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Swiss System Match Scheduling */}
+              {tournament.format?.type === 'swiss-system' && matches.length > 0 && (
+                <div className="unity-card-cyan">
+                  <div className="text-cyan-400 font-bold text-lg mb-4">MATCH SCHEDULING</div>
+                  <div className="text-gray-400 text-sm mb-4">
+                    Teams can schedule their matches within the specified timeframes. 
+                    {tournament.format.swissConfig?.schedulingWindow && 
+                      ` Scheduling window: ${tournament.format.swissConfig.schedulingWindow} days per matchday.`
+                    }
+                  </div>
+                  <div className="space-y-3">
+                    {matches
+                      .filter(m => m.tournamentType === 'swiss-round' && !m.isComplete)
+                      .slice(0, 5) // Show first 5 pending matches
+                      .map(match => {
+                        const team1 = teams.find(t => t.id === match.team1Id);
+                        const team2 = teams.find(t => t.id === match.team2Id);
+                        return (
+                          <div key={match.id} className="bg-gray-800 border border-gray-600 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-white font-medium">
+                                {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
+                              </div>
+                              <div className="text-gray-400 text-xs">
+                                Round {match.swissRound} • Matchday {match.matchday}
+                              </div>
+                            </div>
+                            <div className="text-gray-400 text-xs">
+                              Status: {match.currentSchedulingStatus || 'pending_scheduling'}
+                            </div>
+                            {match.scheduledTime && (
+                              <div className="text-green-400 text-xs">
+                                Scheduled: {new Date(match.scheduledTime).toLocaleString('de-DE', {
+                  timeZone: 'Europe/Berlin',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {matches.filter(m => m.tournamentType === 'swiss-round' && !m.isComplete).length === 0 && (
+                      <div className="text-gray-400 text-sm">No pending Swiss round matches to schedule.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* User's Current Matches */}
+              {tournament.format?.type === 'swiss-system' && authUser && (
+                <UserMatches 
+                  userId={authUser.id}
+                  matches={userMatches}
+                  teams={teams}
+                />
+              )}
+
+              {/* All Current Matches */}
+              {tournament.format?.type === 'swiss-system' && matches.length > 0 && (
+                <div className="unity-card-pink">
+                  <div className="text-pink-400 font-bold text-lg mb-4">ALL CURRENT MATCHES</div>
+                  <div className="text-gray-400 text-sm mb-4">
+                    View all ongoing matches and their scheduling status.
+                  </div>
+                  <div className="space-y-3">
+                    {matches
+                      .filter(m => m.tournamentType === 'swiss-round' && !m.isComplete)
+                      .map(match => {
+                        const team1 = teams.find(t => t.id === match.team1Id);
+                        const team2 = teams.find(t => t.id === match.team2Id);
+                        const statusColor = match.scheduledTime ? 'text-green-400' : 
+                                          match.currentSchedulingStatus === 'proposed' ? 'text-orange-400' : 'text-yellow-400';
+                        
+                        return (
+                          <div key={match.id} className="bg-black/40 border border-pink-400/30 rounded-lg p-4 hover:border-pink-400/60 transition-colors">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-white font-medium text-lg">
+                                {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
+                              </div>
+                              <div className={`font-medium ${statusColor}`}>
+                                {match.scheduledTime ? '✅ Scheduled' :
+                                 match.currentSchedulingStatus === 'proposed' ? '⏳ Proposal Sent' : '⏰ Pending'}
+                              </div>
+                            </div>
+                            <div className="text-pink-300 text-sm mb-2">
+                              Round {match.swissRound} • Matchday {match.matchday}
+                            </div>
+                            {match.scheduledTime && (
+                              <div className="text-green-400 text-sm">
+                                📅 {new Date(match.scheduledTime).toLocaleString('de-DE', {
+                                  timeZone: 'Europe/Berlin',
+                                  year: 'numeric',
+                                  month: '2-digit',
+                                  day: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </div>
+                            )}
+                            {!match.scheduledTime && (
+                              <div className="text-yellow-400 text-sm">
+                                ⏰ Teams need to schedule this match
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {matches.filter(m => m.tournamentType === 'swiss-round' && !m.isComplete).length === 0 && (
+                      <div className="text-gray-400 text-sm">No pending Swiss round matches to schedule.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Swiss System Status */}
+              {tournament.format?.type === 'swiss-system' && (
+                <div className="unity-card-purple">
+                  <div className="text-purple-400 font-bold text-lg mb-4">SWISS SYSTEM STATUS</div>
+                  <div className="text-gray-400 text-sm mb-4">
+                    Current tournament progress and standings information.
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-400">Current Round:</span>
+                      <span className="text-gray-200 ml-2">
+                        {tournament.stageManagement?.swissStage?.currentRound || 1} / {tournament.format.swissConfig?.rounds || 5}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Current Matchday:</span>
+                      <span className="text-gray-200 ml-2">
+                        {tournament.stageManagement?.swissStage?.currentMatchday || 1}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Teams Advancing:</span>
+                      <span className="text-gray-200 ml-2">
+                        {tournament.format.swissConfig?.teamsAdvanceToPlayoffs || 8} teams
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Swiss Stage:</span>
+                      <span className="text-gray-200 ml-2">
+                        {tournament.stageManagement?.swissStage?.isActive ? 'Active' : 'Not Started'}
+                      </span>
+                    </div>
+                  </div>
+                  {tournament.stageManagement?.playoffStage?.isActive && (
+                    <div className="mt-3 p-2 bg-blue-900/20 border border-blue-700 rounded">
+                      <div className="text-blue-400 text-sm font-medium">Playoff Stage Active</div>
+                      <div className="text-blue-300 text-xs">
+                        Round {tournament.stageManagement.playoffStage.currentRound} of {tournament.stageManagement.playoffStage.totalRounds}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1544,25 +1803,74 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               <TournamentSchedule tournament={tournament} matches={matches} teams={teams} />
             </div>
           )}
+
+          {/* Swiss System Tabs */}
+          {activeView === 'swiss-standings' && tournament.format?.type === 'swiss-system' && (
+            <div className="unity-card-cyan">
+              <div className="text-cyan-400 font-bold text-xl mb-4">SWISS SYSTEM STANDINGS</div>
+              <SwissStandings 
+                standings={tournament.stageManagement?.swissStage?.standings || []}
+                teams={teams}
+                currentRound={tournament.stageManagement?.swissStage?.currentRound || 1}
+                totalRounds={tournament.format.swissConfig?.rounds || 5}
+                teamsAdvancingToPlayoffs={tournament.format.swissConfig?.teamsAdvanceToPlayoffs || 8}
+              />
+            </div>
+          )}
+
+          {activeView === 'matchday-management' && tournament.format?.type === 'swiss-system' && (
+            <>
+              {/* Admin Calendar View */}
+              {isAdmin && (
+                <div className="unity-card-pink mb-6">
+                  <div className="text-pink-400 font-bold text-xl mb-4">ADMIN MATCHDAY CALENDAR</div>
+                  <AdminMatchdayCalendar tournamentId={tournament.id} />
+                </div>
+              )}
+              
+              {/* Upcoming Matches for Everyone */}
+              <div className="unity-card-cyan">
+                <div className="text-cyan-400 font-bold text-xl mb-4">UPCOMING MATCHES</div>
+                <UpcomingMatches tournamentId={tournament.id} />
+              </div>
+            </>
+          )}
+
+          {activeView === 'playoff-bracket' && tournament.format?.type === 'swiss-system' && (
+            <div className="unity-card-purple">
+              <div className="text-purple-400 font-bold text-xl mb-4">PLAYOFF BRACKET</div>
+              <PlayoffBracket 
+                tournament={tournament}
+                matches={matches}
+                teams={teams}
+                onUpdate={reloadTournamentData}
+              />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Terminal-style footer */}
+      {/* Unity League Footer */}
       <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
-        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-gray-500 font-mono tracking-tight gap-1 md:gap-0">
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
           <span>&gt; TOURNAMENT ID: {tournament.id}</span>
-          <span className="text-red-500">// bodax.dev/masters</span>
+          <span className="text-cyan-400">// Unity League 2025</span>
         </div>
       </div>
 
-      {/* Team Member Selection Modal */}
-      {showTeamMemberSelection && selectedTeamForRegistration && tournament && (
-        <TeamMemberSelection
-          teamMembers={selectedTeamForRegistration.members || []}
-          onMembersSelected={handleTeamMembersSelected}
-          onCancel={handleCancelTeamMemberSelection}
-          tournamentId={tournament.id}
-          maxPlayers={tournament.requirements?.maxPlayers || 5}
+      {/* Enhanced Team Registration Modal */}
+      {showEnhancedTeamRegistration && selectedTeamForRegistration && tournament && authUser && (
+        <EnhancedTeamRegistration
+          tournament={tournament}
+          team={selectedTeamForRegistration}
+          currentUser={authUser}
+          onRegistrationComplete={async () => {
+            await reloadTournamentData();
+            setShowEnhancedTeamRegistration(false);
+            setSelectedTeamForRegistration(null);
+            toast.success('Team registered successfully for tournament!');
+          }}
+          onCancel={handleCancelEnhancedTeamRegistration}
         />
       )}
 

@@ -17,9 +17,27 @@ export interface User {
 
 export interface TeamMember {
   userId: string;
-  role: 'owner' | 'captain' | 'member';
+  role: 'owner' | 'captain' | 'member' | 'coach' | 'assistant_coach' | 'manager';
   joinedAt: Date;
   isActive: boolean;
+}
+
+export interface TournamentTeamMember {
+  userId: string;
+  role: 'main_player' | 'substitute' | 'coach' | 'assistant_coach' | 'manager';
+  joinedAt: Date;
+  isActive: boolean;
+}
+
+export interface MatchTeamRoster {
+  teamId: string;
+  mainPlayers: string[]; // 5 main players
+  substitutes: string[]; // 2 substitutes
+  coach?: string; // Optional coach
+  assistantCoach?: string; // Optional assistant coach
+  manager?: string; // Optional manager
+  readyUpTime: Date;
+  isReady: boolean;
 }
 
 export interface Team {
@@ -33,7 +51,14 @@ export interface Team {
   createdAt: Date;
   registeredForTournament: boolean;
   tournamentRegistrationDate?: Date;
-  maxMembers: number; // Maximum number of members allowed
+  maxMembers: number; // Maximum number of members allowed (10 total)
+  
+  // Team composition limits
+  maxMainPlayers: number; // 5 main players
+  maxSubstitutes: number; // 2 substitutes
+  maxCoaches: number; // 1 coach
+  maxAssistantCoaches: number; // 1 assistant coach
+  maxManagers: number; // 1 manager
 }
 
 export interface TeamInvitation {
@@ -73,11 +98,11 @@ export interface Match {
   matchNumber: number;
   nextMatchId?: string;
   tournamentId?: string; // ID of the tournament this match belongs to
-  tournamentType: 'qualifier' | 'final' | 'single-elim' | 'double-elim' | 'group-stage' | 'knockout-stage';
+  tournamentType: 'qualifier' | 'final' | 'single-elim' | 'double-elim' | 'group-stage' | 'knockout-stage' | 'swiss-round' | 'playoff';
   bracketType?: 'winners' | 'losers' | 'grand_final';
   createdAt: Date;
   // Map banning system
-  matchState: 'ready_up' | 'map_banning' | 'side_selection' | 'playing' | 'waiting_results' | 'disputed' | 'completed' | 'scheduled';
+  matchState: 'ready_up' | 'map_banning' | 'side_selection_map1' | 'side_selection_map2' | 'side_selection_decider' | 'playing' | 'waiting_results' | 'disputed' | 'completed' | 'scheduled' | 'pending_scheduling' | 'forfeited';
   mapPool: string[];
   bannedMaps: {
     team1: string[];
@@ -90,6 +115,10 @@ export interface Match {
   team2MapBans: string[];
   team1MapPick?: string;
   team2MapPick?: string;
+  
+  // Team rosters for the match
+  team1Roster?: MatchTeamRoster;
+  team2Roster?: MatchTeamRoster;
   // Side selection (attack/defense) - direct properties
   team1Side?: 'attack' | 'defense';
   team2Side?: 'attack' | 'defense';
@@ -122,6 +151,33 @@ export interface Match {
   adminAssigned?: string;
   adminResolution?: string;
   resolvedAt?: Date;
+  
+  // Swiss System and Scheduling
+  swissRound?: number;
+  matchday?: number;
+  scheduledTime?: Date;
+  schedulingProposals?: SchedulingProposal[];
+  currentSchedulingStatus?: 'pending' | 'proposed' | 'accepted' | 'denied' | 'rescheduled';
+  
+  // Forfeit System
+  forfeitTime?: Date; // When teams forfeit if not ready (15 min after match time)
+  matchFormat?: MatchFormat; // BO1, BO3, BO5, BO7
+  currentMap?: number; // Current map being played (1, 2, or 3 for BO3)
+  
+  // BO3 Map System
+  map1?: string; // Selected map for Map 1
+  map1Side?: 'attack' | 'defense'; // Side selected for Map 1
+  map2?: string; // Selected map for Map 2
+  map2Side?: 'attack' | 'defense'; // Side selected for Map 2
+  deciderMap?: string; // Remaining map for Map 3 (decider)
+  deciderMapSide?: 'attack' | 'defense'; // Side selected for Decider Map
+  banSequence?: Array<{ teamId: string; mapName: string; banNumber: number }>; // Sequence of map bans
+  
+  mapResults?: {
+    map1?: { team1Score: number; team2Score: number; winner?: string };
+    map2?: { team1Score: number; team2Score: number; winner?: string };
+    map3?: { team1Score: number; team2Score: number; winner?: string };
+  };
 }
 
 // Tournament Types and Formats
@@ -154,6 +210,56 @@ export type TournamentStatus =
 
 export type TournamentStage = 'registration' | 'group-stage' | 'knockout-stage' | 'completed';
 
+// Swiss System specific
+export interface SwissRound {
+  roundNumber: number;
+  matchday: number;
+  startDate: Date;
+  endDate: Date;
+  matches: string[]; // Match IDs
+  isComplete: boolean;
+  standings: SwissStanding[];
+}
+
+export interface SwissStanding {
+  teamId: string;
+  points: number;
+  matchWins: number;
+  matchLosses: number;
+  gameWins: number;
+  gameLosses: number;
+  roundsWon: number; // Total rounds won across all maps
+  roundsLost: number; // Total rounds lost across all maps
+  opponents: string[]; // Team IDs of opponents faced
+  buchholzScore?: number; // Tiebreaker score
+  sonnebornBergerScore?: number; // Another tiebreaker
+}
+
+// Match Scheduling System
+export interface SchedulingProposal {
+  id: string;
+  proposedBy: string; // Team ID
+  proposedTime: Date;
+  message?: string;
+  status: 'pending' | 'accepted' | 'denied' | 'cancelled';
+  respondedAt?: Date;
+  responseMessage?: string;
+  alternativeProposal?: Date; // Required when denying
+  createdAt: Date;
+}
+
+export interface Matchday {
+  id: string;
+  tournamentId: string;
+  matchdayNumber: number;
+  startDate: Date;
+  endDate: Date;
+  matches: string[]; // Match IDs
+  isComplete: boolean;
+  schedulingDeadline: Date; // When teams must have scheduled their matches
+  autoScheduleTime?: Date; // When admin will auto-schedule if not done
+}
+
 // Tournament Format Configuration
 export interface TournamentFormat {
   type: TournamentType;
@@ -179,6 +285,12 @@ export interface TournamentFormat {
   
   // Swiss System specific
   swissRounds?: number;
+  swissConfig?: {
+    rounds: number;
+    teamsAdvanceToPlayoffs: number;
+    tiebreakerMethod: 'buchholz' | 'sonneborn-berger' | 'direct-encounter';
+    schedulingWindow: number; // Days teams have to schedule matches
+  };
   
   // League specific
   leagueFormat?: {
@@ -210,12 +322,21 @@ export interface RegistrationRequirements {
   requireDiscord: boolean;
   requireRiotId: boolean;
   requireRankVerification: boolean;
-  minimumRank?: string;
-  entryFee?: number;
+  minimumRank?: string | null;
+  entryFee?: number | null;
   approvalProcess: RegistrationApproval;
   maxTeams: number;
   registrationDeadline: Date;
   teamValidationRules: string[];
+  
+  // Team composition requirements
+  minMainPlayers: number; // Minimum main players required (5)
+  maxMainPlayers: number; // Maximum main players allowed (5)
+  minSubstitutes: number; // Minimum substitutes required (0)
+  maxSubstitutes: number; // Maximum substitutes allowed (2)
+  allowCoaches: boolean; // Whether coaches are allowed
+  allowAssistantCoaches: boolean; // Whether assistant coaches are allowed
+  allowManagers: boolean; // Whether managers are allowed
   
   // Additional properties for compatibility
   format?: string;
@@ -298,6 +419,23 @@ export interface TournamentStageManagement {
     completedGroups: string[];
   };
   knockoutStage?: {
+    isActive: boolean;
+    currentRound: number;
+    totalRounds: number;
+    bracketType: 'single-elimination' | 'double-elimination';
+    teamsAdvancing: string[];
+  };
+  swissStage?: {
+    isActive: boolean;
+    currentRound: number;
+    totalRounds: number;
+    currentMatchday: number;
+    totalMatchdays: number;
+    rounds: SwissRound[];
+    standings: SwissStanding[];
+    teamsAdvancingToPlayoffs: string[];
+  };
+  playoffStage?: {
     isActive: boolean;
     currentRound: number;
     totalRounds: number;

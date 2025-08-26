@@ -250,65 +250,66 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
-        <div className="text-center relative z-10">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
-          <p className="text-gray-300">Loading teams...</p>
+      <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-400 mx-auto mb-4"></div>
+          <p className="text-white font-mono tracking-tight">Loading teams...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden">
-      {/* Subtle grid/code background */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
-      
-      <div className="max-w-6xl mx-auto py-8 px-4 relative z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Team Management</h1>
-              <p className="text-gray-300">Manage your teams and members</p>
+    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
+      {/* Unity League Header */}
+      <div className="bg-black/20 backdrop-blur-sm border-b border-white/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate(-1)}
+                className="p-2 text-white/80 hover:text-white transition-colors"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold text-white mb-2 font-mono tracking-tight">TEAM MANAGEMENT</h1>
+                <p className="text-white/80 font-mono tracking-tight">MANAGE YOUR TEAMS AND MEMBERS</p>
+              </div>
             </div>
+            <button
+              onClick={handleCreateTeam}
+              className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors font-medium font-mono tracking-tight"
+            >
+              <Plus className="w-4 h-4" />
+              <span>CREATE TEAM</span>
+            </button>
           </div>
-          <button
-            onClick={handleCreateTeam}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors border border-red-800"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create Team</span>
-          </button>
         </div>
+      </div>
+      
+      <div className="max-w-7xl mx-auto py-8 px-4">
 
         {/* Error/Success Messages */}
         {error && (
-          <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-lg">
-            <p className="text-red-300">{error}</p>
+          <div className="mb-6 p-4 bg-red-900/50 border border-red-400/30 rounded-xl backdrop-blur-sm">
+            <p className="text-red-200 font-mono tracking-tight">{error}</p>
           </div>
         )}
         {success && (
-          <div className="mb-6 p-4 bg-green-900/50 border border-green-700 rounded-lg">
-            <p className="text-green-300">{success}</p>
+          <div className="mb-6 p-4 bg-green-900/50 border border-green-400/30 rounded-xl backdrop-blur-sm">
+            <p className="text-green-200 font-mono tracking-tight">{success}</p>
           </div>
         )}
 
         {/* Teams List */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {teams.map((team) => (
-            <div key={team.id} className="bg-black/60 border border-gray-700 rounded-lg p-6">
+            <div key={team.id} className="unity-card-pink">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-xl font-bold text-white">{team.name}</h3>
-                  <p className="text-gray-400 text-sm">[{team.teamTag}]</p>
+                  <h3 className="text-xl font-bold text-white font-mono tracking-tight">{team.name}</h3>
+                  <p className="text-pink-300 text-sm font-mono tracking-tight">[{team.teamTag}]</p>
                 </div>
                 {canManageTeam(team) && (
                   <div className="relative">
@@ -317,13 +318,13 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                         setSelectedTeam(team);
                         setShowSettingsModal(true);
                       }}
-                      className="p-2 text-gray-400 hover:text-white transition-colors"
+                      className="p-2 text-pink-300 hover:text-white transition-colors"
                     >
                       <Settings className="w-5 h-5" />
                     </button>
                     {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
                       <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
-                        <span className="text-xs text-black font-bold">
+                        <span className="text-xs text-black font-bold font-mono tracking-tight">
                           {pendingInvitations[team.id].length}
                         </span>
                       </div>
@@ -332,15 +333,15 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                 )}
               </div>
 
-              <p className="text-gray-300 text-sm mb-4">{team.description}</p>
+              <p className="text-pink-200 text-sm mb-4 font-mono tracking-tight">{team.description}</p>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Members:</span>
-                  <span className="text-white">{team.members.length}/{team.maxMembers}</span>
+                  <span className="text-pink-300 font-mono tracking-tight">MEMBERS:</span>
+                  <span className="text-white font-mono tracking-tight">{team.members.length}/{team.maxMembers}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Your Role:</span>
+                  <span className="text-pink-300 font-mono tracking-tight">YOUR ROLE:</span>
                   <div className="flex items-center space-x-1">
                     {getRoleIcon(getUserRole(team, currentUser!.id))}
                     <span className={getRoleColor(getUserRole(team, currentUser!.id))}>
@@ -694,6 +695,14 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
             </div>
           </div>
         )}
+      </div>
+      
+      {/* Unity League Footer */}
+      <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
+          <span>&gt; TEAM MANAGEMENT</span>
+          <span className="text-cyan-400">// Unity League 2025</span>
+        </div>
       </div>
     </div>
   );

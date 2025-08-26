@@ -565,6 +565,7 @@ export const getMatch = async (matchId: string): Promise<Match | null> => {
       team1Ready: data.team1Ready,
       team2Ready: data.team2Ready,
       bannedMaps: data.bannedMaps,
+      banSequence: data.banSequence,
       selectedMap: data.selectedMap,
       matchState: data.matchState,
       mapPool: data.mapPool,
@@ -574,12 +575,29 @@ export const getMatch = async (matchId: string): Promise<Match | null> => {
       resultSubmission: data.resultSubmission,
       dispute: data.dispute,
       isWinnerBracket: data.isWinnerBracket,
+      // BO3 Map Banning Fields
+      map1: data.map1,
+      map1Side: data.map1Side,
+      map2: data.map2,
+      map2Side: data.map2Side,
+      deciderMap: data.deciderMap,
+      deciderMapSide: data.deciderMapSide,
       // Fixes for build error
       isComplete: data.isComplete ?? false,
       tournamentType: data.tournamentType ?? 'single-elim',
       createdAt: data.createdAt?.toDate() ?? new Date(),
       team1MapBans: data.team1MapBans ?? [],
       team2MapBans: data.team2MapBans ?? [],
+      schedulingProposals: data.schedulingProposals ?? [],
+      currentSchedulingStatus: data.currentSchedulingStatus ?? 'pending',
+      swissRound: data.swissRound,
+      matchday: data.matchday,
+      forfeitTime: data.forfeitTime?.toDate(),
+      matchFormat: data.matchFormat,
+      currentMap: data.currentMap,
+      mapResults: data.mapResults,
+      team1Roster: data.team1Roster,
+      team2Roster: data.team2Roster,
     } as Match;
   }
   return null;
@@ -607,6 +625,7 @@ export const onMatchUpdate = (matchId: string, callback: (match: Match | null) =
         team1Ready: data.team1Ready,
         team2Ready: data.team2Ready,
         bannedMaps: data.bannedMaps,
+        banSequence: data.banSequence,
         selectedMap: data.selectedMap,
         matchState: data.matchState,
         mapPool: data.mapPool,
@@ -616,12 +635,29 @@ export const onMatchUpdate = (matchId: string, callback: (match: Match | null) =
         resultSubmission: data.resultSubmission,
         dispute: data.dispute,
         isWinnerBracket: data.isWinnerBracket,
+        // BO3 Map Banning Fields
+        map1: data.map1,
+        map1Side: data.map1Side,
+        map2: data.map2,
+        map2Side: data.map2Side,
+        deciderMap: data.deciderMap,
+        deciderMapSide: data.deciderMapSide,
         // Fixes for build error
         isComplete: data.isComplete ?? false,
         tournamentType: data.tournamentType ?? 'single-elim',
         createdAt: data.createdAt?.toDate() ?? new Date(),
         team1MapBans: data.team1MapBans ?? [],
         team2MapBans: data.team2MapBans ?? [],
+        schedulingProposals: data.schedulingProposals ?? [],
+        currentSchedulingStatus: data.currentSchedulingStatus ?? 'pending',
+        swissRound: data.swissRound,
+        matchday: data.matchday,
+        forfeitTime: data.forfeitTime?.toDate(),
+        matchFormat: data.matchFormat,
+        currentMap: data.currentMap,
+        mapResults: data.mapResults,
+        team1Roster: data.team1Roster,
+        team2Roster: data.team2Roster,
       } as Match;
       callback(matchData);
     } else {
@@ -734,7 +770,12 @@ export const generateRandomTeams = (count: number): Omit<Team, 'id'>[] => {
       description: `A competitive Valorant team`,
       createdAt: new Date(),
       registeredForTournament: false,
-      maxMembers: 10
+      maxMembers: 10,
+      maxMainPlayers: 5,
+      maxSubstitutes: 2,
+      maxCoaches: 1,
+      maxAssistantCoaches: 1,
+      maxManagers: 1
     };
   });
 };
@@ -1839,7 +1880,7 @@ export const startTournament = async (tournamentId: string): Promise<void> => {
 
   // Check if any teams are already in active matches
   const allMatches = await getMatches();
-  const activeMatchStates = ['ready_up', 'map_banning', 'side_selection', 'playing'];
+  const activeMatchStates = ['ready_up', 'map_banning', 'side_selection_map1', 'side_selection_map2', 'side_selection_decider', 'playing'];
   const teamsInActiveMatches = (tournamentData.teams || []).filter(teamId => {
     return allMatches.some(match => 
       (match.team1Id === teamId || match.team2Id === teamId) && 
@@ -2215,6 +2256,7 @@ export const handleTeamReadyUp = async (matchId: string, teamId: string): Promis
         team1: [],
         team2: []
       };
+      updateData.mapPool = matchData.mapPool || ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'];
       console.log('[READY-UP] Both teams ready, transitioning to map banning');
     }
     
@@ -2299,15 +2341,33 @@ export const banMap = async (matchId: string, teamId: string, mapName: string): 
     banSequence
   });
   
-  // Determine whose turn it is to ban
-  // Turn order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
-  const isTeam1Turn = totalBans % 2 === 0; // Even ban count = Team 1's turn
+  // BO3 Flow Logic:
+  // Phase 1: 2 bans (Team A, Team B) → Map 1 selection
+  // Phase 2: Map 1 + Map 2 selection (no more banning)
+  // Phase 3: 2 more bans (Team A, Team B) → Decider map (automatic)
+  
+  // Check if we're in the right phase for banning
+  if (totalBans >= 4) {
+    throw new Error('Map banning phase is complete. All maps have been selected.');
+  }
+  
+  // Determine whose turn it is to ban based on BO3 flow
+  let isTeam1Turn: boolean;
+  
+  if (totalBans < 2) {
+    // Phase 1: Team A bans first, then Team B
+    isTeam1Turn = totalBans === 0;
+  } else {
+    // Phase 3: Team A bans first, then Team B (for decider)
+    isTeam1Turn = totalBans === 2;
+  }
   
   console.log('🔍 DEBUG: Turn calculation:', { 
     totalBans, 
     isTeam1Turn, 
     isTeam1, 
-    isTeam2 
+    isTeam2,
+    phase: totalBans < 2 ? 'Phase 1 (Map 1)' : 'Phase 3 (Decider)'
   });
   
   // Check if it's the correct team's turn
@@ -2316,11 +2376,6 @@ export const banMap = async (matchId: string, teamId: string, mapName: string): 
   }
   if (isTeam2 && isTeam1Turn) {
     throw new Error("It's not your team's turn to ban. Please wait for the other team.");
-  }
-  
-  // Check if we've reached the map selection phase (after 5 bans, 2 maps remain)
-  if (totalBans >= 5) {
-    throw new Error('Map banning phase is complete. Please select from the remaining maps.');
   }
   
   // Add the map to the appropriate team's banned list
@@ -2344,7 +2399,7 @@ export const banMap = async (matchId: string, teamId: string, mapName: string): 
   });
 };
 
-// Function to select the final map
+// Function to select a map
 export const selectMap = async (matchId: string, teamId: string, mapName: string): Promise<void> => {
   console.log('🔍 DEBUG: selectMap called with:', { matchId, teamId, mapName });
   
@@ -2371,7 +2426,7 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
     throw new Error('Team is not part of this match');
   }
   
-  // Check if we're in the map selection phase (after 5 bans)
+  // Get current banned maps and ban sequence
   const currentBannedMaps = matchData.bannedMaps || { team1: [], team2: [] };
   const banSequence = matchData.banSequence || [];
   const totalBans = currentBannedMaps.team1.length + currentBannedMaps.team2.length;
@@ -2385,107 +2440,49 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
     banSequence
   });
   
-  if (totalBans < 5) {
-    throw new Error('Map selection phase has not started yet. Continue banning maps.');
-  }
+  // BO3 Map Selection Logic:
+  // After 2 bans: Team A picks Map 1
+  // After Map 1 + side selection: Team B picks Map 2 (no more banning yet)
+  // After Map 2 + side selection: 2 more bans, then Decider is automatic
   
-  // Determine which team should select the map based on ban sequence
-  // The team that banned last should NOT be the one to select
+  let mapSelectionPhase: 'map1' | 'map2' | 'decider' | 'none';
   let teamThatShouldSelect: 'team1' | 'team2';
   
-  if (banSequence.length > 0) {
-    const lastBan = banSequence[banSequence.length - 1];
-    const lastBanTeamId = lastBan.teamId;
-    
-    console.log('🔍 DEBUG: Last ban info:', { 
-      lastBan, 
-      lastBanTeamId, 
-      matchTeam1Id: matchData.team1Id, 
-      matchTeam2Id: matchData.team2Id 
-    });
-    
-    // If Team 1 banned last, Team 2 should select
-    // If Team 2 banned last, Team 1 should select
-    if (lastBanTeamId === matchData.team1Id) {
-      teamThatShouldSelect = 'team2';
-    } else if (lastBanTeamId === matchData.team2Id) {
-      teamThatShouldSelect = 'team1';
-    } else {
-      // Fallback to count-based logic if ban sequence is corrupted
-      const team1Bans = currentBannedMaps.team1.length;
-      const team2Bans = currentBannedMaps.team2.length;
-      
-      // After 5 bans: Team 1 has 3 bans, Team 2 has 2 bans
-      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1
-      // Team 1 banned last, so Team 2 should select
-      if (totalBans === 5) {
-        teamThatShouldSelect = 'team2';
-      } else if (totalBans === 6) {
-        // After 6 bans: Team 1 has 3 bans, Team 2 has 3 bans
-        // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
-        // Team 2 banned last, so Team 1 should select
-        teamThatShouldSelect = 'team1';
-      } else if (totalBans === 7) {
-        // After 7 bans: Team 1 has 4 bans, Team 2 has 3 bans
-        // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1
-        // Team 1 banned last, so Team 2 should select
-        teamThatShouldSelect = 'team2';
-      } else {
-        // After 8 bans: Team 1 has 4 bans, Team 2 has 4 bans
-        // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
-        // Team 2 banned last, so Team 1 should select
-        teamThatShouldSelect = 'team1';
-      }
+  if (!matchData.map1) {
+    // Map 1 selection phase - after 2 bans
+    if (totalBans < 2) {
+      throw new Error('Map 1 selection phase has not started yet. Continue banning maps.');
     }
+    mapSelectionPhase = 'map1';
+    teamThatShouldSelect = 'team1'; // Team A picks Map 1
+  } else if (matchData.map1 && matchData.map1Side && !matchData.map2) {
+    // Map 2 selection phase - Team B picks Map 2 immediately after Map 1 side selection
+    mapSelectionPhase = 'map2';
+    teamThatShouldSelect = 'team2'; // Team B picks Map 2
+  } else if (matchData.map2 && matchData.map2Side && totalBans >= 4) {
+    // Decider map is automatically selected after 4 bans
+    mapSelectionPhase = 'decider';
+    teamThatShouldSelect = 'team1'; // Team A picks side for Decider
   } else {
-    // Fallback to count-based logic if no ban sequence
-    const team1Bans = currentBannedMaps.team1.length;
-    const team2Bans = currentBannedMaps.team2.length;
-    
-    // After 5 bans: Team 1 has 3 bans, Team 2 has 2 bans
-    // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1
-    // Team 1 banned last, so Team 2 should select
-    if (totalBans === 5) {
-      teamThatShouldSelect = 'team2';
-    } else if (totalBans === 6) {
-      // After 6 bans: Team 1 has 3 bans, Team 2 has 3 bans
-      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
-      // Team 2 banned last, so Team 1 should select
-      teamThatShouldSelect = 'team1';
-    } else if (totalBans === 7) {
-      // After 7 bans: Team 1 has 4 bans, Team 2 has 3 bans
-      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1
-      // Team 1 banned last, so Team 2 should select
-      teamThatShouldSelect = 'team2';
-    } else {
-      // After 8 bans: Team 1 has 4 bans, Team 2 has 4 bans
-      // Ban order: Team 1, Team 2, Team 1, Team 2, Team 1, Team 2, Team 1, Team 2
-      // Team 2 banned last, so Team 1 should select
-      teamThatShouldSelect = 'team1';
-    }
+    throw new Error('Map selection is not available at this time.');
   }
   
-  console.log('🔍 DEBUG: Team selection logic:', { 
-    totalBans, 
-    team1Bans: currentBannedMaps.team1.length, 
-    team2Bans: currentBannedMaps.team2.length, 
+  console.log('🔍 DEBUG: Map selection phase:', { 
+    mapSelectionPhase, 
     teamThatShouldSelect,
-    banSequenceLength: banSequence.length
+    totalBans,
+    map1: matchData.map1,
+    map1Side: matchData.map1Side,
+    map2: matchData.map2,
+    map2Side: matchData.map2Side
   });
   
   // Check if the current team is the one that should select
   const currentTeamShouldSelect = (teamThatShouldSelect === 'team1' && isTeam1) || (teamThatShouldSelect === 'team2' && isTeam2);
   
-  console.log('🔍 DEBUG: Current team should select:', { 
-    currentTeamShouldSelect, 
-    teamThatShouldSelect, 
-    isTeam1, 
-    isTeam2 
-  });
-  
   if (!currentTeamShouldSelect) {
     const otherTeamName = teamThatShouldSelect === 'team1' ? 'Team 1' : 'Team 2';
-    throw new Error(`Only ${otherTeamName} can select the final map at this time`);
+    throw new Error(`Only ${otherTeamName} can select a map at this time`);
   }
   
   // Verify the map is available (not banned)
@@ -2494,14 +2491,42 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
     throw new Error('Cannot select a banned map');
   }
   
+  // Verify the map hasn't been selected already
+  if (matchData.map1 === mapName || matchData.map2 === mapName) {
+    throw new Error('This map has already been selected');
+  }
+  
   console.log('🔍 DEBUG: Map selection successful, updating match state');
   
-  // Update the match document
-  await updateDoc(matchRef, {
-    selectedMap: mapName,
-    matchState: 'side_selection',
-    updatedAt: serverTimestamp()
-  });
+  // Update the match document based on the phase
+  const updateData: any = {};
+  
+  if (mapSelectionPhase === 'map1') {
+    updateData.map1 = mapName;
+    // Keep in map_banning state - side selection happens within MapBanning component
+    updateData.matchState = 'map_banning';
+  } else if (mapSelectionPhase === 'map2') {
+    updateData.map2 = mapName;
+    // Keep in map_banning state - side selection happens within MapBanning component
+    updateData.matchState = 'map_banning';
+  } else if (mapSelectionPhase === 'decider') {
+    // Find the remaining map that wasn't banned or picked
+    const allMaps = ['Abyss', 'Bind', 'Haven', 'Ascent', 'Sunset', 'Corrode', 'Lotus'];
+    const usedMaps = [...allBannedMaps, matchData.map1, matchData.map2];
+    const remainingMap = allMaps.find(map => !usedMaps.includes(map));
+    
+    if (remainingMap) {
+      updateData.deciderMap = remainingMap;
+      // Keep in map_banning state - side selection happens within MapBanning component
+      updateData.matchState = 'map_banning';
+    } else {
+      throw new Error('Could not determine decider map');
+    }
+  }
+  
+  updateData.updatedAt = serverTimestamp();
+  
+  await updateDoc(matchRef, updateData);
 };
 
 // Function to handle side selection completion
@@ -2541,7 +2566,7 @@ export const handleMatchComplete = async (matchId: string, winnerId: string, tea
 // Helper function to check if a team is in any active matches
 export const isTeamInActiveMatch = async (teamId: string): Promise<{ isActive: boolean; match?: Match }> => {
   const allMatches = await getMatches();
-  const activeMatchStates = ['ready_up', 'map_banning', 'side_selection', 'playing'];
+  const activeMatchStates = ['ready_up', 'map_banning', 'side_selection_map1', 'side_selection_map2', 'side_selection_decider', 'playing'];
   const activeMatch = allMatches.find(match => 
     (match.team1Id === teamId || match.team2Id === teamId) && 
     activeMatchStates.includes(match.matchState)
@@ -2556,7 +2581,7 @@ export const isTeamInActiveMatch = async (teamId: string): Promise<{ isActive: b
 // Helper function to get all teams that are currently in active matches
 export const getTeamsInActiveMatches = async (): Promise<{ teamId: string; match: Match }[]> => {
   const allMatches = await getMatches();
-  const activeMatchStates = ['ready_up', 'map_banning', 'side_selection', 'playing'];
+  const activeMatchStates = ['ready_up', 'map_banning', 'side_selection_map1', 'side_selection_map2', 'side_selection_decider', 'playing'];
   const activeMatches = allMatches.filter(match => activeMatchStates.includes(match.matchState));
   
   const teamsInActiveMatches: { teamId: string; match: Match }[] = [];
@@ -2642,9 +2667,39 @@ export const submitMatchResult = async (matchId: string, teamId: string, team1Sc
       updateData.team2Score = submittedTeam1Score.team2Score;
       updateData.resolvedAt = serverTimestamp();
       
-      // If this is a tournament match, advance the winner to the next round
+      // If this is a tournament match, update standings and advance the winner
       if (matchData.tournamentId) {
-        await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
+        console.log('🔍 DEBUG: Tournament match detected:', {
+          tournamentId: matchData.tournamentId,
+          tournamentType: matchData.tournamentType,
+          matchState: matchData.matchState,
+          isComplete: matchData.isComplete
+        });
+        
+        // Debug: Show all match data fields
+        console.log('🔍 DEBUG: All match data fields:', Object.keys(matchData));
+        console.log('🔍 DEBUG: Full match data:', matchData);
+        
+        // Update Swiss standings if this is a Swiss system tournament
+        if (matchData.tournamentType === 'swiss-system' || matchData.tournamentType === 'swiss') {
+          console.log('🎯 DEBUG: Swiss system tournament detected, updating standings...');
+          try {
+            const { SwissTournamentService } = await import('./swissTournamentService');
+            await SwissTournamentService.updateSwissStandings(matchData.tournamentId, {
+              ...matchData,
+              team1Score: submittedTeam1Score.team1Score,
+              team2Score: submittedTeam1Score.team2Score,
+              isComplete: true,
+              winnerId
+            } as Match);
+            console.log('✅ DEBUG: Swiss standings updated successfully');
+          } catch (error) {
+            console.error('❌ DEBUG: Failed to update Swiss standings:', error);
+          }
+        } else {
+          // For other tournament types, use the existing advancement logic
+          await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
+        }
       }
       
       // Check if tournament should be marked as completed
@@ -2739,7 +2794,7 @@ export const completeMatch = async (matchId: string, team1Score: number, team2Sc
   
   console.log('✅ DEBUG: Match completed successfully');
   
-  // If this is a tournament match, advance the winner to the next round
+  // If this is a tournament match, update standings and advance the winner
   if (matchData.tournamentId) {
     console.log('🚀 DEBUG: Calling advancement logic with:', {
       tournamentId: matchData.tournamentId,
@@ -2749,23 +2804,42 @@ export const completeMatch = async (matchId: string, team1Score: number, team2Sc
       tournamentType: matchData.tournamentType
     });
     
-    // Determine the loser
-    const loserId = winnerId === matchData.team1Id ? matchData.team2Id : matchData.team1Id;
-    
-    if (matchData.tournamentType === 'double-elim') {
-          // Use double elimination advancement logic
-    if (matchData.bracketType) {
-      await advanceDoubleEliminationMatch(matchData.tournamentId, matchData as Match, winnerId, loserId);
+    // Update Swiss standings if this is a Swiss system tournament
+    if (matchData.tournamentType === 'swiss-system' || matchData.tournamentType === 'swiss') {
+      console.log('🎯 DEBUG: Swiss system tournament detected in completeMatch, updating standings...');
+      try {
+        const { SwissTournamentService } = await import('./swissTournamentService');
+        await SwissTournamentService.updateSwissStandings(matchData.tournamentId, {
+          ...matchData,
+          team1Score,
+          team2Score,
+          isComplete: true,
+          winnerId
+        } as Match);
+        console.log('✅ DEBUG: Swiss standings updated successfully in completeMatch');
+      } catch (error) {
+        console.error('❌ DEBUG: Failed to update Swiss standings in completeMatch:', error);
+      }
     } else {
-      // Fallback to single elimination logic
-      await advanceWinnerToNextMatch(matchData.tournamentId, matchData.nextMatchId || '', winnerId);
-    }
-    } else {
-      // Use single elimination advancement logic
-      await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
+      // For other tournament types, use the existing advancement logic
+      // Determine the loser
+      const loserId = winnerId === matchData.team1Id ? matchData.team2Id : matchData.team1Id;
       
-      // Check if this round is complete and if we should advance to the next round
-      await checkAndAdvanceRound(matchData.tournamentId, matchData.round);
+      if (matchData.tournamentType === 'double-elim') {
+        // Use double elimination advancement logic
+        if (matchData.bracketType) {
+          await advanceDoubleEliminationMatch(matchData.tournamentId, matchData as Match, winnerId, loserId);
+        } else {
+          // Fallback to single elimination logic
+          await advanceWinnerToNextMatch(matchData.tournamentId, matchData.nextMatchId || '', winnerId);
+        }
+      } else {
+        // Use single elimination advancement logic
+        await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
+        
+        // Check if this round is complete and if we should advance to the next round
+        await checkAndAdvanceRound(matchData.tournamentId, matchData.round);
+      }
     }
   } else {
     console.log('⚠️ DEBUG: No tournamentId found, skipping advancement');
@@ -3645,10 +3719,25 @@ export const getUserById = async (userId: string): Promise<User | null> => {
   }
 };
 
-// --- Restore missing export for Profile.tsx compatibility ---
+// --- Discord Account Management ---
 export const unlinkDiscordAccount = async (userId: string): Promise<void> => {
-  // No-op for now. Implement actual unlink logic if needed.
-  return;
+  try {
+    const userRef = doc(db, 'users', userId);
+    
+    // Update user document to remove Discord information
+    await updateDoc(userRef, {
+      discordId: null,
+      discordUsername: null,
+      discordAvatar: null,
+      discordLinked: false,
+      inDiscordServer: false
+    });
+    
+    console.log(`Discord account unlinked for user: ${userId}`);
+  } catch (error) {
+    console.error('Error unlinking Discord account:', error);
+    throw new Error('Failed to unlink Discord account');
+  }
 };
 
 // --- Double Elimination Bracket Generator ---
@@ -4694,9 +4783,12 @@ export const onUserMatchesChange = (userId: string, callback: (matches: Match[])
       
       // 2. Listen for matches involving the user's teams
       const activeMatchStates = [
+        'scheduled',
         'ready_up', 
         'map_banning', 
-        'side_selection', 
+        'side_selection_map1', 
+        'side_selection_map2', 
+        'side_selection_decider', 
         'playing', 
         'waiting_for_results',
         'disputed'

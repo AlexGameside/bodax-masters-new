@@ -1,4 +1,4 @@
-# Bodax Masters - Valorant Tournament Platform
+# Unity League - Professional Tournament Platform
 
 A modern, full-stack tournament management platform for Valorant competitions built with React, TypeScript, and Firebase.
 
@@ -26,7 +26,7 @@ A modern, full-stack tournament management platform for Valorant competitions bu
 
 ## 🚀 Live Demo
 
-Visit the live application: **[https://bodax-masters.web.app](https://bodax-masters.web.app)**
+Visit the live application: **[https://unity-league.web.app](https://unity-league.web.app)**
 
 ## 🛠️ Tech Stack
 
@@ -153,4 +153,4 @@ For support and questions, please open an issue on GitHub or contact the develop
 
 ---
 
-**Built with ❤️ for the Valorant community**
+**Built with ❤️ for the Unity League community**

@@ -49,25 +49,33 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden flex items-center justify-center py-12">
-      {/* Subtle grid/code background */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
+    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 text-white font-sans relative overflow-hidden flex items-center justify-center py-12">
+      {/* Geometric background pattern inspired by Unity League */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-20" 
+           style={{
+             backgroundImage: `
+               linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%),
+               linear-gradient(-45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%),
+               radial-gradient(circle at 25% 25%, rgba(0,255,255,0.1) 0 1px, transparent 1px 100px),
+               radial-gradient(circle at 75% 75%, rgba(255,255,255,0.1) 0 1px, transparent 1px 100px)
+             `
+           }} />
       
-      {/* Code/terminal style header overlay */}
-      <div className="absolute top-0 left-0 w-full px-4 pt-8 z-10 select-none pointer-events-none">
-        <div className="text-sm md:text-lg lg:text-2xl text-gray-400 tracking-tight">
-          <span className="text-gray-600">function</span> <span className="text-red-500 font-bold">UserLogin</span><span className="text-white">()</span> <span className="text-gray-600">&#123;</span>
-        </div>
+      {/* Diagonal accent lines like Unity League poster */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <div className="absolute top-0 right-0 w-32 h-1 bg-cyan-400 transform rotate-45 origin-top-right"></div>
+        <div className="absolute bottom-20 right-10 w-24 h-1 bg-cyan-400 transform -rotate-45 origin-bottom-right"></div>
+        <div className="absolute top-40 left-0 w-20 h-1 bg-white transform rotate-45 origin-top-left"></div>
       </div>
 
       <div className="relative z-20 max-w-md w-full mx-4">
-        <div className="bg-black/60 border border-gray-700 rounded-2xl shadow-xl p-8 backdrop-blur-sm">
+        <div className="bg-black/60 border border-pink-400/30 rounded-2xl shadow-2xl p-8 backdrop-blur-sm">
           <div className="text-center mb-8">
-            <div className="bg-gradient-to-r from-red-500 to-red-600 p-3 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+            <div className="bg-gradient-to-r from-cyan-500 to-blue-600 p-3 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
               <User className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome Back</h1>
-            <p className="text-gray-300">Sign in to your account</p>
+            <p className="text-pink-200">Sign in to your Unity League account</p>
           </div>
 
           {error && (
@@ -79,16 +87,16 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Username/Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-200 mb-2">
+              <label className="block text-sm font-medium text-pink-200 mb-2">
                 Username or Email
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
                 <input
                   type="text"
                   value={formData.username}
                   onChange={(e) => handleInputChange('username', e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-black/40 border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-white placeholder-gray-400"
+                  className="w-full pl-10 pr-4 py-3 bg-black/40 border border-pink-400/30 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300"
                   placeholder="Enter username or email"
                 />
               </div>
@@ -96,45 +104,47 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-200 mb-2">
+              <label className="block text-sm font-medium text-pink-200 mb-2">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 bg-black/40 border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-white placeholder-gray-400"
-                  placeholder="Enter password"
+                  className="w-full pl-10 pr-12 py-3 bg-black/40 border border-pink-400/30 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300"
+                  placeholder="Enter your password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-pink-300 hover:text-cyan-400 transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-3 rounded-lg font-bold hover:from-red-700 hover:to-red-800 transition-all disabled:bg-gray-600 disabled:cursor-not-allowed shadow-lg border border-red-800"
+              className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-black font-bold py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
               {isLoading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
 
+          {/* Additional Links */}
           <div className="mt-6 text-center">
-            <p className="text-gray-300">
+            <p className="text-pink-200 text-sm">
               Don't have an account?{' '}
               <button
                 onClick={() => navigate('/register')}
-                className="text-red-400 hover:text-red-300 font-semibold transition-colors"
+                className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
               >
-                Create Account
+                Sign up here
               </button>
             </p>
           </div>

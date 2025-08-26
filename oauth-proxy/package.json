@@ -1,0 +1,17 @@
+{
+  "name": "discord-oauth-proxy",
+  "version": "1.0.0",
+  "description": "Simple OAuth proxy for Discord authentication",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vercel": "^32.0.0"
+  },
+  "keywords": ["discord", "oauth", "proxy", "vercel"],
+  "author": "Bodax Masters",
+  "license": "MIT"
+} 

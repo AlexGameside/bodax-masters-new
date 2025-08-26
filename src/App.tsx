@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -16,8 +16,12 @@ import TournamentList from './pages/TournamentList';
 import TournamentCreation from './pages/TournamentCreation';
 import TournamentDetail from './pages/TournamentDetail';
 import TournamentManagement from './pages/TournamentManagement';
-import TournamentInfo from './pages/TournamentInfo';
+import TicketManagement from './pages/TicketManagement';
+import ComingSoon from './pages/ComingSoon';
+
 import BracketReveal from './pages/BracketReveal';
+import TeamPage from './pages/TeamPage';
+import MyMatches from './pages/MyMatches';
 import ConnectionStatus from './components/ConnectionStatus';
 // Footer pages
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -25,8 +29,8 @@ import TermsOfService from './pages/TermsOfService';
 import CookiePolicy from './pages/CookiePolicy';
 import GDPR from './pages/GDPR';
 import ContactUs from './pages/ContactUs';
-import HelpCenter from './pages/HelpCenter';
-import FAQ from './pages/FAQ';
+import Impressum from './pages/Impressum';
+
 import TournamentRules from './pages/TournamentRules';
 import DiscordCallback from './pages/DiscordCallback';
 import AdminStats from './pages/AdminStats';
@@ -61,6 +65,7 @@ import {
   loginUser, 
   logoutUser 
 } from './services/authService';
+
 import { useAuth } from './hooks/useAuth';
 import { getDoc, doc } from 'firebase/firestore';
 import { db, auth } from './config/firebase';
@@ -78,7 +83,7 @@ function App() {
 
   // Check if launch date has passed or if user is admin
   const isLaunched = () => {
-    return true; // Always show landing page for live tournament
+    return true; // Always show landing page for Unity League tournament series
   };
 
   // Load initial data
@@ -305,91 +310,224 @@ function App() {
 
   return (
     <Router>
-      <div className="flex flex-col min-h-screen">
+      <AppContent 
+        currentUser={currentUser}
+        isAdmin={isAdmin}
+        loading={loading}
+        teams={teams}
+        matches={matches}
+        userTeam={userTeam}
+        teamInvitations={teamInvitations}
+        userMatches={userMatches}
+        teamPlayers={teamPlayers}
+        onUserRegister={handleUserRegister}
+        onUserLogin={handleUserLogin}
+        onUserLogout={handleUserLogout}
+        onCreateTeam={handleCreateTeam}
+        onInvitePlayer={handleInvitePlayer}
+        onAcceptInvitation={handleAcceptInvitation}
+        onDeclineInvitation={handleDeclineInvitation}
+        onRegisterForTournament={handleRegisterForTournament}
+        onSetActivePlayers={handleSetActivePlayers}
+        addTeam={addTeam}
+        updateMatch={updateMatch}
+        deleteTeam={deleteTeam}
+        deleteAllTeams={deleteAllTeams}
+        deleteAllMatches={deleteAllMatches}
+        generateRandomTeamsForTesting={generateRandomTeamsForTesting}
+        generateFinalBracketForTesting={generateFinalBracketForTesting}
+      />
+    </Router>
+  );
+}
+
+// Separate component to use useLocation hook
+function AppContent({
+  currentUser,
+  isAdmin,
+  loading,
+  teams,
+  matches,
+  userTeam,
+  teamInvitations,
+  userMatches,
+  teamPlayers,
+  onUserRegister,
+  onUserLogin,
+  onUserLogout,
+  onCreateTeam,
+  onInvitePlayer,
+  onAcceptInvitation,
+  onDeclineInvitation,
+  onRegisterForTournament,
+  onSetActivePlayers,
+  addTeam,
+  updateMatch,
+  deleteTeam,
+  deleteAllTeams,
+  deleteAllMatches,
+  generateRandomTeamsForTesting,
+  generateFinalBracketForTesting
+}: {
+  currentUser: any;
+  isAdmin: boolean | null;
+  loading: boolean;
+  teams: any[];
+  matches: any[];
+  userTeam: any;
+  teamInvitations: any[];
+  userMatches: any[];
+  teamPlayers: any[];
+  onUserRegister: any;
+  onUserLogin: any;
+  onUserLogout: any;
+  onCreateTeam: any;
+  onInvitePlayer: any;
+  onAcceptInvitation: any;
+  onDeclineInvitation: any;
+  onRegisterForTournament: any;
+  onSetActivePlayers: any;
+  addTeam: any;
+  updateMatch: any;
+  deleteTeam: any;
+  deleteAllTeams: any;
+  deleteAllMatches: any;
+  generateRandomTeamsForTesting: any;
+  generateFinalBracketForTesting: any;
+}) {
+  const location = useLocation();
+  const isComingSoonPage = location.pathname === '/';
+
+  // Define which routes are allowed during "Coming Soon" mode
+  const isAllowedRoute = (pathname: string) => {
+    const allowedRoutes = [
+      '/', // Coming Soon page
+      '/landing', // Landing page
+      '/register', // User registration
+      '/login', // User login
+      '/profile', // User profile
+      '/team/register', // Team registration
+      '/team-management', // Team management
+      '/create-team', // Create team
+      '/teams', // View teams
+      '/discord/callback', // Discord OAuth
+      '/discord-callback', // Discord OAuth alternative
+      '/privacy-policy', // Legal pages
+      '/terms-of-service',
+      '/cookie-policy',
+      '/gdpr',
+      '/contact',
+      '/impressum'
+    ];
+
+    // Admin routes are always allowed
+    if (pathname.startsWith('/admin')) {
+      return true;
+    }
+
+    // Check if the current path is allowed
+    return allowedRoutes.some(route => {
+      if (route === '/') return pathname === '/';
+      if (route.endsWith('/*')) return pathname.startsWith(route.slice(0, -2));
+      return pathname === route || pathname.startsWith(route + '/');
+    });
+  };
+
+  // If it's not an allowed route and not admin, redirect to Coming Soon
+  if (!isAllowedRoute(location.pathname) && !isAdmin) {
+    // Add a query parameter to indicate this was a redirect
+    const searchParams = new URLSearchParams();
+    searchParams.set('redirected', 'true');
+    const newUrl = `/?${searchParams.toString()}`;
+    
+    // Only redirect if we're not already on the Coming Soon page
+    if (location.pathname !== '/') {
+      return <Navigate to={newUrl} replace />;
+    }
+    
+    // If already on Coming Soon page, just render it
+    return <ComingSoon />;
+  }
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      {!isComingSoonPage && (
         <Navbar 
           currentUser={currentUser} 
-          onLogout={handleUserLogout} 
+          onLogout={onUserLogout} 
           isAdmin={isAdmin || false}
         />
-        <ConnectionStatus />
-        <main className="flex-grow">
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/tournament-info" element={<TournamentInfo />} />
-            <Route path="/register" element={<UserRegistration onRegister={handleUserRegister} />} />
-            <Route path="/login" element={<UserLogin onLogin={handleUserLogin} />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/terms-of-service" element={<TermsOfService />} />
-            <Route path="/cookie-policy" element={<CookiePolicy />} />
-            <Route path="/gdpr" element={<GDPR />} />
-            <Route path="/contact" element={<ContactUs />} />
-            <Route path="/help" element={<HelpCenter />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/tournament-rules" element={<TournamentRules />} />
-            <Route path="/discord/callback" element={<DiscordCallback />} />
+      )}
+      {!isComingSoonPage && <ConnectionStatus />}
+      <main className="flex-grow">
+        <Routes>
+          {/* Public routes - always accessible */}
+          <Route path="/" element={<ComingSoon />} />
+          <Route path="/landing" element={<LandingPage />} />
+          <Route path="/register" element={<UserRegistration onRegister={onUserRegister} />} />
+          <Route path="/login" element={<UserLogin onLogin={onUserLogin} />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
+          <Route path="/cookie-policy" element={<CookiePolicy />} />
+          <Route path="/gdpr" element={<GDPR />} />
+          <Route path="/contact" element={<ContactUs />} />
+          <Route path="/impressum" element={<Impressum />} />
+          <Route path="/discord/callback" element={<DiscordCallback />} />
+          <Route path="/discord-callback" element={<DiscordCallback />} />
 
-            {/* Protected routes */}
-            <Route path="/dashboard" element={
-              currentUser ? (
-                <UserDashboard 
-                  currentUser={currentUser}
-                  userTeam={userTeam}
-                  teamInvitations={teamInvitations}
-                  userMatches={userMatches}
-                  teamPlayers={teamPlayers}
-                  teams={teams}
-                  onCreateTeam={handleCreateTeam}
-                  onInvitePlayer={handleInvitePlayer}
-                  onAcceptInvitation={handleAcceptInvitation}
-                  onDeclineInvitation={handleDeclineInvitation}
-                  onLogout={handleUserLogout}
-                />
-              ) : <Navigate to="/login" />
-            } />
-            <Route path="/profile" element={currentUser ? <Profile /> : <Navigate to="/login" />} />
-            <Route path="/team/register" element={
-              currentUser ? (
-                <TeamRegistration 
-                  onRegister={handleCreateTeam}
-                  teams={teams}
-                />
-              ) : <Navigate to="/login" />
-            } />
-            <Route path="/team-management" element={currentUser ? <TeamManagement currentUser={currentUser} /> : <Navigate to="/login" />} />
-            <Route path="/create-team" element={currentUser ? <CreateTeam currentUser={currentUser} /> : <Navigate to="/login" />} />
-            <Route path="/match/:matchId" element={currentUser ? <MatchPage /> : <Navigate to="/login" />} />
-            <Route path="/tournaments" element={<TournamentList currentUser={currentUser} />} />
-            <Route path="/tournaments/:id" element={<TournamentDetail currentUser={currentUser} />} />
-            <Route path="/tournament/:id" element={<TournamentDetail currentUser={currentUser} />} />
+          {/* Team preparation routes - accessible during Coming Soon mode */}
+          <Route path="/profile" element={currentUser ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/team/register" element={
+            currentUser ? (
+              <TeamRegistration 
+                onRegister={onCreateTeam}
+                teams={teams}
+              />
+            ) : <Navigate to="/login" />
+          } />
+          <Route path="/team-management" element={currentUser ? <TeamManagement currentUser={currentUser} /> : <Navigate to="/login" />} />
+          <Route path="/create-team" element={currentUser ? <CreateTeam currentUser={currentUser} /> : <Navigate to="/login" />} />
+          <Route path="/teams/:teamId" element={<TeamPage />} />
 
-            {/* Admin routes */}
-            <Route path="/admin" element={
-              isAdmin ? (
-                <AdminPanel 
-                  teams={teams}
-                  matches={matches}
-                  isAdmin={true}
-                  onAddTeam={addTeam}
-                  onUpdateMatch={updateMatch}
-                  onDeleteTeam={deleteTeam}
-                  onDeleteAllTeams={deleteAllTeams}
-                  onDeleteAllMatches={deleteAllMatches}
-                  onGenerateRandomTeams={generateRandomTeamsForTesting}
-                  onGenerateFinalBracket={generateFinalBracketForTesting}
-                />
-              ) : <Navigate to="/" />
-            } />
-            <Route path="/admin/tournaments" element={isAdmin ? <Navigate to="/admin/tournaments/manage" /> : <Navigate to="/" />} />
-            <Route path="/admin/tournaments/create" element={isAdmin ? <TournamentCreation /> : <Navigate to="/" />} />
-            <Route path="/admin/tournaments/manage" element={isAdmin ? <TournamentManagement /> : <Navigate to="/" />} />
-            <Route path="/admin/bracket-reveal/:id" element={isAdmin ? <BracketReveal currentUser={currentUser} /> : <Navigate to="/" />} />
-            <Route path="/admin/stats" element={isAdmin ? <AdminStats /> : <Navigate to="/" />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
-    </Router>
+          {/* Tournament routes - redirect to Coming Soon during preparation mode */}
+          <Route path="/tournaments" element={<Navigate to="/?redirected=true" replace />} />
+          <Route path="/tournaments/:id" element={<Navigate to="/?redirected=true" replace />} />
+          <Route path="/tournament/:id" element={<Navigate to="/?redirected=true" replace />} />
+          <Route path="/tournament-rules" element={<Navigate to="/?redirected=true" replace />} />
+          <Route path="/match/:matchId" element={<Navigate to="/?redirected=true" replace />} />
+          <Route path="/my-matches" element={<Navigate to="/?redirected=true" replace />} />
+          <Route path="/dashboard" element={<Navigate to="/?redirected=true" replace />} />
+          <Route path="/tickets" element={<Navigate to="/?redirected=true" replace />} />
+
+          {/* Admin routes - always accessible for admins */}
+          <Route path="/admin" element={
+            isAdmin ? (
+              <AdminPanel 
+                teams={teams}
+                matches={matches}
+                isAdmin={true}
+                onAddTeam={addTeam}
+                onUpdateMatch={updateMatch}
+                onDeleteTeam={deleteTeam}
+                onDeleteAllTeams={deleteAllTeams}
+                onDeleteAllMatches={deleteAllMatches}
+                onGenerateRandomTeams={generateRandomTeamsForTesting}
+                onGenerateFinalBracket={generateFinalBracketForTesting}
+              />
+            ) : <Navigate to="/" />
+          } />
+          <Route path="/admin/tournaments" element={isAdmin ? <Navigate to="/admin/tournaments/manage" /> : <Navigate to="/" />} />
+          <Route path="/admin/tournaments/create" element={isAdmin ? <TournamentCreation /> : <Navigate to="/" />} />
+          <Route path="/admin/tournaments/manage" element={isAdmin ? <TournamentManagement /> : <Navigate to="/" />} />
+          <Route path="/admin/bracket-reveal/:id" element={isAdmin ? <BracketReveal currentUser={currentUser} /> : <Navigate to="/" />} />
+          <Route path="/admin/stats" element={isAdmin ? <AdminStats /> : <Navigate to="/" />} />
+          
+          {/* Catch all other routes and redirect to Coming Soon */}
+          <Route path="*" element={<Navigate to="/?redirected=true" replace />} />
+        </Routes>
+      </main>
+      {!isComingSoonPage && <Footer />}
+    </div>
   );
 }
 

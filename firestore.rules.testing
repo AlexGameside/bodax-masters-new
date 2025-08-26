@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ========================================
+    // TESTING/DEVELOPMENT RULES
+    // ========================================
+    // These rules allow everything for easy testing
+    // WARNING: NEVER use in production!
+    
+    // Allow all operations on all collections
+    match /{document=**} {
+      allow read, write, create, update, delete: if true;
+    }
+    
+    // ========================================
+    // PRODUCTION RULES (COMMENTED OUT)
+    // ========================================
+    // Uncomment and modify these for production use
+    
+    // Users collection
+    // match /users/{userId} {
+    //   allow read: if request.auth != null;
+    //   allow write: if request.auth != null && request.auth.uid == userId;
+    // }
+    
+    // Teams collection
+    // match /teams/{teamId} {
+    //   allow read: if true;
+    //   allow create: if request.auth != null;
+    //   allow update, delete: if request.auth != null && 
+    //     (resource.data.ownerId == request.auth.uid || 
+    //      request.auth.token.email in ['admin@bodaxmasters.com']);
+    // }
+    
+    // Matches collection
+    // match /matches/{matchId} {
+    //   allow read: if true;
+    //   allow write: if request.auth != null && 
+    //     (resource.data.team1Id == request.auth.uid || 
+    //      resource.data.team2Id == request.auth.uid ||
+    //      request.auth.token.email in ['admin@bodaxmasters.com']);
+    // }
+    
+    // Tournaments collection
+    // match /tournaments/{tournamentId} {
+    //   allow read: if true;
+    //   allow write: if request.auth != null && 
+    //     request.auth.token.email in ['admin@bodaxmasters.com'];
+    // }
+    
+    // Notifications collection
+    // match /notifications/{notificationId} {
+    //   allow read, write: if request.auth != null && 
+    //     resource.data.userId == request.auth.uid;
+    // }
+    
+    // Team invitations collection
+    // match /teamInvitations/{invitationId} {
+    //   allow read, write: if request.auth != null && 
+    //     (resource.data.invitedUserId == request.auth.uid ||
+    //      resource.data.invitedByUserId == request.auth.uid);
+    // }
+  }
+} 

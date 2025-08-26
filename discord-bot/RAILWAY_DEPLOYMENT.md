@@ -1,41 +1,60 @@
-# Railway Deployment Guide
+# 🚂 Railway Deployment Guide
 
-## Prerequisites
-- GitHub account
-- Railway account (free at railway.app)
-- Discord bot token
+## Quick Deploy to Railway
 
-## Steps to Deploy
-
-### 1. Push to GitHub
-Make sure your `discord-bot` folder is in a GitHub repository.
-
-### 2. Deploy on Railway
-1. Go to [railway.app](https://railway.app/) and sign up/login
-2. Click "New Project" → "Deploy from GitHub repo"
-3. Select your repository
-4. Set the root directory to `discord-bot` (or deploy the entire repo and set the root to `discord-bot`)
-
-### 3. Set Environment Variables
-In Railway dashboard, add these environment variables:
-- `DISCORD_BOT_TOKEN` = your Discord bot token
-- `DISCORD_GUILD_ID` = your Discord server ID (optional)
-
-### 4. Deploy
-Railway will automatically deploy your bot. The URL will be something like:
-`https://your-app-name.railway.app`
-
-### 5. Update Frontend
-Once deployed, update your frontend's `.env` file:
-```
-VITE_DISCORD_API_URL=https://your-app-name.railway.app
+### 1. Install Railway CLI
+```bash
+npm install -g @railway/cli
 ```
 
-### 6. Test
-- Visit `https://your-app-name.railway.app/api/health` to check if it's running
-- Test Discord notifications from your admin panel
+### 2. Login to Railway
+```bash
+railway login
+```
+
+### 3. Initialize Project
+```bash
+cd discord-bot
+railway init
+```
+
+### 4. Set Environment Variables
+```bash
+railway variables set DISCORD_BOT_TOKEN=your_bot_token_here
+railway variables set DISCORD_GUILD_ID=your_guild_id_here
+railway variables set DISCORD_ADMIN_CHANNEL_ID=your_admin_channel_id_here
+railway variables set DISCORD_TICKET_CATEGORY_ID=your_ticket_category_id_here
+railway variables set DISCORD_SUPPORT_ROLE_ID=your_support_role_id_here
+railway variables set DISCORD_TICKET_CHANNEL_ID=your_ticket_channel_id_here
+```
+
+### 5. Deploy
+```bash
+railway up
+```
+
+### 6. Get Your URL
+```bash
+railway domain
+```
+
+## Environment Variables Needed
+
+- `DISCORD_BOT_TOKEN` - Your Discord bot token
+- `DISCORD_GUILD_ID` - Your Discord server ID
+- `DISCORD_ADMIN_CHANNEL_ID` - Admin notifications channel
+- `DISCORD_TICKET_CATEGORY_ID` - Category for ticket channels
+- `DISCORD_SUPPORT_ROLE_ID` - Role for support team
+- `DISCORD_TICKET_CHANNEL_ID` - Channel for ticket creation
+
+## After Deployment
+
+1. **Copy your Railway URL** (e.g., `https://your-bot-name.railway.app`)
+2. **Update your frontend** to use this URL instead of `localhost:3001`
+3. **Test the integration** on your live site
 
 ## Troubleshooting
-- Check Railway logs if the bot doesn't start
-- Make sure all environment variables are set
-- Verify your Discord bot token is correct 
+
+- **Check logs**: `railway logs`
+- **Restart service**: `railway service restart`
+- **View variables**: `railway variables` 

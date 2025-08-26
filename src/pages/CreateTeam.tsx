@@ -55,7 +55,12 @@ const CreateTeam: React.FC<CreateTeamProps> = ({ currentUser }) => {
           isActive: true
         }],
         createdAt: new Date(),
-        registeredForTournament: false
+        registeredForTournament: false,
+        maxMainPlayers: 5,
+        maxSubstitutes: 2,
+        maxCoaches: 1,
+        maxAssistantCoaches: 1,
+        maxManagers: 1
       };
 
       const teamId = await addTeam(teamData);
@@ -101,22 +106,42 @@ const CreateTeam: React.FC<CreateTeamProps> = ({ currentUser }) => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden">
-      {/* Subtle grid/code background */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
+    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
+      {/* Unity League Header */}
+      <div className="bg-black/20 backdrop-blur-sm border-b border-white/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 text-white/80 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2 font-mono tracking-tight">CREATE NEW TEAM</h1>
+              <p className="text-white/80 font-mono tracking-tight">SET UP YOUR TEAM FOR COMPETITIVE PLAY</p>
+            </div>
+          </div>
+        </div>
+      </div>
       
-      <div className="max-w-2xl mx-auto py-8 px-4 relative z-10">
-        {/* Header */}
-        <div className="flex items-center space-x-4 mb-8">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 text-gray-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Create New Team</h1>
-            <p className="text-gray-300">Set up your team for competitive play</p>
+      <div className="max-w-2xl mx-auto py-8 px-4">
+
+        {/* Preparation Phase Notice */}
+        <div className="mb-8 p-6 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/40 rounded-2xl backdrop-blur-sm shadow-lg">
+          <div className="flex items-center space-x-4">
+            <div className="flex-shrink-0">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-2xl">🚀</span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-blue-200 mb-1">Vorbereitungsphase läuft!</h3>
+              <p className="text-blue-100 text-sm leading-relaxed">
+                Das Turnier startet bald! Erstelle jetzt dein Team und organisiere dein Roster, 
+                damit du bereit bist, sobald die Turnier-Registrierung öffnet.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -128,7 +153,7 @@ const CreateTeam: React.FC<CreateTeamProps> = ({ currentUser }) => {
         )}
 
         {/* Form */}
-        <div className="bg-black/60 border border-gray-700 rounded-lg p-6">
+        <div className="unity-card-pink">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-gray-300 font-medium mb-2">
@@ -213,6 +238,14 @@ const CreateTeam: React.FC<CreateTeamProps> = ({ currentUser }) => {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+      
+      {/* Unity League Footer */}
+      <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
+          <span>&gt; CREATE TEAM</span>
+          <span className="text-cyan-400">// Unity League 2025</span>
         </div>
       </div>
     </div>

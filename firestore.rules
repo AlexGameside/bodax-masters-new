@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow all read and write operations for testing
+    // WARNING: These rules are for development/testing only!
+    // DO NOT use in production!
+    
+    match /{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Alternative: Allow everything for authenticated users only
+    // match /{document=**} {
+    //   allow read, write: if request.auth != null;
+    // }
+    
+    // Alternative: Allow everything for specific admin users
+    // match /{document=**} {
+    //   allow read, write: if request.auth != null && 
+    //     request.auth.token.email in ['admin@bodaxmasters.com'];
+    // }
+  }
+} 

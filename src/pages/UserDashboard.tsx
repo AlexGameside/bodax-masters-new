@@ -17,13 +17,13 @@ import {
   UserCheck,
   UserX
 } from 'lucide-react';
+import { useRealtimeUserMatches } from '../hooks/useRealtimeData';
 import type { User as UserType, Team, TeamInvitation, Match } from '../types/tournament';
 
 interface UserDashboardProps {
   currentUser: UserType;
   userTeam: Team | null;
   teamInvitations: TeamInvitation[];
-  userMatches: Match[];
   teamPlayers: UserType[];
   teams: Team[];
   onCreateTeam: (teamData: Omit<Team, 'id' | 'createdAt'>) => Promise<any>;
@@ -37,7 +37,6 @@ const UserDashboard = ({
   currentUser,
   userTeam,
   teamInvitations,
-  userMatches,
   teamPlayers,
   teams,
   onCreateTeam,
@@ -51,6 +50,9 @@ const UserDashboard = ({
   const [showInvitePlayer, setShowInvitePlayer] = useState(false);
   const [inviteUsername, setInviteUsername] = useState('');
   const [isInviting, setIsInviting] = useState(false);
+
+  // Use real-time hook for user matches
+  const { matches: userMatches, loading: matchesLoading, error: matchesError } = useRealtimeUserMatches(currentUser.id);
 
   const upcomingMatches = userMatches.filter(match => 
     !match.isComplete && match.matchState === 'ready_up'
@@ -72,48 +74,48 @@ const UserDashboard = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-700 sticky top-0 z-30 shadow-lg">
-        <div className="container-modern py-6">
+    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
+      {/* Unity League Header */}
+      <div className="bg-black/20 backdrop-blur-sm border-b border-white/20 sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-3 rounded-xl shadow-lg">
+              <div className="bg-gradient-to-r from-pink-600 to-pink-500 p-3 rounded-xl shadow-lg border border-pink-400/50">
                 <User className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-                <p className="text-gray-300">Welcome back, {currentUser.username}!</p>
+                <h1 className="text-2xl font-bold text-white font-mono tracking-tight">DASHBOARD</h1>
+                <p className="text-white/80 font-mono tracking-tight">Welcome back, {currentUser.username}!</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <button
                 onClick={onLogout}
-                className="px-4 py-2 text-gray-300 hover:text-white transition-colors hover:bg-gray-800 rounded-lg"
+                className="px-6 py-3 text-white/80 hover:text-white transition-colors hover:bg-white/10 rounded-lg font-mono tracking-tight border border-white/20"
               >
-                Logout
+                LOGOUT
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="container-modern py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Navigation Tabs */}
-        <div className="flex space-x-1 bg-gray-800 rounded-xl p-1 shadow-lg mb-8 border border-gray-700">
+        <div className="flex space-x-1 bg-black/40 rounded-xl p-1 shadow-lg mb-8 border border-white/20 backdrop-blur-sm">
           {[
-            { id: 'overview', label: 'Overview', icon: User },
-            { id: 'team', label: 'Team', icon: Users },
-            { id: 'tournament', label: 'Tournament', icon: Trophy },
-            { id: 'matches', label: 'Matches', icon: Gamepad2 }
+            { id: 'overview', label: 'OVERVIEW', icon: User },
+            { id: 'team', label: 'TEAM', icon: Users },
+            { id: 'tournament', label: 'TOURNAMENT', icon: Trophy },
+            { id: 'matches', label: 'MATCHES', icon: Gamepad2 }
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 ${
+              className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 font-mono tracking-tight ${
                 activeTab === tab.id
-                  ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg'
-                  : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                  ? 'bg-gradient-to-r from-pink-600 to-pink-700 text-white shadow-lg'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -545,6 +547,14 @@ const UserDashboard = ({
           </div>
         </div>
       )}
+      
+      {/* Unity League Footer */}
+      <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
+          <span>&gt; USER DASHBOARD</span>
+          <span className="text-cyan-400">// Unity League 2025</span>
+        </div>
+      </div>
     </div>
   );
 };

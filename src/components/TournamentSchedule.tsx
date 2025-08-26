@@ -61,7 +61,11 @@ const TournamentSchedule: React.FC<TournamentScheduleProps> = ({ tournament, mat
       .map(([date, matches]) => ({
         date,
         matches: matches.sort((a, b) => a.matchNumber - b.matchNumber),
-        dayNumber: Math.floor((new Date(date).getTime() - new Date(tournament.schedule.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+        dayNumber: Math.floor((new Date(date).getTime() - ((tournament.schedule.startDate as any)?.seconds !== undefined 
+          ? (tournament.schedule.startDate as any).seconds * 1000 
+          : tournament.schedule.startDate instanceof Date 
+            ? tournament.schedule.startDate.getTime() 
+            : new Date(tournament.schedule.startDate).getTime())) / (1000 * 60 * 60 * 24)) + 1
       }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
@@ -70,7 +74,19 @@ const TournamentSchedule: React.FC<TournamentScheduleProps> = ({ tournament, mat
     const now = new Date();
     const upcoming = allMatches
       .filter(match => !match.isComplete && new Date(match.createdAt) > now)
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .sort((a, b) => {
+        const aTime = (a.createdAt as any)?.seconds !== undefined 
+          ? (a.createdAt as any).seconds * 1000 
+          : a.createdAt instanceof Date 
+            ? a.createdAt.getTime() 
+            : new Date(a.createdAt).getTime();
+        const bTime = (b.createdAt as any)?.seconds !== undefined 
+          ? (b.createdAt as any).seconds * 1000 
+          : b.createdAt instanceof Date 
+            ? b.createdAt.getTime() 
+            : new Date(b.createdAt).getTime();
+        return aTime - bTime;
+      })
       .slice(0, 10)
       .map(match => ({
         match,
@@ -87,9 +103,19 @@ const TournamentSchedule: React.FC<TournamentScheduleProps> = ({ tournament, mat
     return allTeams.find(team => team.id === teamId);
   };
 
-  const getTimeUntil = (matchDate: Date): string => {
+  const getTimeUntil = (matchDate: Date | any): string => {
     const now = new Date();
-    const match = new Date(matchDate);
+    let match: Date;
+    
+    // Handle Firestore Timestamp objects
+    if (matchDate && typeof matchDate === 'object' && matchDate.seconds !== undefined) {
+      match = new Date(matchDate.seconds * 1000);
+    } else if (matchDate instanceof Date) {
+      match = matchDate;
+    } else {
+      match = new Date(matchDate);
+    }
+    
     const diff = match.getTime() - now.getTime();
     
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -108,7 +134,7 @@ const TournamentSchedule: React.FC<TournamentScheduleProps> = ({ tournament, mat
         return 'border-yellow-500 bg-yellow-900/20';
       case 'map_banning':
         return 'border-blue-500 bg-blue-900/20';
-      case 'side_selection':
+      case 'ready_up':
         return 'border-purple-500 bg-purple-900/20';
       case 'playing':
         return 'border-green-500 bg-green-900/20';
@@ -125,7 +151,7 @@ const TournamentSchedule: React.FC<TournamentScheduleProps> = ({ tournament, mat
         return 'Ready Up';
       case 'map_banning':
         return 'Map Banning';
-      case 'side_selection':
+      case 'ready_up':
         return 'Side Selection';
       case 'playing':
         return 'In Progress';
@@ -136,21 +162,49 @@ const TournamentSchedule: React.FC<TournamentScheduleProps> = ({ tournament, mat
     }
   };
 
-  const formatDate = (date: Date | string) => {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    return dateObj.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+  const formatDate = (date: Date | string | any | undefined) => {
+    if (!date) return 'TBD';
+    
+    try {
+      let dateObj: Date;
+      
+      // Handle Firestore Timestamp objects
+      if (date && typeof date === 'object' && date.seconds !== undefined) {
+        dateObj = new Date(date.seconds * 1000);
+      } else if (typeof date === 'string') {
+        dateObj = new Date(date);
+      } else if (date instanceof Date) {
+        dateObj = date;
+      } else {
+        console.warn('Unsupported date type received:', date);
+        return 'TBD';
+      }
+      
+      // Check if the date is valid
+      if (isNaN(dateObj.getTime())) {
+        console.warn('Invalid date received:', date);
+        return 'TBD';
+      }
+      
+      return dateObj.toLocaleDateString('de-DE', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'Europe/Berlin'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error, 'Date value:', date);
+      return 'TBD';
+    }
   };
 
   const formatTime = (date: Date | string) => {
     const dateObj = typeof date === 'string' ? new Date(date) : date;
-    return dateObj.toLocaleTimeString('en-US', {
+    return dateObj.toLocaleTimeString('de-DE', {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'Europe/Berlin'
     });
   };
 

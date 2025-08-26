@@ -39,6 +39,7 @@ import {
   generateSingleEliminationBracket, 
   generateDoubleEliminationBracket 
 } from './firebaseService';
+import { SwissTournamentService } from './swissTournamentService';
 
 // Helper function to retry Firebase operations
 const retryOperation = async <T>(
@@ -188,18 +189,20 @@ export const getTournament = async (tournamentId: string): Promise<Tournament | 
     return {
       id: tournamentDoc.id,
       ...data,
-      createdAt: data.createdAt?.toDate() || new Date(),
-      updatedAt: data.updatedAt?.toDate() || new Date(),
-      publishedAt: data.publishedAt?.toDate(),
+      createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+      updatedAt: data.updatedAt?.toDate?.() || data.updatedAt || new Date(),
+      publishedAt: data.publishedAt?.toDate?.() || data.publishedAt || undefined,
       schedule: {
         ...data.schedule,
-        startDate: data.schedule?.startDate?.toDate() || new Date(),
-        endDate: data.schedule?.endDate?.toDate() || new Date(),
-        blackoutDates: data.schedule?.blackoutDates?.map((date: Timestamp) => date.toDate()) || [],
+        startDate: data.schedule?.startDate?.toDate?.() || data.schedule?.startDate || new Date(),
+        endDate: data.schedule?.endDate?.toDate?.() || data.schedule?.endDate || new Date(),
+        blackoutDates: data.schedule?.blackoutDates?.map((date: any) => 
+          date?.toDate?.() || date || new Date()
+        ) || [],
       },
       requirements: {
         ...data.requirements,
-        registrationDeadline: data.requirements?.registrationDeadline?.toDate() || new Date(),
+        registrationDeadline: data.requirements?.registrationDeadline?.toDate?.() || data.requirements?.registrationDeadline || new Date(),
       },
     } as Tournament;
   } catch (error) {
@@ -252,18 +255,20 @@ export const getTournaments = async (filters?: {
         tournaments.push({
           id: doc.id,
           ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-          publishedAt: data.publishedAt?.toDate(),
+          createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+          updatedAt: data.updatedAt?.toDate?.() || data.updatedAt || new Date(),
+          publishedAt: data.publishedAt?.toDate?.() || data.publishedAt || undefined,
           schedule: {
             ...data.schedule,
-            startDate: data.schedule?.startDate?.toDate() || new Date(),
-            endDate: data.schedule?.endDate?.toDate() || new Date(),
-            blackoutDates: data.schedule?.blackoutDates?.map((date: Timestamp) => date.toDate()) || [],
+            startDate: data.schedule?.startDate?.toDate?.() || data.schedule?.startDate || new Date(),
+            endDate: data.schedule?.endDate?.toDate?.() || data.schedule?.endDate || new Date(),
+            blackoutDates: data.schedule?.blackoutDates?.map((date: any) => 
+              date?.toDate?.() || date || new Date()
+            ) || [],
           },
           requirements: {
             ...data.requirements,
-            registrationDeadline: data.requirements?.registrationDeadline?.toDate() || new Date(),
+            registrationDeadline: data.requirements?.registrationDeadline?.toDate?.() || data.requirements?.registrationDeadline || new Date(),
           },
         } as Tournament);
       });
@@ -338,7 +343,14 @@ export const startTournament = async (tournamentId: string): Promise<void> => {
     });
 
     // Generate brackets based on tournament type using the configured team count
-    if (tournament.format.type === 'double-elimination') {
+    if (tournament.format.type === 'swiss-system') {
+      console.log('🔍 DEBUG: Generating Swiss system tournament');
+      const swissConfig = tournament.format.swissConfig;
+      if (!swissConfig) {
+        throw new Error('Swiss system configuration missing');
+      }
+      await SwissTournamentService.generateSwissRounds(tournamentId, teamsForBracket, swissConfig.rounds);
+    } else if (tournament.format.type === 'double-elimination') {
       console.log('🔍 DEBUG: Generating double elimination bracket');
       await generateDoubleEliminationBracket(tournamentId, teamsForBracket);
     } else {
