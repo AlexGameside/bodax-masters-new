@@ -946,9 +946,23 @@ const MatchPage = () => {
                   match={match}
                   teams={teams}
                   currentUserTeamId={userTeam?.id}
+                  onSideSelectionComplete={async () => {
+                    // Refresh match data after side selection completes
+                    try {
+                      const updatedMatch = await getMatch(match.id);
+                      if (updatedMatch) {
+                        setMatch(updatedMatch);
+                        toast.success('Match is now starting!');
+                      }
+                    } catch (error) {
+                      console.error('Failed to refresh match data:', error);
+                    }
+                  }}
                 />
               </div>
             )}
+
+
 
             {(match.matchState === 'playing' || match.matchState === 'waiting_results' || match.matchState === 'disputed') && (
               <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
@@ -959,6 +973,8 @@ const MatchPage = () => {
                 />
               </div>
             )}
+
+
 
             {(match.matchState === 'completed' || match.matchState === 'forfeited') && (
               <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">

@@ -24,6 +24,9 @@ const ComingSoon = () => {
   const isRedirected = window.location.search.includes('redirected=true') || 
                       (window.location.pathname !== '/' && window.location.pathname !== '/landing');
 
+  // Check if user is admin
+  const isAdmin = currentUser?.isAdmin === true;
+
   // Set launch date (you can adjust this)
   const launchDate = new Date('2025-09-08T16:00:00Z').getTime(); // 6pm CEST = 4pm UTC
 
@@ -120,6 +123,34 @@ const ComingSoon = () => {
                   Diese Funktion ist während der Vorbereitungsphase noch nicht verfügbar. 
                   Du wirst automatisch zur Coming Soon Seite weitergeleitet.
                 </p>
+              </div>
+            )}
+
+            {/* Admin Notice */}
+            {isAdmin && (
+              <div className="mb-8 p-6 bg-gradient-to-r from-blue-900/30 to-cyan-900/30 border border-blue-500/40 rounded-2xl backdrop-blur-sm shadow-lg">
+                <div className="flex items-center justify-center space-x-3 mb-3">
+                  <span className="text-2xl">👑</span>
+                  <h3 className="text-xl font-bold text-blue-200">Admin Zugriff</h3>
+                </div>
+                <p className="text-blue-100 text-center">
+                  Als Administrator hast du vollen Zugriff auf alle Turnier-Funktionen. 
+                  Du kannst alle Seiten direkt aufrufen und das Swiss System verwalten.
+                </p>
+                <div className="mt-4 flex justify-center space-x-4">
+                  <button
+                    onClick={() => navigate('/tournaments')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Turniere anzeigen
+                  </button>
+                  <button
+                    onClick={() => navigate('/admin')}
+                    className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Admin Panel
+                  </button>
+                </div>
               </div>
             )}
 
@@ -389,7 +420,7 @@ const ComingSoon = () => {
       <div className="container-modern py-16 text-center">
         <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-2xl p-8 border border-purple-500/30">
           <h3 className="text-3xl font-bold text-white mb-4">
-            Bereit für den Kampf?
+            Bereit für den Wettkampf?
           </h3>
           <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
             Warte nicht bis zum Start! Bereite dein Team jetzt vor und sichere dir einen Vorsprung.

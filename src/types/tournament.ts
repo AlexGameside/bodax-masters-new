@@ -427,6 +427,7 @@ export interface TournamentStageManagement {
   };
   swissStage?: {
     isActive: boolean;
+    isComplete?: boolean;
     currentRound: number;
     totalRounds: number;
     currentMatchday: number;

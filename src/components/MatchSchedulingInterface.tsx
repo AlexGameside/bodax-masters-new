@@ -217,17 +217,38 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
     // If user has a team, use that team
     if (currentTeamId) {
       setSelectedTeamId(currentTeamId);
+  
     }
     // For admins without a currentTeamId, set selectedTeamId to the first team
     else if (isAdmin && teams.length > 0) {
       setSelectedTeamId(teams[0].id);
+
     }
+    // Fallback: if teams are loaded but no team is selected, select the first one
+    else if (teams.length > 0 && !selectedTeamId) {
+      setSelectedTeamId(teams[0].id);
+
+    }
+    
+
   }, [isAdmin, currentTeamId, teams]);
 
   const handleSendProposal = async () => {
+
     if (!selectedDate || !selectedTime) {
       setError('Please select both date and time');
       return;
+    }
+    
+    if (!selectedTeamId) {
+      // Try to set a default team if none is selected
+      if (teams.length > 0) {
+        setSelectedTeamId(teams[0].id);
+  
+      } else {
+        setError('No team selected. Please select a team first.');
+        return;
+      }
     }
     
     // For admins without a team, ensure a team is selected
@@ -240,18 +261,10 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
     const proposedDateTime = new Date(`${selectedDate}T${selectedTime}`);
     const now = new Date();
     
-    console.log('🔍 DEBUG: Date validation:', {
-      selectedDate,
-      selectedTime,
-      proposedDateTime: proposedDateTime.toISOString(),
-      now: now.toISOString(),
-      minDate: constraints.minDate.toISOString(),
-      maxDate: constraints.maxDate.toISOString(),
-      isValid: !isNaN(proposedDateTime.getTime())
-    });
+
     
     if (isNaN(proposedDateTime.getTime())) {
-      setError('Invalid date/time combination');
+      setError('Please select a valid date and time');
       return;
     }
     
@@ -265,20 +278,37 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
       return;
     }
 
+    // Simple team ID handling - no complex validation
+    const teamIdToUse = selectedTeamId || teams[0]?.id;
+    
+    // Check if this team has already proposed this exact time
+    console.log('🔍 DEBUG: Checking for duplicate proposals:', {
+      selectedTeamId,
+      teamIdToUse,
+      proposedDateTime: proposedDateTime.toISOString(),
+      existingProposals: match.schedulingProposals?.map(p => ({
+        id: p.id,
+        proposedBy: p.proposedBy,
+        proposedTime: p.proposedTime ? new Date(p.proposedTime).toISOString() : null,
+        status: p.status
+      }))
+    });
+    
+
+    
+
+
+
+
     setIsSubmitting(true);
     setError('');
 
     try {
-      console.log('🔍 DEBUG: Sending proposal with:', {
-        matchId: match.id,
-        teamId: selectedTeamId,
-        proposedDateTime,
-        message: message.trim() || undefined
-      });
+
 
       await MatchSchedulingService.sendSchedulingProposal(
         match.id,
-        selectedTeamId,
+        teamIdToUse,
         proposedDateTime,
         message.trim() || undefined
       );
@@ -312,6 +342,7 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
       }
       let alternativeProposal: Date | undefined;
       let responseMessage = '';
+      let teamIdToUseForAlternative = selectedTeamId || teams[0]?.id;
 
       if (response === 'deny') {
         // For deny, require alternative proposal
@@ -336,6 +367,17 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
           setIsSubmitting(false);
           return;
         }
+
+        // Ensure we have a valid team ID for validation
+        if (!teamIdToUseForAlternative) {
+          setError('Team selection error. Please refresh the page and try again.');
+          setIsSubmitting(false);
+          return;
+        }
+        
+
+        
+
         
         alternativeProposal = proposedDateTime;
         responseMessage = message.trim() || 'Alternative time proposed';
@@ -351,7 +393,7 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
       await MatchSchedulingService.respondToSchedulingProposal(
         match.id,
         proposalId,
-        selectedTeamId,
+        teamIdToUseForAlternative,
         response,
         responseMessage,
         alternativeProposal
@@ -771,6 +813,9 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
                   onChange={(e) => setSelectedTime(e.target.value)}
                   className="w-full bg-gray-700 border border-cyan-500/30 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
                 />
+                <div className="text-xs text-pink-200 mt-1">
+                  Choose any time, but you can't propose the same time twice
+                </div>
               </div>
 
               <div>
@@ -785,6 +830,16 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
                   className="w-full bg-gray-700 border border-cyan-500/30 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none transition-all duration-200"
                 />
               </div>
+
+              {/* Error Message Display */}
+              {error && (
+                <div className="bg-gradient-to-r from-red-600/20 to-pink-600/20 border border-red-500/30 rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <XCircle className="w-5 h-5 text-red-400" />
+                    <div className="text-red-300 font-medium">{error}</div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-4">
                 <button
@@ -809,15 +864,7 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
         </div>
       )}
 
-      {/* Error Messages */}
-      {error && (
-        <div className="bg-gradient-to-r from-red-600/20 to-pink-600/20 border border-red-500/30 rounded-xl p-4 mt-6">
-          <div className="flex items-center gap-3">
-            <XCircle className="w-5 h-5 text-red-400" />
-            <div className="text-red-300 font-medium">{error}</div>
-          </div>
-        </div>
-      )}
+
 
       {/* Help Text with Unity styling */}
       <div className="mt-8 p-6 bg-black/60 rounded-2xl border border-pink-400/30">
@@ -833,17 +880,17 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
             </div>
             <div className="flex items-center gap-2 text-pink-300">
               <div className="w-2 h-2 bg-pink-400 rounded-full"></div>
-              <span>Your opponent can accept or propose alternative</span>
+              <span>Can't propose same time twice or within 59 minutes</span>
             </div>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-purple-300">
               <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-              <span>Keep negotiating until you agree on a time</span>
+              <span>Your opponent can accept or propose alternative</span>
             </div>
             <div className="flex items-center gap-2 text-yellow-300">
               <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-              <span>Auto-scheduled if not agreed by deadline</span>
+              <span>Keep negotiating until you agree on a time</span>
             </div>
           </div>
         </div>

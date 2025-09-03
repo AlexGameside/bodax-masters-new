@@ -19,10 +19,12 @@
   limit,
   enableNetwork,
   disableNetwork,
-  connectFirestoreEmulator
+  connectFirestoreEmulator,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { Team, Match, TeamInvitation, User, Tournament, TeamMember, Notification } from '../types/tournament';
+import { ValidationService } from './validationService';
 
 // Enhanced Teams collection functions
 export const addTeam = async (team: Omit<Team, 'id'>): Promise<string> => {
@@ -1504,29 +1506,45 @@ export const getOpenTournaments = async (): Promise<Tournament[]> => {
 export const signupTeamForTournament = async (tournamentId: string, teamId: string): Promise<void> => {
   return retryFirebaseOperation(async () => {
     try {
-      const tournamentRef = doc(db, 'tournaments', tournamentId);
-      const tournamentDoc = await getDoc(tournamentRef);
-      
-      if (!tournamentDoc.exists()) {
-        throw new Error('Tournament not found');
-      }
-      
-      const tournamentData = tournamentDoc.data();
-      const teams = tournamentData.teams || [];
-      
-      if (teams.includes(teamId)) {
-        throw new Error('Team is already signed up for this tournament');
-      }
-      
-      // Use the actual configured team count from tournament format, not requirements
-      const maxTeams = tournamentData.format?.teamCount || tournamentData.requirements?.maxTeams || 8;
-      if (teams.length >= maxTeams) {
-        throw new Error('Tournament is full');
-      }
-      
-      await updateDoc(tournamentRef, {
-        teams: [...teams, teamId],
-        updatedAt: serverTimestamp()
+      // Use transaction to prevent race conditions
+      await runTransaction(db, async (transaction: any) => {
+        const tournamentRef = doc(db, 'tournaments', tournamentId);
+        const tournamentDoc = await transaction.get(tournamentRef);
+        
+        if (!tournamentDoc.exists()) {
+          throw new Error('Tournament not found');
+        }
+        
+        const tournamentData = tournamentDoc.data();
+        const teams = tournamentData.teams || [];
+        
+        if (teams.includes(teamId)) {
+          throw new Error('Team is already signed up for this tournament');
+        }
+        
+        // Use the actual configured team count from tournament format, not requirements
+        const maxTeams = tournamentData.format?.teamCount || tournamentData.requirements?.maxTeams || 8;
+        if (teams.length >= maxTeams) {
+          throw new Error('Tournament is full');
+        }
+        
+        // Validate team composition before allowing registration
+        const teamDoc = await transaction.get(doc(db, 'teams', teamId));
+        if (!teamDoc.exists()) {
+          throw new Error('Team not found');
+        }
+        
+        const teamData = teamDoc.data();
+        const activeMembers = teamData.members?.filter((m: any) => m.isActive) || [];
+        
+        if (activeMembers.length < 5) {
+          throw new Error('Team must have at least 5 active members to register');
+        }
+        
+        transaction.update(tournamentRef, {
+          teams: [...teams, teamId],
+          updatedAt: serverTimestamp()
+        });
       });
     } catch (error) {
       console.error('Error signing up team for tournament:', error);
@@ -1860,76 +1878,79 @@ export const fillTournamentWithDemoTeams = async (tournamentId: string, userTeam
 
 // Start tournament manually (closes registration and prepares for group stage)
 export const startTournament = async (tournamentId: string): Promise<void> => {
-  const tournamentRef = doc(db, 'tournaments', tournamentId);
-  const tournamentDoc = await getDoc(tournamentRef);
-  
-  if (!tournamentDoc.exists()) {
-    throw new Error('Tournament not found');
-  }
-  
-  const tournamentData = tournamentDoc.data() as Tournament;
-  
-  if (tournamentData.status !== 'registration-closed') {
-    throw new Error('Tournament must be registration-closed to start');
-  }
-  
-  const maxTeams = tournamentData.format?.teamCount || 8;
-  if ((tournamentData.teams?.length || 0) !== maxTeams) {
-    throw new Error('Tournament must have the maximum number of teams to start');
-  }
-
-  // Check if any teams are already in active matches
-  const allMatches = await getMatches();
-  const activeMatchStates = ['ready_up', 'map_banning', 'side_selection_map1', 'side_selection_map2', 'side_selection_decider', 'playing'];
-  const teamsInActiveMatches = (tournamentData.teams || []).filter(teamId => {
-    return allMatches.some(match => 
-      (match.team1Id === teamId || match.team2Id === teamId) && 
-      activeMatchStates.includes(match.matchState)
-    );
-  });
-
-  if (teamsInActiveMatches.length > 0) {
-    const teamNames = await Promise.all(
-      teamsInActiveMatches.map(async (teamId) => {
-        const team = await getTeamById(teamId);
-        return team?.name || `Team ${teamId}`;
-      })
-    );
-    throw new Error(`Cannot start tournament: The following teams are already in active matches: ${teamNames.join(', ')}`);
-  }
-  
-  // Close registration and prepare for group stage
-  await updateDoc(tournamentRef, {
-    status: 'registration-closed',
-    startedAt: Timestamp.now()
-  });
-  
-  // Send notifications to all players
-  const allTeams = await getTeams();
-  const tournamentTeams = allTeams.filter(team => (tournamentData.teams || []).includes(team.id));
-  
-  for (const team of tournamentTeams) {
-    if (team.members) {
-      for (const member of team.members) {
-        // Create notification for each player
-        await createNotification({
-          userId: member.userId,
-          type: 'match_scheduled',
-          title: 'Tournament Registration Closed!',
-          message: `The tournament "${tournamentData.name}" registration has closed! Groups will be generated soon.`,
-          isRead: false,
-          data: {
-            tournamentId: tournamentId,
-            teamId: team.id
-          },
-          actionRequired: true,
-          actionUrl: `/tournaments/${tournamentId}`
-        });
+  try {
+    // Use validation service to check if tournament can start
+    const validation = await ValidationService.validateTournamentStart(tournamentId);
+    
+    if (!validation.canStart) {
+      const errorMessage = validation.errors.join('\n');
+      throw new Error(`Tournament cannot start:\n${errorMessage}`);
+    }
+    
+    if (validation.warnings.length > 0) {
+      console.warn('Tournament start warnings:', validation.warnings);
+    }
+    
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    const tournamentDoc = await getDoc(tournamentRef);
+    
+    if (!tournamentDoc.exists()) {
+      throw new Error('Tournament not found');
+    }
+    
+    const tournamentData = tournamentDoc.data() as Tournament;
+    
+         // Use transaction to ensure data consistency
+     await runTransaction(db, async (transaction: any) => {
+       // Double-check status hasn't changed
+       const currentDoc = await transaction.get(tournamentRef);
+       if (!currentDoc.exists()) {
+         throw new Error('Tournament not found');
+       }
+       
+       const currentData = currentDoc.data();
+       if (currentData.status !== 'registration-closed') {
+         throw new Error('Tournament status has changed and cannot start');
+       }
+       
+       // Update tournament status atomically
+       transaction.update(tournamentRef, {
+         status: 'in-progress',
+         startedAt: serverTimestamp()
+       });
+     });
+    
+    // Send notifications to all players
+    const allTeams = await getTeams();
+    const tournamentTeams = allTeams.filter(team => (tournamentData.teams || []).includes(team.id));
+    
+    for (const team of tournamentTeams) {
+      if (team.members) {
+        for (const member of team.members) {
+          // Create notification for each player
+          await createNotification({
+            userId: member.userId,
+            type: 'match_scheduled',
+            title: 'Tournament Started!',
+            message: `The tournament "${tournamentData.name}" has started!`,
+            isRead: false,
+            data: {
+              tournamentId: tournamentId,
+              teamId: team.id
+            },
+            actionRequired: true,
+            actionUrl: `/tournaments/${tournamentId}`
+          });
+        }
       }
     }
+    
+    console.log(`Tournament ${tournamentId} started successfully with ${tournamentData.teams?.length || 0} teams`);
+    
+  } catch (error) {
+    console.error('Error starting tournament:', error);
+    throw error;
   }
-  
-  console.log(`Tournament ${tournamentId} registration closed successfully with ${tournamentData.teams?.length || 0} teams`);
 };
 
 // Migration function to convert old team structure to new structure
@@ -2720,6 +2741,83 @@ export const submitMatchResult = async (matchId: string, teamId: string, team1Sc
   }
   
   await updateDoc(matchRef, updateData);
+};
+
+// Function for admin to force confirm match results without waiting for both teams
+export const submitMatchResultAdminOverride = async (matchId: string, team1Score: number, team2Score: number): Promise<void> => {
+  const matchRef = doc(db, 'matches', matchId);
+  const matchDoc = await getDoc(matchRef);
+  
+  if (!matchDoc.exists()) {
+    throw new Error('Match not found');
+  }
+  
+  const matchData = matchDoc.data();
+  
+  // Check if match is in waiting_results state or playing state
+  if (matchData.matchState !== 'waiting_results' && matchData.matchState !== 'playing') {
+    throw new Error('Match is not in result submission state');
+  }
+  
+  // Determine winner
+  const winnerId = team1Score > team2Score ? matchData.team1Id : matchData.team2Id;
+  
+  // Complete the match immediately with admin override
+  const updateData: any = {
+    matchState: 'completed',
+    isComplete: true,
+    winnerId,
+    team1Score,
+    team2Score,
+    resolvedAt: serverTimestamp(),
+    resultSubmission: {
+      team1Submitted: true,
+      team2Submitted: true,
+      team1SubmittedScore: { team1Score, team2Score },
+      team2SubmittedScore: { team1Score, team2Score },
+      submittedAt: serverTimestamp(),
+      adminOverride: true,
+      adminOverrideAt: serverTimestamp()
+    }
+  };
+  
+  await updateDoc(matchRef, updateData);
+  
+  // If this is a tournament match, update standings and advance the winner
+  if (matchData.tournamentId) {
+    console.log('🔍 DEBUG: Tournament match detected for admin override:', {
+      tournamentId: matchData.tournamentId,
+      tournamentType: matchData.tournamentType,
+      matchState: matchData.matchState,
+      isComplete: matchData.isComplete
+    });
+    
+    // Update Swiss standings if this is a Swiss system tournament
+    if (matchData.tournamentType === 'swiss-system' || matchData.tournamentType === 'swiss') {
+      console.log('🎯 DEBUG: Swiss system tournament detected, updating standings...');
+      try {
+        const { SwissTournamentService } = await import('./swissTournamentService');
+        await SwissTournamentService.updateSwissStandings(matchData.tournamentId, {
+          ...matchData,
+          team1Score,
+          team2Score,
+          isComplete: true,
+          winnerId
+        } as Match);
+        console.log('✅ DEBUG: Swiss standings updated successfully via admin override');
+      } catch (error) {
+        console.error('❌ DEBUG: Failed to update Swiss standings via admin override:', error);
+      }
+    } else {
+      // For other tournament types, use the existing advancement logic
+      await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
+    }
+  }
+  
+  // Check if tournament should be marked as completed
+  if (matchData.tournamentId) {
+    await checkAndMarkTournamentCompleted(matchData.tournamentId);
+  }
 };
 
 // Function to advance winner to next match in tournament

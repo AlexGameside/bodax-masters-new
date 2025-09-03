@@ -387,6 +387,37 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
     }
   };
 
+  // Handle transition to playing state when map banning is complete
+  useEffect(() => {
+    if (phaseInfo.phase === 'Complete' && currentMatch.matchState !== 'playing') {
+      const transitionToPlaying = async () => {
+        try {
+          // Ensure all map selection data is preserved during transition
+          const updateData = {
+            matchState: 'playing',
+            // Explicitly preserve all map selection data
+            map1: currentMatch.map1,
+            map1Side: currentMatch.map1Side,
+            map2: currentMatch.map2,
+            map2Side: currentMatch.map2Side,
+            deciderMap: currentMatch.deciderMap,
+            deciderMapSide: currentMatch.deciderMapSide,
+            updatedAt: new Date()
+          };
+          
+          console.log('🔍 DEBUG: Transitioning to playing with map data:', updateData);
+          
+          await updateDoc(doc(db, 'matches', currentMatch.id), updateData);
+          toast.success('Match is now starting!');
+        } catch (error) {
+          console.error('Failed to transition match to playing state:', error);
+        }
+      };
+      
+      transitionToPlaying();
+    }
+  }, [phaseInfo.phase, currentMatch.matchState, currentMatch.id, currentMatch.map1, currentMatch.map1Side, currentMatch.map2, currentMatch.map2Side, currentMatch.deciderMap, currentMatch.deciderMapSide]);
+
   // Don't render if all phases are complete
   if (phaseInfo.phase === 'Complete') {
     return (
@@ -398,6 +429,9 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
             <div>Map 1: {currentMatch.map1} ({currentMatch.map1Side})</div>
             <div>Map 2: {currentMatch.map2} ({currentMatch.map2Side})</div>
             <div>Decider: {currentMatch.deciderMap} ({currentMatch.deciderMapSide})</div>
+          </div>
+          <div className="mt-4 text-blue-200 text-sm">
+            🚀 Transitioning to Playing state...
           </div>
         </div>
       </div>

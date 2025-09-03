@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Match, Team } from '../types/tournament';
-import { submitMatchResult } from '../services/firebaseService';
+import { submitMatchResult, submitMatchResultAdminOverride } from '../services/firebaseService';
 import { toast } from 'react-hot-toast';
 import { X, Trophy, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -10,6 +10,7 @@ interface ResultSubmissionModalProps {
   match: Match;
   teams: Team[];
   currentUserTeamId?: string;
+  isAdmin?: boolean;
 }
 
 const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
@@ -17,7 +18,8 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
   onClose,
   match,
   teams,
-  currentUserTeamId
+  currentUserTeamId,
+  isAdmin = false
 }) => {
   const [team1Score, setTeam1Score] = useState<string>('');
   const [team2Score, setTeam2Score] = useState<string>('');
@@ -36,7 +38,7 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
     : false;
 
   const handleScoreChange = (team: 'team1' | 'team2', value: string) => {
-    // Only allow numbers
+    // Only allow numbers, but no upper limit
     const numericValue = value.replace(/[^0-9]/g, '');
     
     if (team === 'team1') {
@@ -78,6 +80,44 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
     } catch (error) {
       console.error('Error submitting results:', error);
       toast.error('Failed to submit results. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAdminOverride = async () => {
+    if (!isAdmin) {
+      toast.error('Only admins can force confirm results');
+      return;
+    }
+
+    const score1 = parseInt(team1Score);
+    const score2 = parseInt(team2Score);
+
+    if (isNaN(score1) || isNaN(score2)) {
+      toast.error('Please enter valid scores');
+      return;
+    }
+
+    if (score1 < 0 || score2 < 0) {
+      toast.error('Scores cannot be negative');
+      return;
+    }
+
+    if (score1 === 0 && score2 === 0) {
+      toast.error('At least one team must have scored');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Use admin override function
+      await submitMatchResultAdminOverride(match.id, score1, score2);
+      toast.success('Results force confirmed by admin!');
+      onClose();
+    } catch (error) {
+      console.error('Error force confirming results:', error);
+      toast.error('Failed to force confirm results. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -165,6 +205,52 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
                     ? 'Waiting for other team to submit results'
                     : 'Both teams need to submit matching results'}
                 </span>
+              </div>
+            </div>
+          )}
+
+          {/* Admin Override Section */}
+          {isAdmin && (
+            <div className="mt-4 p-3 bg-purple-900 border border-purple-700 rounded-lg">
+              <div className="flex items-center space-x-2 mb-2">
+                <AlertCircle className="h-4 w-4 text-purple-400" />
+                <span className="text-sm text-purple-300 font-medium">Admin Override</span>
+              </div>
+              <div className="text-xs text-purple-200 mb-3">
+                As an admin, you can force confirm results without waiting for both teams.
+              </div>
+              <button
+                onClick={handleAdminOverride}
+                disabled={isSubmitting || !team1Score || !team2Score || (parseInt(team1Score) === 0 && parseInt(team2Score) === 0)}
+                className="w-full px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {isSubmitting ? 'Processing...' : 'Force Confirm Results (Admin)'}
+              </button>
+            </div>
+          )}
+
+          {/* Confirmation Status */}
+          {match.resultSubmission && (
+            <div className="mt-4 p-3 bg-gray-700 border border-gray-600 rounded-lg">
+              <h4 className="text-white font-medium mb-2 text-sm">Confirmation Status:</h4>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-300">{team1?.name || 'Team 1'}:</span>
+                  <span className={match.resultSubmission.team1Submitted ? 'text-green-400' : 'text-red-400'}>
+                    {match.resultSubmission.team1Submitted ? '✅ Confirmed' : '❌ Not Confirmed'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">{team2?.name || 'Team 2'}:</span>
+                  <span className={match.resultSubmission.team2Submitted ? 'text-green-400' : 'text-red-400'}>
+                    {match.resultSubmission.team2Submitted ? '✅ Confirmed' : '❌ Not Confirmed'}
+                  </span>
+                </div>
+                {match.resultSubmission.team1Submitted && match.resultSubmission.team2Submitted && (
+                  <div className="text-center pt-2 border-t border-gray-600">
+                    <span className="text-green-400 font-medium">🎉 Both teams confirmed! Results will be processed.</span>
+                  </div>
+                )}
               </div>
             </div>
           )}

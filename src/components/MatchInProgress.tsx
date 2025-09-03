@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Match, Team } from '../types/tournament';
-import ResultSubmissionModal from './ResultSubmissionModal';
+
 import { toast } from 'react-hot-toast';
 import { Gamepad2, Trophy, Target, Flag, Play, AlertTriangle, HelpCircle, Shield, RotateCcw, CheckCircle, X, MapPin } from 'lucide-react';
 import { createDispute, resolveDispute, forceSubmitResults, updateMatchState } from '../services/firebaseService';
@@ -29,9 +29,7 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
   
   const isAdmin = currentUser?.isAdmin;
   const isInDispute = match.matchState === 'disputed';
-  const hasSubmitted = currentUserTeamId && match.resultSubmission && 
-    ((currentUserTeamId === match.team1Id && match.resultSubmission.team1Submitted) ||
-     (currentUserTeamId === match.team2Id && match.resultSubmission.team2Submitted));
+
 
   // Calculate BO3 match status
   const getBO3Status = () => {
@@ -59,6 +57,21 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
   };
 
   const bo3Status = getBO3Status();
+
+  // Debug logging for map selection data
+  useEffect(() => {
+    if (isAdmin) {
+      console.log('🔍 DEBUG: MatchInProgress - Map selection data:', {
+        map1: match.map1,
+        map1Side: match.map1Side,
+        map2: match.map2,
+        map2Side: match.map2Side,
+        deciderMap: match.deciderMap,
+        deciderMapSide: match.deciderMapSide,
+        matchState: match.matchState
+      });
+    }
+  }, [match.map1, match.map1Side, match.map2, match.map2Side, match.deciderMap, match.deciderMapSide, match.matchState, isAdmin]);
 
   const handleCreateDispute = async () => {
     if (!currentUserTeamId) return;
@@ -299,6 +312,19 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
           </button>
         </div>
 
+        {/* Admin Debug Info */}
+        {isAdmin && (
+          <div className="mt-4 p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+            <h4 className="text-purple-300 font-bold mb-2 text-sm">🔍 Admin Debug - Map Selection Data</h4>
+            <div className="text-xs text-purple-200 space-y-1">
+              <div>map1: "{match.map1 || 'undefined'}" | map1Side: "{match.map1Side || 'undefined'}"</div>
+              <div>map2: "{match.map2 || 'undefined'}" | map2Side: "{match.map2Side || 'undefined'}"</div>
+              <div>deciderMap: "{match.deciderMap || 'undefined'}" | deciderMapSide: "{match.deciderMapSide || 'undefined'}"</div>
+              <div>matchState: "{match.matchState}"</div>
+            </div>
+          </div>
+        )}
+
         {/* BO3 Progress & Results Display */}
         <div className="mt-4 pt-4 border-t border-gray-700/50">
           {/* BO3 Series Score */}
@@ -341,6 +367,12 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
                 <div className="text-white font-bold text-lg mb-2">
                   {match.map1 || 'Not Selected'}
                 </div>
+                {/* Debug info for admins */}
+                {isAdmin && (
+                  <div className="text-xs text-gray-500 mb-1">
+                    Debug: map1="{match.map1}", map1Side="{match.map1Side}"
+                  </div>
+                )}
                 {match.map1Side && (
                   <div className="space-y-2 mb-3">
                     {/* Team A sees opposite of what Team B picked */}
@@ -409,6 +441,12 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
                 <div className="text-white font-bold text-lg mb-2">
                   {match.map2 || 'Not Selected'}
                 </div>
+                {/* Debug info for admins */}
+                {isAdmin && (
+                  <div className="text-xs text-gray-500 mb-1">
+                    Debug: map2="{match.map2}", map2Side="{match.map2Side}"
+                  </div>
+                )}
                 {match.map2Side && (
                   <div className="space-y-2 mb-3">
                     {/* Team A sees what they picked, Team B sees opposite */}
@@ -477,6 +515,12 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
                 <div className="text-white font-bold text-lg mb-2">
                   {match.deciderMap || 'Not Selected'}
                 </div>
+                {/* Debug info for admins */}
+                {isAdmin && (
+                  <div className="text-xs text-gray-500 mb-1">
+                    Debug: deciderMap="{match.deciderMap}", deciderMapSide="{match.deciderMapSide}"
+                  </div>
+                )}
                 {match.deciderMapSide && (
                   <div className="space-y-2 mb-3">
                     {/* Team A sees what they picked, Team B sees opposite */}
@@ -536,7 +580,7 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
           </div>
 
           {/* Submit Map Result Button */}
-          {!bo3Status.isComplete && bo3Status.currentMapNumber <= 3 && currentUserTeamId && !hasSubmitted && (
+          {!bo3Status.isComplete && bo3Status.currentMapNumber <= 3 && currentUserTeamId && (
             <div className="mt-4 text-center">
               <button
                 onClick={() => setShowBO3ResultModal(true)}
@@ -623,36 +667,7 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
         </div>
       )}
 
-      {/* Result Submission */}
-      {hasSubmitted ? (
-        <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
-          <div className="flex items-center space-x-3">
-            <CheckCircle className="w-5 h-5 text-green-400" />
-            <span className="text-green-300 font-medium">Results Submitted ✓</span>
-          </div>
-          <p className="text-green-200 text-sm mt-1">
-            Waiting for the other team to submit their results...
-          </p>
-        </div>
-      ) : (
-        <button
-          onClick={() => setShowResultModal(true)}
-          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-3 px-6 rounded-lg font-semibold transition-all transform hover:scale-105"
-        >
-          Submit Results
-        </button>
-      )}
 
-      {/* Result Submission Modal */}
-      {showResultModal && (
-        <ResultSubmissionModal
-          isOpen={showResultModal}
-          onClose={() => setShowResultModal(false)}
-          match={match}
-          teams={teams}
-          currentUserTeamId={currentUserTeamId}
-        />
-      )}
 
       {/* BO3 Map Result Submission Modal */}
       {showBO3ResultModal && (

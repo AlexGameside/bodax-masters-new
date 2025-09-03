@@ -56,8 +56,8 @@ export class SwissTournamentService {
           endDate,
           matches: [],
           isComplete: false,
-          schedulingDeadline: new Date(endDate.getTime() - 24 * 60 * 60 * 1000), // 1 day before end
-          autoScheduleTime: new Date(endDate.getTime() - 12 * 60 * 60 * 1000), // 12 hours before end
+          schedulingDeadline: endDate, // Teams must play by the end of the matchday
+          // autoScheduleTime removed - no auto-scheduling
         };
         
         batch.set(matchdayRef, matchdayData);
@@ -87,8 +87,8 @@ export class SwissTournamentService {
           isComplete: false,
           round: 1,
           matchNumber: firstRoundMatches.indexOf([team1Id, team2Id]) + 1,
-          matchState: 'pending_scheduling',
-          currentSchedulingStatus: 'pending',
+          matchState: 'pending_scheduling', // Teams need to schedule first
+          currentSchedulingStatus: 'pending', // Waiting for scheduling
           schedulingProposals: [],
           createdAt: new Date(),
           mapPool: [], // Will be set by tournament config
@@ -197,13 +197,39 @@ export class SwissTournamentService {
     }
     
     const data = snapshot.docs[0].data();
-    return {
-      ...data,
-              startDate: data.startDate?.toDate?.() || data.startDate || new Date(),
-        endDate: data.endDate?.toDate?.() || data.endDate || new Date(),
-        schedulingDeadline: data.schedulingDeadline?.toDate?.() || data.schedulingDeadline || new Date(),
-        autoScheduleTime: data.autoScheduleTime?.toDate?.() || data.autoScheduleTime || undefined,
-    } as Matchday;
+            return {
+          ...data,
+          startDate: data.startDate?.toDate?.() || data.startDate || new Date(),
+          endDate: data.endDate?.toDate?.() || data.endDate || new Date(),
+          schedulingDeadline: data.schedulingDeadline?.toDate?.() || data.schedulingDeadline || new Date(),
+          // autoScheduleTime removed - no auto-scheduling
+        } as Matchday;
+  }
+
+  // Get all matchdays for a tournament
+  static async getAllMatchdays(tournamentId: string): Promise<Matchday[]> {
+    try {
+      const matchdayQuery = query(
+        collection(db, 'matchdays'),
+        where('tournamentId', '==', tournamentId),
+        orderBy('matchdayNumber', 'asc')
+      );
+      
+      const snapshot = await getDocs(matchdayQuery);
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          startDate: data.startDate?.toDate?.() || data.startDate || new Date(),
+          endDate: data.endDate?.toDate?.() || data.endDate || new Date(),
+          schedulingDeadline: data.schedulingDeadline?.toDate?.() || data.schedulingDeadline || new Date(),
+          // autoScheduleTime removed - no auto-scheduling
+        } as Matchday;
+      });
+    } catch (error) {
+      console.error('Error getting all matchdays:', error);
+      throw error;
+    }
   }
   
   // Generate next Swiss round based on current standings
@@ -244,8 +270,8 @@ export class SwissTournamentService {
           isComplete: false,
           round: nextRound,
           matchNumber: pairings.indexOf([team1Id, team2Id]) + 1,
-          matchState: 'pending_scheduling',
-          currentSchedulingStatus: 'pending',
+          matchState: 'pending_scheduling', // Teams need to schedule first
+          currentSchedulingStatus: 'pending', // Waiting for scheduling
           schedulingProposals: [],
           createdAt: new Date(),
           mapPool: [], // Will be set by tournament config
@@ -328,44 +354,77 @@ export class SwissTournamentService {
     });
   }
   
-  // Generate Swiss pairings avoiding rematches
+  // Generate Swiss pairings avoiding rematches with improved odd team handling
   private static generateSwissPairings(standings: SwissStanding[], tournamentId: string, currentRound: number): [string, string][] {
     const pairings: [string, string][] = [];
     const usedTeams = new Set<string>();
+    const availableTeams = [...standings];
     
-    for (const team of standings) {
-      if (usedTeams.has(team.teamId)) continue;
+    // Handle odd number of teams by giving bye to lowest ranked team
+    if (availableTeams.length % 2 === 1) {
+      const lowestRankedTeam = availableTeams[availableTeams.length - 1];
+      pairings.push([lowestRankedTeam.teamId, 'BYE']);
+      usedTeams.add(lowestRankedTeam.teamId);
+      availableTeams.splice(availableTeams.length - 1, 1); // Remove from available teams
+    }
+    
+    // Sort teams by points for better pairing
+    availableTeams.sort((a, b) => {
+      if (a.points !== b.points) return b.points - a.points; // Higher points first
+      if (a.matchWins !== b.matchWins) return b.matchWins - a.matchWins;
+      if (a.gameWins !== b.gameWins) return b.gameWins - a.gameWins;
+      return (b.roundsWon - b.roundsLost) - (a.roundsWon - a.roundsLost); // Rounds differential
+    });
+    
+    // Generate pairings using improved algorithm
+    while (availableTeams.length > 0) {
+      const currentTeam = availableTeams[0];
+      availableTeams.splice(0, 1); // Remove current team
+      
+      if (usedTeams.has(currentTeam.teamId)) continue;
       
       // Find best available opponent
-      let bestOpponent: string | null = null;
+      let bestOpponent: SwissStanding | null = null;
       let bestScoreDiff = Infinity;
+      let bestOpponentIndex = -1;
       
-      for (const potentialOpponent of standings) {
-        if (potentialOpponent.teamId === team.teamId || usedTeams.has(potentialOpponent.teamId)) {
+      for (let i = 0; i < availableTeams.length; i++) {
+        const potentialOpponent = availableTeams[i];
+        
+        if (usedTeams.has(potentialOpponent.teamId)) continue;
+        
+        // Check if they've already played (rematch prevention)
+        if (currentTeam.opponents.includes(potentialOpponent.teamId)) {
           continue;
         }
         
-        // Check if they've already played
-        if (team.opponents.includes(potentialOpponent.teamId)) {
-          continue;
-        }
+        // Calculate pairing score (lower is better)
+        const scoreDiff = Math.abs(currentTeam.points - potentialOpponent.points);
+        const matchWinDiff = Math.abs(currentTeam.matchWins - potentialOpponent.matchWins);
+        const gameWinDiff = Math.abs(currentTeam.gameWins - potentialOpponent.gameWins);
         
-        // Find opponent with closest points
-        const scoreDiff = Math.abs(team.points - potentialOpponent.points);
-        if (scoreDiff < bestScoreDiff) {
-          bestScoreDiff = scoreDiff;
-          bestOpponent = potentialOpponent.teamId;
+        // Weighted scoring: points matter most, then match wins, then game wins
+        const pairingScore = scoreDiff * 10 + matchWinDiff * 3 + gameWinDiff;
+        
+        if (pairingScore < bestScoreDiff) {
+          bestScoreDiff = pairingScore;
+          bestOpponent = potentialOpponent;
+          bestOpponentIndex = i;
         }
       }
       
-      if (bestOpponent) {
-        pairings.push([team.teamId, bestOpponent]);
-        usedTeams.add(team.teamId);
-        usedTeams.add(bestOpponent);
+      if (bestOpponent && bestOpponentIndex !== -1) {
+        pairings.push([currentTeam.teamId, bestOpponent.teamId]);
+        usedTeams.add(currentTeam.teamId);
+        usedTeams.add(bestOpponent.teamId);
+        
+        // Remove opponent from available teams
+        availableTeams.splice(bestOpponentIndex, 1);
       } else {
-        // No suitable opponent found, give bye
-        pairings.push([team.teamId, 'BYE']);
-        usedTeams.add(team.teamId);
+        // No suitable opponent found - this shouldn't happen with even teams
+        // but if it does, give a bye
+        pairings.push([currentTeam.teamId, 'BYE']);
+        usedTeams.add(currentTeam.teamId);
       }
     }
     
@@ -567,8 +626,10 @@ export class SwissTournamentService {
       
       console.log('✅ DEBUG: Swiss standings updated successfully');
       
-      // Check if current matchday is complete and generate next round if needed
-      await this.checkAndGenerateNextRound(tournamentId, match);
+      // Note: Next round generation is now manual - admin must trigger it
+      // await this.checkAndGenerateNextRound(tournamentId, match);
+      
+      return; // Explicit return for Promise<void>
       
     } catch (error) {
       console.error('❌ DEBUG: Error updating Swiss standings:', error);
@@ -576,30 +637,54 @@ export class SwissTournamentService {
     }
   }
   
-  // Check if current matchday is complete and generate next round if needed
-  private static async checkAndGenerateNextRound(tournamentId: string, completedMatch: Match): Promise<void> {
+  // Manual round generation - admin must trigger this
+  static async manuallyGenerateNextRound(tournamentId: string): Promise<{
+    success: boolean;
+    message: string;
+    nextRound?: number;
+    nextMatchday?: number;
+    errors?: string[];
+    warnings?: string[];
+  }> {
     try {
-      console.log('🔍 DEBUG: Checking if matchday is complete for match:', completedMatch.id);
+      console.log('🔍 DEBUG: Manual next round generation requested for tournament:', tournamentId);
       
       const tournamentRef = doc(db, 'tournaments', tournamentId);
       const tournamentDoc = await getDoc(tournamentRef);
       
       if (!tournamentDoc.exists()) {
-        throw new Error('Tournament not found');
+        return {
+          success: false,
+          message: 'Tournament not found',
+          errors: ['Tournament not found']
+        };
       }
       
-      const tournament = tournamentDoc.data() as Tournament;
-      const swissStage = tournament.stageManagement?.swissStage;
+      const tournamentData = tournamentDoc.data() as Tournament;
+      const swissStage = tournamentData.stageManagement?.swissStage;
       
       if (!swissStage || !swissStage.isActive) {
-        return;
+        return {
+          success: false,
+          message: 'Tournament not in Swiss stage',
+          errors: ['Tournament not in Swiss stage']
+        };
       }
       
       const currentMatchday = swissStage.currentMatchday;
       const currentRound = swissStage.currentRound;
       const totalRounds = swissStage.totalRounds;
       
-      console.log('🔍 DEBUG: Current matchday/round:', { currentMatchday, currentRound, totalRounds });
+      console.log('🔍 DEBUG: Current state:', { currentMatchday, currentRound, totalRounds });
+      
+      // Check if we can generate next round
+      if (currentRound >= totalRounds) {
+        return {
+          success: false,
+          message: 'All Swiss rounds already completed',
+          errors: ['All Swiss rounds already completed']
+        };
+      }
       
       // Get all matches for current matchday
       const matchesQuery = query(
@@ -611,34 +696,193 @@ export class SwissTournamentService {
       const matchdayMatches = matchesSnapshot.docs.map(doc => doc.data() as Match);
       
       // Check if all matches in current matchday are complete
-      const allMatchesComplete = matchdayMatches.every(match => match.isComplete);
+      const incompleteMatches = matchdayMatches.filter(match => !match.isComplete);
       
-      if (allMatchesComplete && currentRound < totalRounds) {
-        console.log('🎯 DEBUG: Matchday complete, generating next round');
+      if (incompleteMatches.length > 0) {
+        return {
+          success: false,
+          message: `Cannot generate next round: ${incompleteMatches.length} matches still incomplete`,
+          errors: [`${incompleteMatches.length} matches still incomplete`],
+          warnings: incompleteMatches.map(match => `Match ${match.id} (${match.team1Id} vs ${match.team2Id})`)
+        };
+      }
+      
+      // Check if matchday has ended and process forfeits first
+      const matchday = await this.getMatchdayByNumber(tournamentId, currentMatchday);
+      if (new Date() > matchday.endDate) {
+        console.log('⏰ DEBUG: Matchday ended, processing forfeits before manual round generation');
+        await this.processMatchdayForfeits(tournamentId, currentMatchday);
         
-        // Generate next round
-        await this.generateNextSwissRound(tournamentId, currentRound + 1);
+        // Re-check completion after forfeits
+        const updatedMatchesQuery = query(
+          collection(db, 'matches'),
+          where('tournamentId', '==', tournamentId),
+          where('matchday', '==', currentMatchday)
+        );
+        const updatedMatchesSnapshot = await getDocs(updatedMatchesQuery);
+        const updatedMatchdayMatches = updatedMatchesSnapshot.docs.map(doc => doc.data() as Match);
+        const stillIncomplete = updatedMatchdayMatches.filter(match => !match.isComplete);
         
-        // Update tournament to next round
-        await updateDoc(tournamentRef, {
-          'stageManagement.swissStage.currentRound': currentRound + 1,
-          'stageManagement.swissStage.currentMatchday': currentMatchday + 1,
-          updatedAt: serverTimestamp(),
-        });
-        
-        console.log('✅ DEBUG: Advanced to next round:', currentRound + 1);
-      } else if (allMatchesComplete && currentRound >= totalRounds) {
-        console.log('🏆 DEBUG: All Swiss rounds complete, tournament ready for playoffs');
-        
-        // Mark Swiss stage as complete
-        await updateDoc(tournamentRef, {
-          'stageManagement.swissStage.isComplete': true,
+        if (stillIncomplete.length > 0) {
+          return {
+            success: false,
+            message: `Cannot generate next round: ${stillIncomplete.length} matches still incomplete after forfeits`,
+            errors: [`${stillIncomplete.length} matches still incomplete after forfeits`],
+            warnings: stillIncomplete.map(match => `Match ${match.id} (${match.team1Id} vs ${match.team2Id})`)
+          };
+        }
+      }
+      
+      // Mark current matchday as complete
+      const matchdayQuery = query(
+        collection(db, 'matchdays'),
+        where('tournamentId', '==', tournamentId),
+        where('matchdayNumber', '==', currentMatchday)
+      );
+      const matchdaySnapshot = await getDocs(matchdayQuery);
+      if (!matchdaySnapshot.empty) {
+        const matchdayRef = doc(db, 'matchdays', matchdaySnapshot.docs[0].id);
+        await updateDoc(matchdayRef, {
+          isComplete: true,
           updatedAt: serverTimestamp(),
         });
       }
       
+      // Generate next round
+      await this.generateNextSwissRound(tournamentId, currentRound + 1);
+      
+      // Update tournament to next round
+      await updateDoc(tournamentRef, {
+        'stageManagement.swissStage.currentRound': currentRound + 1,
+        'stageManagement.swissStage.currentMatchday': currentMatchday + 1,
+        updatedAt: serverTimestamp(),
+      });
+      
+      console.log('✅ DEBUG: Manually advanced to next round:', currentRound + 1);
+      
+      return {
+        success: true,
+        message: `Successfully generated Round ${currentRound + 1}`,
+        nextRound: currentRound + 1,
+        nextMatchday: currentMatchday + 1
+      };
+      
     } catch (error) {
-      console.error('❌ DEBUG: Error checking matchday completion:', error);
+      console.error('❌ DEBUG: Error manually generating next round:', error);
+      return {
+        success: false,
+        message: 'Error generating next round',
+        errors: [error instanceof Error ? error.message : 'Unknown error']
+      };
+    }
+  }
+  
+  // Check if current matchday is complete (for admin reference only)
+  static async checkMatchdayCompletion(tournamentId: string): Promise<{
+    isComplete: boolean;
+    totalMatches: number;
+    completedMatches: number;
+    incompleteMatches: Array<{id: string, team1Id: string, team2Id: string, matchState: string}>;
+    canGenerateNextRound: boolean;
+    currentRound: number;
+    totalRounds: number;
+  }> {
+    try {
+      const tournamentRef = doc(db, 'tournaments', tournamentId);
+      const tournamentDoc = await getDoc(tournamentRef);
+      
+      if (!tournamentDoc.exists()) {
+        throw new Error('Tournament not found');
+      }
+      
+      const tournamentData = tournamentDoc.data() as Tournament;
+      const swissStage = tournamentData.stageManagement?.swissStage;
+      
+      if (!swissStage || !swissStage.isActive) {
+        throw new Error('Tournament not in Swiss stage');
+      }
+      
+      const currentMatchday = swissStage.currentMatchday;
+      const currentRound = swissStage.currentRound;
+      const totalRounds = swissStage.totalRounds;
+      
+      // Get all matches for current matchday
+      const matchesQuery = query(
+        collection(db, 'matches'),
+        where('tournamentId', '==', tournamentId),
+        where('matchday', '==', currentMatchday)
+      );
+      const matchesSnapshot = await getDocs(matchesQuery);
+      const matchdayMatches = matchesSnapshot.docs.map(doc => doc.data() as Match);
+      
+      const completedMatches = matchdayMatches.filter(match => match.isComplete);
+      const incompleteMatches = matchdayMatches.filter(match => !match.isComplete);
+      
+      const isComplete = incompleteMatches.length === 0;
+      const canGenerateNextRound = isComplete && currentRound < totalRounds;
+      
+      return {
+        isComplete,
+        totalMatches: matchdayMatches.length,
+        completedMatches: completedMatches.length,
+        incompleteMatches: incompleteMatches.map(match => ({
+          id: match.id,
+          team1Id: match.team1Id || 'Unknown',
+          team2Id: match.team2Id || 'Unknown',
+          matchState: match.matchState
+        })),
+        canGenerateNextRound,
+        currentRound,
+        totalRounds
+      };
+    } catch (error) {
+      console.error('Error checking matchday completion:', error);
+      throw error;
+    }
+  }
+
+  // Process forfeits at the end of matchdays (1-1 draw, no rounds)
+  static async processMatchdayForfeits(tournamentId: string, matchdayNumber: number): Promise<void> {
+    try {
+      console.log(`🔍 DEBUG: Processing forfeits for matchday ${matchdayNumber}`);
+      
+      // Get all matches for this matchday that aren't complete
+      const matchesQuery = query(
+        collection(db, 'matches'),
+        where('tournamentId', '==', tournamentId),
+        where('matchday', '==', matchdayNumber),
+        where('isComplete', '==', false)
+      );
+      
+      const matchesSnapshot = await getDocs(matchesQuery);
+      const now = new Date();
+      
+      for (const matchDoc of matchesSnapshot.docs) {
+        const matchData = matchDoc.data();
+        
+        // Check if matchday has ended
+        const matchday = await this.getMatchdayByNumber(tournamentId, matchdayNumber);
+        if (now > matchday.endDate) {
+          console.log(`🔍 DEBUG: Matchday ${matchdayNumber} ended, forfeiting match ${matchDoc.id}`);
+          
+          // Forfeit with 1-1 draw, no rounds
+          await updateDoc(matchDoc.ref, {
+            team1Score: 1,
+            team2Score: 1,
+            isComplete: true,
+            matchState: 'forfeited',
+            resolvedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            // No rounds given for forfeits
+            mapResults: undefined
+          });
+          
+          console.log(`✅ DEBUG: Match ${matchDoc.id} forfeited with 1-1 draw`);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error processing matchday forfeits:', error);
       throw error;
     }
   }
@@ -1020,42 +1264,8 @@ export class MatchSchedulingService {
     }
   }
   
-  // Auto-schedule matches that haven't been scheduled
-  static async autoSchedulePendingMatches(tournamentId: string, matchdayNumber: number): Promise<void> {
-    try {
-      const matchday = await SwissTournamentService.getMatchdayByNumber(tournamentId, matchdayNumber);
-      
-      // Get all pending matches for this matchday
-      const matchesQuery = query(
-        collection(db, 'matches'),
-        where('tournamentId', '==', tournamentId),
-        where('matchday', '==', matchdayNumber),
-        where('matchState', '==', 'pending_scheduling')
-      );
-      
-      const matchesSnapshot = await getDocs(matchesQuery);
-      
-      for (const matchDoc of matchesSnapshot.docs) {
-        const matchData = matchDoc.data();
-        
-        // Auto-schedule to middle of matchday window
-        const autoScheduleTime = new Date(matchday.startDate);
-        autoScheduleTime.setDate(autoScheduleTime.getDate() + 3); // Middle of 7-day window
-        autoScheduleTime.setHours(20, 0, 0, 0); // 8 PM
-        
-        await updateDoc(matchDoc.ref, {
-          scheduledTime: autoScheduleTime,
-          currentSchedulingStatus: 'rescheduled',
-          matchState: 'scheduled',
-          updatedAt: serverTimestamp(),
-        });
-      }
-      
-    } catch (error) {
-      console.error('Error auto-scheduling matches:', error);
-      throw error;
-    }
-  }
+  // Note: Auto-scheduling has been removed as per requirements
+  // Teams must schedule their own matches within the 7-day matchday window
   
   // Ready-up system functions
   static async readyUpForMatch(
@@ -1219,5 +1429,5 @@ export class MatchSchedulingService {
   }
 }
 
-// Export the services
-export default { SwissTournamentService, MatchSchedulingService }; 
+// Export the service
+export default SwissTournamentService; 

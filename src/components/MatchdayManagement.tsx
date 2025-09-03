@@ -45,8 +45,8 @@ const MatchdayManagement: React.FC<MatchdayManagementProps> = ({
             endDate,
             matches: matches.filter(m => m.matchday === i).map(m => m.id),
             isComplete: false,
-            schedulingDeadline: new Date(endDate.getTime() - 24 * 60 * 60 * 1000),
-            autoScheduleTime: new Date(endDate.getTime() - 12 * 60 * 60 * 1000),
+            schedulingDeadline: endDate, // Teams must play by the end of the matchday
+            // autoScheduleTime removed - no auto-scheduling
           });
         }
         setMatchdays(mockMatchdays);
@@ -94,22 +94,8 @@ const MatchdayManagement: React.FC<MatchdayManagementProps> = ({
     }
   };
 
-  const autoSchedulePendingMatches = async (matchdayNumber: number) => {
-    try {
-      setIsLoading(true);
-      setError('');
-      
-      await MatchSchedulingService.autoSchedulePendingMatches(tournament.id, matchdayNumber);
-      
-      setSuccess(`Auto-scheduled pending matches for Matchday ${matchdayNumber}`);
-      onUpdate();
-      
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to auto-schedule matches');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Note: Auto-scheduling has been removed as per requirements
+  // Teams must schedule their own matches within the 7-day window
 
   const getMatchdayStatus = (matchday: Matchday) => {
     const matchdayMatches = matches.filter(m => m.matchday === matchday.matchdayNumber);
@@ -196,22 +182,15 @@ const MatchdayManagement: React.FC<MatchdayManagementProps> = ({
             <h3 className="text-xl font-semibold text-white">
               Matchday {currentMatchday.matchdayNumber}
             </h3>
-            <div className="flex gap-3">
-              <button
-                onClick={() => autoSchedulePendingMatches(currentMatchday.matchdayNumber)}
-                disabled={isLoading}
-                className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-xl font-medium transition-colors"
-              >
-                Auto-Schedule Pending
-              </button>
-              <button
-                onClick={advanceToNextRound}
-                disabled={isLoading || !currentMatchday.isComplete}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-xl font-medium transition-colors"
-              >
-                Advance to Next Round
-              </button>
-            </div>
+                      <div className="flex gap-3">
+            <button
+              onClick={advanceToNextRound}
+              disabled={isLoading || !currentMatchday.isComplete}
+              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-xl font-medium transition-colors"
+            >
+              Advance to Next Round
+            </button>
+          </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -232,7 +211,7 @@ const MatchdayManagement: React.FC<MatchdayManagementProps> = ({
             <div className="bg-black/40 border border-pink-400/20 rounded-lg p-4">
               <div className="text-pink-200 text-sm">Auto-Schedule</div>
               <div className="text-white font-medium">
-                {currentMatchday.autoScheduleTime ? formatDate(currentMatchday.autoScheduleTime) : 'Not set'}
+                Disabled
               </div>
             </div>
           </div>

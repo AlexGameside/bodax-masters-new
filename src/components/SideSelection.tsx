@@ -48,9 +48,10 @@ interface SideSelectionProps {
   match: Match;
   teams: Team[];
   currentUserTeamId?: string;
+  onSideSelectionComplete?: () => void;
 }
 
-const SideSelection: React.FC<SideSelectionProps> = ({ match, teams, currentUserTeamId }) => {
+const SideSelection: React.FC<SideSelectionProps> = ({ match, teams, currentUserTeamId, onSideSelectionComplete }) => {
   const [isLoading, setIsLoading] = useState(false);
 
   const team1 = teams.find(t => t.id === match.team1Id);
@@ -95,6 +96,11 @@ const SideSelection: React.FC<SideSelectionProps> = ({ match, teams, currentUser
       
       toast.success(`${choosingTeamName} selected ${sideText}, ${otherTeamName} automatically assigned ${otherSideText}`);
       toast.success('Match is now starting!');
+      
+      // Notify parent component that side selection is complete
+      if (onSideSelectionComplete) {
+        onSideSelectionComplete();
+      }
       
     } catch (error: any) {
       toast.error(error.message || 'Failed to select side');

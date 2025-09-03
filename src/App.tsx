@@ -396,12 +396,12 @@ function AppContent({
   generateFinalBracketForTesting: any;
 }) {
   const location = useLocation();
-  const isComingSoonPage = location.pathname === '/';
+  const isComingSoonPage = location.pathname === '/' && !isAdmin; // Only show Coming Soon for non-admins
 
   // Define which routes are allowed during "Coming Soon" mode
   const isAllowedRoute = (pathname: string) => {
     const allowedRoutes = [
-      '/', // Coming Soon page
+      '/', // Coming Soon page (only for non-admins)
       '/landing', // Landing page
       '/register', // User registration
       '/login', // User login
@@ -451,14 +451,15 @@ function AppContent({
 
   return (
     <div className="flex flex-col min-h-screen">
-      {!isComingSoonPage && (
+      {/* Show navbar for admins on all pages, for regular users only on non-Coming Soon pages */}
+      {(isAdmin || !isComingSoonPage) && (
         <Navbar 
           currentUser={currentUser} 
           onLogout={onUserLogout} 
           isAdmin={isAdmin || false}
         />
       )}
-      {!isComingSoonPage && <ConnectionStatus />}
+      {(isAdmin || !isComingSoonPage) && <ConnectionStatus />}
       <main className="flex-grow">
         <Routes>
           {/* Public routes - always accessible */}
@@ -489,15 +490,49 @@ function AppContent({
           <Route path="/create-team" element={currentUser ? <CreateTeam currentUser={currentUser} /> : <Navigate to="/login" />} />
           <Route path="/teams/:teamId" element={<TeamPage />} />
 
-          {/* Tournament routes - redirect to Coming Soon during preparation mode */}
-          <Route path="/tournaments" element={<Navigate to="/?redirected=true" replace />} />
-          <Route path="/tournaments/:id" element={<Navigate to="/?redirected=true" replace />} />
-          <Route path="/tournament/:id" element={<Navigate to="/?redirected=true" replace />} />
-          <Route path="/tournament-rules" element={<Navigate to="/?redirected=true" replace />} />
-          <Route path="/match/:matchId" element={<Navigate to="/?redirected=true" replace />} />
-          <Route path="/my-matches" element={<Navigate to="/?redirected=true" replace />} />
-          <Route path="/dashboard" element={<Navigate to="/?redirected=true" replace />} />
-          <Route path="/tickets" element={<Navigate to="/?redirected=true" replace />} />
+          {/* Tournament routes - accessible to admins, redirect to Coming Soon for regular users */}
+          <Route path="/tournaments" element={
+            isAdmin ? <TournamentList currentUser={currentUser} /> : <Navigate to="/?redirected=true" replace />
+          } />
+          <Route path="/tournaments/:id" element={
+            isAdmin ? <TournamentDetail currentUser={currentUser} /> : <Navigate to="/?redirected=true" replace />
+          } />
+          <Route path="/tournament/:id" element={
+            isAdmin ? <TournamentDetail currentUser={currentUser} /> : <Navigate to="/?redirected=true" replace />
+          } />
+          <Route path="/tournament-rules" element={
+            isAdmin ? <TournamentRules /> : <Navigate to="/?redirected=true" replace />
+          } />
+          <Route path="/match/:matchId" element={
+            isAdmin ? <MatchPage /> : <Navigate to="/?redirected=true" replace />
+          } />
+          <Route path="/my-matches" element={
+            isAdmin ? <MyMatches /> : <Navigate to="/?redirected=true" replace />
+          } />
+          <Route path="/dashboard" element={
+            isAdmin ? <UserDashboard 
+              currentUser={currentUser}
+              userTeam={userTeam}
+              teamInvitations={teamInvitations}
+              teamPlayers={teamPlayers}
+              teams={teams}
+              onCreateTeam={onCreateTeam}
+              onInvitePlayer={async (teamId: string, username: string) => {
+                // Find user by username and create invitation
+                const user = teams.find(t => t.name === username)?.members[0]?.userId;
+                if (user) {
+                  return await createTeamInvitation(teamId, user, currentUser?.id || '');
+                }
+                throw new Error('User not found');
+              }}
+              onAcceptInvitation={acceptTeamInvitation}
+              onDeclineInvitation={declineTeamInvitation}
+              onLogout={onUserLogout}
+            /> : <Navigate to="/?redirected=true" replace />
+          } />
+          <Route path="/tickets" element={
+            isAdmin ? <TicketManagement /> : <Navigate to="/?redirected=true" replace />
+          } />
 
           {/* Admin routes - always accessible for admins */}
           <Route path="/admin" element={
@@ -526,7 +561,7 @@ function AppContent({
           <Route path="*" element={<Navigate to="/?redirected=true" replace />} />
         </Routes>
       </main>
-      {!isComingSoonPage && <Footer />}
+      {(isAdmin || !isComingSoonPage) && <Footer />}
     </div>
   );
 }

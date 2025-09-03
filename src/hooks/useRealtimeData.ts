@@ -148,9 +148,10 @@ export const useRealtimeTournament = (tournamentId: string) => {
   return { tournament, loading, error };
 };
 
-// Real-time user matches hook - SIMPLIFIED VERSION FOR DEBUGGING
+// Real-time user matches hook - ENHANCED VERSION WITH TEAM DATA
 export const useRealtimeUserMatches = (userId: string) => {
   const [matches, setMatches] = useState<Match[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -160,13 +161,13 @@ export const useRealtimeUserMatches = (userId: string) => {
     setLoading(true);
     console.log('[useRealtimeUserMatches] Starting with userId:', userId);
     
-    // For debugging, let's listen to ALL matches and filter them
+    // Listen to all matches
     const matchesQuery = query(
       collection(db, 'matches'),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshotCollection(matchesQuery, (snapshot) => {
+    const matchesUnsubscribe = onSnapshotCollection(matchesQuery, (snapshot) => {
       const allMatches = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
@@ -181,9 +182,45 @@ export const useRealtimeUserMatches = (userId: string) => {
         tournamentId: m.tournamentId
       })));
       
-      // For now, show ALL matches for debugging
-      // TODO: Implement proper team filtering
       setMatches(allMatches);
+      
+      // Extract unique team IDs from matches
+      const teamIds = new Set<string>();
+      allMatches.forEach(match => {
+        if (match.team1Id) teamIds.add(match.team1Id);
+        if (match.team2Id) teamIds.add(match.team2Id);
+      });
+      
+      console.log('[useRealtimeUserMatches] Team IDs found:', Array.from(teamIds));
+      
+      // Fetch teams data for all team IDs found in matches
+      if (teamIds.size > 0) {
+        const teamsQuery = query(
+          collection(db, 'teams'),
+          where('__name__', 'in', Array.from(teamIds))
+        );
+        
+        getDocs(teamsQuery).then((teamsSnapshot) => {
+          const teamsData = teamsSnapshot.docs.map((doc: any) => ({
+            id: doc.id,
+            ...doc.data()
+          })) as Team[];
+          
+          console.log('[useRealtimeUserMatches] Teams loaded:', teamsData.length);
+          console.log('[useRealtimeUserMatches] Team details:', teamsData.map(t => ({
+            id: t.id,
+            name: t.name,
+            ownerId: t.ownerId
+          })));
+          
+          setTeams(teamsData);
+        }).catch((error) => {
+          console.error('Error fetching teams:', error);
+        });
+      } else {
+        setTeams([]);
+      }
+      
       setError(null);
       setLoading(false);
     }, (error) => {
@@ -192,10 +229,10 @@ export const useRealtimeUserMatches = (userId: string) => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => matchesUnsubscribe();
   }, [userId]);
 
-  return { matches, loading, error };
+  return { matches, teams, loading, error };
 };
 
 // Real-time tournaments hook

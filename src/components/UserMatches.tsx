@@ -13,6 +13,14 @@ const UserMatches: React.FC<UserMatchesProps> = ({ userId, teams, matches }) => 
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [userMatches, setUserMatches] = useState<Match[]>([]);
 
+  // Debug logging
+  console.log('[UserMatches] Props received:', {
+    userId,
+    teamsCount: teams.length,
+    teams: teams.map(t => ({ id: t.id, name: t.name })),
+    matchesCount: matches.length
+  });
+
   useEffect(() => {
     // Find teams the user is a member of
     const userTeamIds = teams.filter(team => 
@@ -87,7 +95,25 @@ const UserMatches: React.FC<UserMatchesProps> = ({ userId, teams, matches }) => 
     const team1 = teams.find(t => t.id === match.team1Id);
     const team2 = teams.find(t => t.id === match.team2Id);
     
-    if (!team1 || !team2) return 'TBD vs TBD';
+    console.log('[UserMatches] getMatchTeamNames for match:', match.id, {
+      team1Id: match.team1Id,
+      team2Id: match.team2Id,
+      team1: team1 ? { id: team1.id, name: team1.name } : null,
+      team2: team2 ? { id: team2.id, name: team2.name } : null,
+      availableTeams: teams.map(t => ({ id: t.id, name: t.name }))
+    });
+    
+    if (!team1 && !team2) {
+      return 'Loading teams...';
+    }
+    
+    if (!team1) {
+      return `Loading... vs ${team2?.name || 'Unknown Team'}`;
+    }
+    
+    if (!team2) {
+      return `${team1.name} vs Loading...`;
+    }
     
     return `${team1.name} vs ${team2.name}`;
   };
@@ -158,6 +184,19 @@ const UserMatches: React.FC<UserMatchesProps> = ({ userId, teams, matches }) => 
     }
   };
 
+  // Show loading state if teams are still being fetched
+  if (teams.length === 0) {
+    return (
+      <div className="bg-gradient-to-br from-gray-500/10 to-gray-600/10 backdrop-blur-sm rounded-2xl p-8 border border-gray-400/30 shadow-2xl">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <h3 className="text-2xl font-bold text-white mb-2">Loading Teams...</h3>
+          <p className="text-gray-200">Please wait while we fetch team information.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (userTeams.length === 0) {
     return (
       <div className="bg-gradient-to-br from-gray-500/10 to-gray-600/10 backdrop-blur-sm rounded-2xl p-8 border border-gray-400/30 shadow-2xl">
@@ -170,17 +209,8 @@ const UserMatches: React.FC<UserMatchesProps> = ({ userId, teams, matches }) => 
     );
   }
 
-  if (userMatches.length === 0) {
-    return (
-      <div className="bg-gradient-to-br from-blue-500/10 to-indigo-600/10 backdrop-blur-sm rounded-2xl p-8 border border-blue-400/30 shadow-2xl">
-        <div className="text-center">
-          <Calendar className="w-16 h-16 mx-auto mb-4 text-blue-400" />
-          <h3 className="text-2xl font-bold text-white mb-2">No Matches Found</h3>
-          <p className="text-blue-200">You don't have any upcoming matches at the moment.</p>
-        </div>
-      </div>
-    );
-  }
+  // Note: Empty matches are now handled by the parent MyMatches component
+  // This component only renders when there are actual matches to show
 
   // Sort matches by scheduled time (closest first)
   const sortedMatches = [...userMatches].sort((a, b) => {

@@ -88,6 +88,7 @@ import TournamentSchedule from '../components/TournamentSchedule';
 import TournamentLeaderboard from '../components/TournamentLeaderboard';
 import EnhancedTeamRegistration from '../components/EnhancedTeamRegistration';
 import SwissStandings from '../components/SwissStandings';
+import SwissRoundManagement from '../components/SwissRoundManagement';
 import AdminMatchdayCalendar from '../components/AdminMatchdayCalendar';
 import UpcomingMatches from '../components/UpcomingMatches';
 import PlayoffBracket from '../components/PlayoffBracket';
@@ -1820,6 +1821,17 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
           {activeView === 'matchday-management' && tournament.format?.type === 'swiss-system' && (
             <>
+              {/* Admin Swiss Round Management */}
+              {isAdmin && (
+                <div className="unity-card-purple mb-6">
+                  <div className="text-purple-400 font-bold text-xl mb-4">MANAGE SWISS ROUNDS</div>
+                  <SwissRoundManagement 
+                    tournament={tournament}
+                    onRoundGenerated={reloadTournamentData}
+                  />
+                </div>
+              )}
+              
               {/* Admin Calendar View */}
               {isAdmin && (
                 <div className="unity-card-pink mb-6">
