@@ -19,6 +19,7 @@ import {
   getUserTeams, 
   getTeamById, 
   getAllUsers, 
+  getUsersForDisplay,
   createTeamInvitation,
   updateTeamMemberRole,
   removeTeamMember,
@@ -61,7 +62,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
     try {
       setLoading(true);
       setError('');
-      const allUsersData = await getAllUsers();
+      const allUsersData = await getUsersForDisplay(currentUser?.id || '', currentUser?.isAdmin || false);
       setAllUsers(allUsersData);
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -79,7 +80,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
     // Set up real-time listener for user's teams
     const teamsUnsubscribe = onUserTeamsChange(currentUser.id, (updatedTeams) => {
-      console.log('Teams updated in real-time:', updatedTeams);
       setTeams(updatedTeams);
       
       // Set up listeners for pending invitations for each team

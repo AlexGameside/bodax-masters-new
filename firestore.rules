@@ -1,23 +1,163 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow all read and write operations for testing
-    // WARNING: These rules are for development/testing only!
-    // DO NOT use in production!
-    
-    match /{document=**} {
-      allow read, write: if true;
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
     }
     
-    // Alternative: Allow everything for authenticated users only
-    // match /{document=**} {
-    //   allow read, write: if request.auth != null;
-    // }
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
     
-    // Alternative: Allow everything for specific admin users
-    // match /{document=**} {
-    //   allow read, write: if request.auth != null && 
-    //     request.auth.token.email in ['admin@bodaxmasters.com'];
-    // }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Users collection - TEMPORARILY RELAXED FOR LOGIN FIX
+    match /users/{userId} {
+      allow read: if true; // TEMPORARILY ALLOW ALL READS FOR LOGIN
+      allow write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Teams collection - Allow public read for streaming overlay
+    match /teams/{teamId} {
+      allow read: if true; // Allow public read access for streaming overlay
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+      
+      // Team members subcollection
+      match /members/{memberId} {
+        allow read: if true; // Allow public read access for streaming overlay
+        allow write: if isOwner(memberId) || isAdmin() || 
+          (isAuthenticated() && 
+           (resource.data.ownerId == request.auth.uid || resource.data.captainId == request.auth.uid));
+      }
+    }
+    
+    // Team invitations collection
+    match /teamInvitations/{invitationId} {
+      allow read: if isAuthenticated() && 
+        (resource.data.invitedUserId == request.auth.uid || 
+         resource.data.invitedByUserId == request.auth.uid || 
+         isAdmin());
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+        (resource.data.invitedUserId == request.auth.uid || 
+         resource.data.invitedByUserId == request.auth.uid || 
+         isAdmin());
+      allow delete: if isAuthenticated() && 
+        (resource.data.invitedByUserId == request.auth.uid || isAdmin());
+    }
+    
+    // Tournaments collection
+    match /tournaments/{tournamentId} {
+      allow read: if true; // Allow public read access to tournaments
+      allow create, update, delete: if isAdmin();
+      
+      // Allow users to update tournaments for withdrawal (only specific fields)
+      allow update: if isAuthenticated() && 
+        (isAdmin() || 
+         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams', 'approvedTeams', 'pendingTeams', 'rejectedTeams', 'updatedAt'])));
+      
+      // Tournament participants
+      match /participants/{participantId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(participantId) || isAdmin();
+      }
+      
+      // Tournament matches
+      match /matches/{matchId} {
+        allow read: if true; // Allow public read access to tournament matches
+        allow write: if isAdmin();
+        
+        // Match results
+        match /results/{resultId} {
+          allow read: if true; // Allow public read access to match results
+          allow write: if isAuthenticated() && 
+            (isAdmin() || 
+             resource.data.userId == request.auth.uid ||
+             request.auth.uid in get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.teams);
+        }
+      }
+    }
+    
+    // Matches collection
+    match /matches/{matchId} {
+      allow read: if true; // Allow public read access to matches
+      allow create, delete: if isAdmin();
+      allow update: if isAuthenticated();
+      
+      // Match participants
+      match /participants/{participantId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(participantId) || isAdmin();
+      }
+      
+      // Match results
+      match /results/{resultId} {
+        allow read: if true; // Allow public read access to match results
+        allow write: if isAuthenticated() && 
+          (isAdmin() || 
+           resource.data.userId == request.auth.uid ||
+           request.auth.uid in get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.teams);
+      }
+    }
+    
+    // Tickets collection - users can only see their own tickets, admins can see all
+    match /tickets/{ticketId} {
+      allow read: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    // Discord tokens - users can only access their own
+    match /discord_tokens/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Admin settings - only admins
+    match /admin_settings/{docId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Global settings - read for all authenticated users, write for admins
+    match /global_settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Notifications - users can only see their own, but can create for others (for team invitations)
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated(); // Allow creating notifications for anyone (needed for team invitations)
+      allow update, delete: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    // Chat messages - users can only see messages in their matches/teams
+    match /chat_messages/{messageId} {
+      allow read: if isAuthenticated() && 
+        (isAdmin() || 
+         resource.data.userId == request.auth.uid ||
+         resource.data.matchId in get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.teams);
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    // Default rule - allow authenticated users to read, but restrict writes
+    match /{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
   }
 } 

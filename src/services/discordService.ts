@@ -2,7 +2,7 @@
 
 const CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID;
 const REDIRECT_URI = import.meta.env.VITE_DISCORD_REDIRECT_URI || `${window.location.origin}/discord-callback`;
-const OAUTH_PROXY_URL = import.meta.env.VITE_OAUTH_PROXY_URL || 'https://your-oauth-proxy.vercel.app';
+const OAUTH_PROXY_URL = 'https://oauth-proxy-d8qw1bmwr-alexgamesides-projects.vercel.app';
 
 export interface DiscordUser {
   id: string;
@@ -16,7 +16,7 @@ export interface DiscordUser {
 // Generate Discord OAuth URL
 export const getDiscordAuthUrl = (): string => {
   const params = new URLSearchParams({
-    client_id: CLIENT_ID,
+    client_id: CLIENT_ID || '',
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
     scope: 'identify email',
@@ -86,10 +86,15 @@ export const exchangeCodeForToken = async (code: string): Promise<string> => {
 // Get Discord user information
 export const getDiscordUser = async (accessToken: string): Promise<DiscordUser> => {
   try {
-    const response = await fetch('https://discord.com/api/users/@me', {
+    // Route through OAuth proxy to avoid CORS issues
+    const response = await fetch(`${OAUTH_PROXY_URL}/api/discord/user`, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        access_token: accessToken,
+      }),
     });
 
     if (!response.ok) {

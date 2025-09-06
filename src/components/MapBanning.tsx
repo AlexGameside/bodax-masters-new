@@ -405,8 +405,6 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
             updatedAt: new Date()
           };
           
-          console.log('🔍 DEBUG: Transitioning to playing with map data:', updateData);
-          
           await updateDoc(doc(db, 'matches', currentMatch.id), updateData);
           toast.success('Match is now starting!');
         } catch (error) {

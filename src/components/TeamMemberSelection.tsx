@@ -128,7 +128,7 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
         body: JSON.stringify({
           userIds: [userId],
           title: 'Tournament Registration Required',
-          message: `Hey ${username}! Your team captain is trying to register for a tournament, but you need to link your Discord account and join our server first.\n\nPlease visit your profile to link Discord: https://bodax-masters.web.app/profile\n\nJoin our Discord server: https://discord.gg/MZzEyX3peN`
+          message: `Hey ${username}! Your team captain is trying to register for a tournament, but you need to link your Discord account and join our server first.\n\nPlease visit your profile to link Discord: https://unityleauge.com/profile\n\nJoin our Discord server: https://discord.gg/MZzEyX3peN`
         }),
       });
 

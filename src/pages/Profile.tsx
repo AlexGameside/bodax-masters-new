@@ -9,6 +9,7 @@ import {
   inviteTeamMember, 
   getUserTeams, 
   getAllUsers,
+  getUsersForDisplay,
   onUserTeamsChange
 } from '../services/firebaseService';
 import { resetPassword } from '../services/authService';
@@ -59,8 +60,8 @@ const Profile = () => {
     if (!currentUser) return;
     
     try {
-      // Load all users for team member display
-      const users = await getAllUsers();
+      // Load users for team member display (without sensitive data)
+      const users = await getUsersForDisplay(currentUser.id, currentUser.isAdmin);
       setAllUsers(users);
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -72,7 +73,6 @@ const Profile = () => {
 
     // Set up real-time listener for user's teams
     const unsubscribe = onUserTeamsChange(currentUser.id, (updatedTeams) => {
-      console.log('Teams updated in real-time on Profile:', updatedTeams);
       setUserTeams(updatedTeams);
     });
 
@@ -91,6 +91,10 @@ const Profile = () => {
         displayName: editForm.displayName,
         riotName: editForm.riotName
       });
+      
+      // Refresh user data to reflect the changes
+      await refreshUser();
+      
       setIsEditing(false);
       setMessage('Profile updated successfully!');
       setTimeout(() => setMessage(''), 3000);
@@ -389,34 +393,33 @@ const Profile = () => {
                     </p>
                     
                     {/* Support Tickets Section */}
-                    {currentUser.discordLinked && (
-                      <div className="mt-4 pt-4 border-t border-gray-700">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Support Tickets
-                            </label>
-                            <p className="text-xs text-gray-500">
-                              Create support tickets and report match disputes
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => navigate('/tickets')}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-blue-800"
-                            >
-                              View Tickets
-                            </button>
-                            <button
-                              onClick={() => setShowTicketModal(true)}
-                              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-green-800"
-                            >
-                              Create Ticket
-                            </button>
-                          </div>
+                    {/* Support Tickets Section - Available for all users */}
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Support Tickets
+                          </label>
+                          <p className="text-xs text-gray-500">
+                            Create support tickets and report match disputes
+                          </p>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => navigate('/tickets')}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-blue-800"
+                          >
+                            View Tickets
+                          </button>
+                          <button
+                            onClick={() => setShowTicketModal(true)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-green-800"
+                          >
+                            Create Ticket
+                          </button>
                         </div>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>

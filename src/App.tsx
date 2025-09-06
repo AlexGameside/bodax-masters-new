@@ -12,12 +12,13 @@ import TeamManagement from './pages/TeamManagement';
 import CreateTeam from './pages/CreateTeam';
 import AdminPanel from './pages/AdminPanel';
 import MatchPage from './pages/MatchPage';
+import StreamingOverlay from './pages/StreamingOverlay';
 import TournamentList from './pages/TournamentList';
 import TournamentCreation from './pages/TournamentCreation';
 import TournamentDetail from './pages/TournamentDetail';
 import TournamentManagement from './pages/TournamentManagement';
 import TicketManagement from './pages/TicketManagement';
-import ComingSoon from './pages/ComingSoon';
+import TicketNotificationManager from './components/TicketNotificationManager';
 
 import BracketReveal from './pages/BracketReveal';
 import TeamPage from './pages/TeamPage';
@@ -34,6 +35,7 @@ import Impressum from './pages/Impressum';
 import TournamentRules from './pages/TournamentRules';
 import DiscordCallback from './pages/DiscordCallback';
 import AdminStats from './pages/AdminStats';
+import StreamOverlayManager from './pages/StreamOverlayManager';
 import type { User, Team, Match, TeamInvitation } from './types/tournament';
 import { 
   getTeams, 
@@ -91,18 +93,21 @@ function App() {
     const loadData = async () => {
       try {
         const [teamsData, matchesData] = await Promise.all([
-          getTeams(),
+          getTeams(currentUser?.id, currentUser?.isAdmin || false),
           getMatches()
         ]);
         setTeams(teamsData);
         setMatches(matchesData);
       } catch (error) {
         console.error('Error loading initial data:', error);
+        // Don't throw the error, just log it to prevent login failures
       }
     };
 
-    loadData();
-  }, []);
+    if (currentUser) {
+      loadData();
+    }
+  }, [currentUser]);
 
 
 
@@ -152,6 +157,7 @@ function App() {
         if (!loading) {
           setIsAdmin(false);
         }
+        // Don't throw the error to prevent login failures
       }
     };
 
@@ -164,7 +170,7 @@ function App() {
       // If we're not loading and there's no user, but Firebase auth might have a user
       const firebaseUser = auth.currentUser;
       if (firebaseUser) {
-        console.log('⚠️ DEBUG: Firebase has user but currentUser is null, retrying...');
+
         setTimeout(() => {
           retryAuthStateCheck();
         }, 500);
@@ -296,13 +302,21 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white font-mono relative overflow-hidden flex items-center justify-center">
-        {/* Subtle grid/code background */}
-        <div className="absolute inset-0 z-0 pointer-events-none opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, #fff1 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #fff1 0 1px, transparent 1px 40px)'}} />
-        
-        <div className="relative z-20">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-500"></div>
-          <p className="mt-4 text-gray-400">Loading...</p>
+      <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 flex items-center justify-center">
+        <div className="bg-black/20 backdrop-blur-sm rounded-xl p-8 border border-white/20 shadow-2xl max-w-md mx-auto">
+          <div className="text-center">
+            <div className="mb-6">
+                             <img 
+                 src="/logo.png" 
+                 alt="Unity League Logo" 
+                 className="w-32 h-32 mx-auto mb-4 animate-spin-slow drop-shadow-2xl rounded-full"
+               />
+            </div>
+            <div className="animate-pulse">
+              <h2 className="text-3xl font-bold text-white mb-2 font-mono tracking-tight">UNITY LEAGUE</h2>
+              <p className="text-white/80 font-mono tracking-tight text-lg">Loading Tournament Platform...</p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -310,33 +324,41 @@ function App() {
 
   return (
     <Router>
-      <AppContent 
-        currentUser={currentUser}
-        isAdmin={isAdmin}
-        loading={loading}
-        teams={teams}
-        matches={matches}
-        userTeam={userTeam}
-        teamInvitations={teamInvitations}
-        userMatches={userMatches}
-        teamPlayers={teamPlayers}
-        onUserRegister={handleUserRegister}
-        onUserLogin={handleUserLogin}
-        onUserLogout={handleUserLogout}
-        onCreateTeam={handleCreateTeam}
-        onInvitePlayer={handleInvitePlayer}
-        onAcceptInvitation={handleAcceptInvitation}
-        onDeclineInvitation={handleDeclineInvitation}
-        onRegisterForTournament={handleRegisterForTournament}
-        onSetActivePlayers={handleSetActivePlayers}
-        addTeam={addTeam}
-        updateMatch={updateMatch}
-        deleteTeam={deleteTeam}
-        deleteAllTeams={deleteAllTeams}
-        deleteAllMatches={deleteAllMatches}
-        generateRandomTeamsForTesting={generateRandomTeamsForTesting}
-        generateFinalBracketForTesting={generateFinalBracketForTesting}
-      />
+      <Routes>
+        {/* Streaming Overlay Route - No Navbar/Footer */}
+        <Route path="/stream/:matchId" element={<StreamingOverlay />} />
+        
+        {/* All other routes with full layout */}
+        <Route path="*" element={
+          <AppContent 
+            currentUser={currentUser}
+            isAdmin={isAdmin}
+            loading={loading}
+            teams={teams}
+            matches={matches}
+            userTeam={userTeam}
+            teamInvitations={teamInvitations}
+            userMatches={userMatches}
+            teamPlayers={teamPlayers}
+            onUserRegister={handleUserRegister}
+            onUserLogin={handleUserLogin}
+            onUserLogout={handleUserLogout}
+            onCreateTeam={handleCreateTeam}
+            onInvitePlayer={handleInvitePlayer}
+            onAcceptInvitation={handleAcceptInvitation}
+            onDeclineInvitation={handleDeclineInvitation}
+            onRegisterForTournament={handleRegisterForTournament}
+            onSetActivePlayers={handleSetActivePlayers}
+            addTeam={addTeam}
+            updateMatch={updateMatch}
+            deleteTeam={deleteTeam}
+            deleteAllTeams={deleteAllTeams}
+            deleteAllMatches={deleteAllMatches}
+            generateRandomTeamsForTesting={generateRandomTeamsForTesting}
+            generateFinalBracketForTesting={generateFinalBracketForTesting}
+          />
+        } />
+      </Routes>
     </Router>
   );
 }
@@ -396,74 +418,24 @@ function AppContent({
   generateFinalBracketForTesting: any;
 }) {
   const location = useLocation();
-  const isComingSoonPage = location.pathname === '/' && !isAdmin; // Only show Coming Soon for non-admins
-
-  // Define which routes are allowed during "Coming Soon" mode
-  const isAllowedRoute = (pathname: string) => {
-    const allowedRoutes = [
-      '/', // Coming Soon page (only for non-admins)
-      '/landing', // Landing page
-      '/register', // User registration
-      '/login', // User login
-      '/profile', // User profile
-      '/team/register', // Team registration
-      '/team-management', // Team management
-      '/create-team', // Create team
-      '/teams', // View teams
-      '/discord/callback', // Discord OAuth
-      '/discord-callback', // Discord OAuth alternative
-      '/privacy-policy', // Legal pages
-      '/terms-of-service',
-      '/cookie-policy',
-      '/gdpr',
-      '/contact',
-      '/impressum'
-    ];
-
-    // Admin routes are always allowed
-    if (pathname.startsWith('/admin')) {
-      return true;
-    }
-
-    // Check if the current path is allowed
-    return allowedRoutes.some(route => {
-      if (route === '/') return pathname === '/';
-      if (route.endsWith('/*')) return pathname.startsWith(route.slice(0, -2));
-      return pathname === route || pathname.startsWith(route + '/');
-    });
-  };
-
-  // If it's not an allowed route and not admin, redirect to Coming Soon
-  if (!isAllowedRoute(location.pathname) && !isAdmin) {
-    // Add a query parameter to indicate this was a redirect
-    const searchParams = new URLSearchParams();
-    searchParams.set('redirected', 'true');
-    const newUrl = `/?${searchParams.toString()}`;
-    
-    // Only redirect if we're not already on the Coming Soon page
-    if (location.pathname !== '/') {
-      return <Navigate to={newUrl} replace />;
-    }
-    
-    // If already on Coming Soon page, just render it
-    return <ComingSoon />;
-  }
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Show navbar for admins on all pages, for regular users only on non-Coming Soon pages */}
-      {(isAdmin || !isComingSoonPage) && (
-        <Navbar 
-          currentUser={currentUser} 
-          onLogout={onUserLogout} 
-          isAdmin={isAdmin || false}
-        />
-      )}
-      {(isAdmin || !isComingSoonPage) && <ConnectionStatus />}
+      {/* Show navbar for all pages */}
+      <Navbar 
+        currentUser={currentUser} 
+        onLogout={onUserLogout} 
+        isAdmin={isAdmin || false}
+      />
+      <ConnectionStatus />
+      
+      {/* Ticket Notifications */}
+      {currentUser && <TicketNotificationManager currentUser={currentUser} />}
+      
       <main className="flex-grow">
         <Routes>
           {/* Public routes - always accessible */}
-          <Route path="/" element={<ComingSoon />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/landing" element={<LandingPage />} />
           <Route path="/register" element={<UserRegistration onRegister={onUserRegister} />} />
           <Route path="/login" element={<UserLogin onLogin={onUserLogin} />} />
@@ -476,7 +448,7 @@ function AppContent({
           <Route path="/discord/callback" element={<DiscordCallback />} />
           <Route path="/discord-callback" element={<DiscordCallback />} />
 
-          {/* Team preparation routes - accessible during Coming Soon mode */}
+          {/* User routes - require authentication */}
           <Route path="/profile" element={currentUser ? <Profile /> : <Navigate to="/login" />} />
           <Route path="/team/register" element={
             currentUser ? (
@@ -490,27 +462,15 @@ function AppContent({
           <Route path="/create-team" element={currentUser ? <CreateTeam currentUser={currentUser} /> : <Navigate to="/login" />} />
           <Route path="/teams/:teamId" element={<TeamPage />} />
 
-          {/* Tournament routes - accessible to admins, redirect to Coming Soon for regular users */}
-          <Route path="/tournaments" element={
-            isAdmin ? <TournamentList currentUser={currentUser} /> : <Navigate to="/?redirected=true" replace />
-          } />
-          <Route path="/tournaments/:id" element={
-            isAdmin ? <TournamentDetail currentUser={currentUser} /> : <Navigate to="/?redirected=true" replace />
-          } />
-          <Route path="/tournament/:id" element={
-            isAdmin ? <TournamentDetail currentUser={currentUser} /> : <Navigate to="/?redirected=true" replace />
-          } />
-          <Route path="/tournament-rules" element={
-            isAdmin ? <TournamentRules /> : <Navigate to="/?redirected=true" replace />
-          } />
-          <Route path="/match/:matchId" element={
-            isAdmin ? <MatchPage /> : <Navigate to="/?redirected=true" replace />
-          } />
-          <Route path="/my-matches" element={
-            isAdmin ? <MyMatches /> : <Navigate to="/?redirected=true" replace />
-          } />
+          {/* Tournament routes - accessible to everyone */}
+          <Route path="/tournaments" element={<TournamentList currentUser={currentUser} />} />
+          <Route path="/tournaments/:id" element={<TournamentDetail currentUser={currentUser} />} />
+          <Route path="/tournament/:id" element={<TournamentDetail currentUser={currentUser} />} />
+          <Route path="/tournament-rules" element={<TournamentRules />} />
+          <Route path="/match/:matchId" element={<MatchPage />} />
+          <Route path="/my-matches" element={<MyMatches />} />
           <Route path="/dashboard" element={
-            isAdmin ? <UserDashboard 
+            <UserDashboard 
               currentUser={currentUser}
               userTeam={userTeam}
               teamInvitations={teamInvitations}
@@ -528,15 +488,13 @@ function AppContent({
               onAcceptInvitation={acceptTeamInvitation}
               onDeclineInvitation={declineTeamInvitation}
               onLogout={onUserLogout}
-            /> : <Navigate to="/?redirected=true" replace />
+            />
           } />
-          <Route path="/tickets" element={
-            isAdmin ? <TicketManagement /> : <Navigate to="/?redirected=true" replace />
-          } />
+          <Route path="/tickets" element={currentUser ? <TicketManagement /> : <Navigate to="/login" />} />
 
-          {/* Admin routes - always accessible for admins */}
+          {/* Admin routes - require admin privileges */}
           <Route path="/admin" element={
-            isAdmin ? (
+            isAdmin === true ? (
               <AdminPanel 
                 teams={teams}
                 matches={matches}
@@ -549,19 +507,20 @@ function AppContent({
                 onGenerateRandomTeams={generateRandomTeamsForTesting}
                 onGenerateFinalBracket={generateFinalBracketForTesting}
               />
-            ) : <Navigate to="/" />
+            ) : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>
           } />
-          <Route path="/admin/tournaments" element={isAdmin ? <Navigate to="/admin/tournaments/manage" /> : <Navigate to="/" />} />
-          <Route path="/admin/tournaments/create" element={isAdmin ? <TournamentCreation /> : <Navigate to="/" />} />
-          <Route path="/admin/tournaments/manage" element={isAdmin ? <TournamentManagement /> : <Navigate to="/" />} />
-          <Route path="/admin/bracket-reveal/:id" element={isAdmin ? <BracketReveal currentUser={currentUser} /> : <Navigate to="/" />} />
-          <Route path="/admin/stats" element={isAdmin ? <AdminStats /> : <Navigate to="/" />} />
+          <Route path="/admin/tournaments" element={isAdmin === true ? <Navigate to="/admin/tournaments/manage" /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/tournaments/create" element={isAdmin === true ? <TournamentCreation /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/tournaments/manage" element={isAdmin === true ? <TournamentManagement /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/bracket-reveal/:id" element={isAdmin === true ? <BracketReveal currentUser={currentUser} /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/stats" element={isAdmin === true ? <AdminStats /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/stream-overlays" element={isAdmin === true ? <StreamOverlayManager /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           
-          {/* Catch all other routes and redirect to Coming Soon */}
-          <Route path="*" element={<Navigate to="/?redirected=true" replace />} />
+          {/* Catch all other routes and redirect to home */}
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
-      {(isAdmin || !isComingSoonPage) && <Footer />}
+      <Footer />
     </div>
   );
 }

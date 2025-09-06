@@ -42,7 +42,7 @@ const TournamentManagement = () => {
   const loadTournaments = async () => {
     try {
       setLoading(true);
-      const filters: any = { createdBy: currentUser?.id };
+      const filters: any = {}; // Remove the createdBy filter to show all tournaments for admins
       if (statusFilter !== 'all') {
         filters.status = statusFilter;
       }

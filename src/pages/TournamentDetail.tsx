@@ -37,6 +37,7 @@ import {
   getTournamentMatches, 
   getTeams, 
   getTeamById, 
+  getTeamsByIds,
   startTournament, 
   getUserMatches, 
  
@@ -63,11 +64,17 @@ import {
   revertRound,
   revertRoundComprehensive,
   getMatchProgressionInfo,
-  debugBracketState
+  debugBracketState,
+  withdrawTeamFromTournament
 } from '../services/firebaseService';
 import { 
   getTournament,
-
+  updateTournament,
+  deleteTournament,
+  publishTournament,
+  closeRegistration,
+  registerTeamForTournamentWithVerification,
+  fixExistingTournamentDates
 } from '../services/tournamentService';
 import { 
   generateGroups, 
@@ -146,7 +153,9 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
   // Helper function to format dates
   const formatDate = (date: Date | string | any | undefined) => {
-    if (!date) return 'TBD';
+    if (!date) {
+      return 'TBD';
+    }
     
     try {
       let dateObj: Date;
@@ -159,17 +168,15 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
       } else if (date instanceof Date) {
         dateObj = date;
       } else {
-        console.warn('Unsupported date type received:', date);
         return 'TBD';
       }
       
       // Check if the date is valid
       if (isNaN(dateObj.getTime())) {
-        console.warn('Invalid date received:', date);
         return 'TBD';
       }
       
-      return dateObj.toLocaleDateString('de-DE', { 
+      const formatted = dateObj.toLocaleDateString('de-DE', { 
         month: 'short', 
         day: 'numeric', 
         year: 'numeric',
@@ -177,8 +184,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         minute: '2-digit',
         timeZone: 'Europe/Berlin'
       });
+      return formatted;
     } catch (error) {
-      console.error('Error formatting date:', error, 'Date value:', date);
       return 'TBD';
     }
   };
@@ -209,20 +216,9 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
       if (foundTournament) {
         setTournament(foundTournament);
         
-        // Load teams data
-        const teamsData = await Promise.all(
-          foundTournament.teams.map(async (teamId) => {
-            try {
-              return await getTeamById(teamId);
-            } catch (error) {
-              console.warn(`Failed to load team ${teamId}:`, error);
-              return null;
-            }
-          })
-        );
-        
-        const validTeams = teamsData.filter(team => team !== null) as Team[];
-        setTeams(validTeams);
+        // Load teams data efficiently using batch operation
+        const teamsData = await getTeamsByIds(foundTournament.teams);
+        setTeams(teamsData);
         
         // Load user teams if user is logged in
         if (authUser?.uid || authUser?.id) {
@@ -253,7 +249,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   useEffect(() => {
     const loadTournamentData = async () => {
       if (!id) {
-        console.log('No tournament ID provided');
         setLoading(false);
         return;
       }
@@ -261,29 +256,15 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
       setLoading(true);
       setError('');
       try {
-        console.log('Loading tournament data for ID:', id);
-        
         // Load tournament data
         const foundTournament = await getTournament(id);
-        console.log('Found tournament:', foundTournament);
         
         if (foundTournament) {
           setTournament(foundTournament);
           
-          // Load teams data
-          const teamsData = await Promise.all(
-            foundTournament.teams.map(async (teamId) => {
-              try {
-                return await getTeamById(teamId);
-              } catch (error) {
-                console.warn(`Failed to load team ${teamId}:`, error);
-                return null;
-              }
-            })
-          );
-          
-          const validTeams = teamsData.filter(team => team !== null) as Team[];
-          setTeams(validTeams);
+          // Load teams data efficiently using batch operation
+          const teamsData = await getTeamsByIds(foundTournament.teams);
+          setTeams(teamsData);
           
           // Load user teams if user is logged in
           if (authUser?.uid || authUser?.id) {
@@ -311,7 +292,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
             }
           }
         } else {
-          console.log('Tournament not found');
           setTournament(null);
           setError('Tournament not found');
         }
@@ -435,7 +415,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     
     setStarting(true);
     try {
-      console.log('🔍 DEBUG: Starting Swiss system tournament');
       
       // Initialize Swiss stage
       if (tournament.format?.type === 'swiss-system' && tournament.format.swissConfig) {
@@ -456,6 +435,20 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
       toast.error('Failed to start Swiss system tournament');
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleFixDates = async () => {
+    try {
+      console.log('🔧 Starting to fix tournament dates...');
+      const fixedCount = await fixExistingTournamentDates();
+      toast.success(`Fixed ${fixedCount} tournaments!`);
+      
+      // Reload the current tournament data
+      await reloadTournamentData();
+    } catch (error) {
+      console.error('❌ Error fixing tournament dates:', error);
+      toast.error('Failed to fix tournament dates');
     }
   };
 
@@ -595,16 +588,13 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     
     try {
       setStarting(true);
-      console.log('🔍 DEBUG: Auto-completing all matches for tournament:', tournament.id);
       
       // Get all incomplete matches for this tournament
       const incompleteMatches = matches.filter(match => !match.isComplete);
-      console.log('🔍 DEBUG: Found incomplete matches:', incompleteMatches.length);
       
       let completedCount = 0;
       for (const match of incompleteMatches) {
         if (!match.team1Id || !match.team2Id) {
-          console.log('⚠️ DEBUG: Skipping match without both teams:', match.id);
           continue;
         }
         
@@ -612,13 +602,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         const team1Score = Math.floor(Math.random() * 16) + 1; // 1-16
         const team2Score = Math.floor(Math.random() * 16) + 1; // 1-16
         const winnerId = team1Score > team2Score ? match.team1Id : match.team2Id;
-        
-        console.log('🔍 DEBUG: Completing match:', {
-          matchId: match.id,
-          team1Score,
-          team2Score,
-          winnerId
-        });
         
         // Fix: Pass parameters separately instead of as an object
         await completeMatch(match.id, team1Score, team2Score, winnerId);
@@ -743,21 +726,10 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const isUserTeamSignedUp = userTeams.some(team => (tournament?.teams || []).includes(team.id));
   const canSignupForUser = authUser && userTeams.length > 0 && !isUserTeamSignedUp && tournament && tournament.status === 'registration-open';
 
-  // Debug information
-  console.log('🔍 DEBUG: Signup conditions:', {
-    authUser: !!authUser,
-    userTeamsLength: userTeams.length,
-    isUserTeamSignedUp,
-    tournamentExists: !!tournament,
-    tournamentStatus: tournament?.status,
-    canSignupForUser
-  });
-
   const handleAutoCompleteCurrentRound = async () => {
     if (!tournament || starting) return;
     try {
       setStarting(true);
-      console.log('🔍 DEBUG: Starting auto-complete current round');
       
       // Find the current round (lowest round with incomplete matches)
       const incompleteMatches = matches.filter(m => !m.isComplete);
@@ -767,21 +739,12 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
       }
       
       const currentRound = Math.min(...incompleteMatches.map(m => m.round));
-      console.log('🔍 DEBUG: Current round:', currentRound);
       
       const matchesInCurrentRound = matches.filter(m => m.round === currentRound && !m.isComplete);
-      console.log('🔍 DEBUG: Matches in current round:', matchesInCurrentRound.map(m => ({
-        id: m.id,
-        team1Id: m.team1Id,
-        team2Id: m.team2Id,
-        round: m.round,
-        matchNumber: m.matchNumber
-      })));
       
       let completedCount = 0;
       for (const match of matchesInCurrentRound) {
         if (!match.team1Id || !match.team2Id) {
-          console.log('⚠️ DEBUG: Skipping match without both teams:', match.id);
           continue; // Only auto-complete if both teams are set
         }
         
@@ -789,15 +752,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         const team2Score = team1Score === 13 ? 7 : 13;
         const winnerId = team1Score > team2Score ? match.team1Id : match.team2Id;
         
-        console.log('🔍 DEBUG: Completing match:', {
-          matchId: match.id,
-          team1Score,
-          team2Score,
-          winnerId
-        });
-        
         if (!winnerId) {
-          console.warn('❌ DEBUG: Skipping match with undefined winnerId:', match);
           continue;
         }
         
@@ -821,7 +776,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     if (!tournament || starting) return;
     try {
       setStarting(true);
-      console.log('🔍 DEBUG: Completing single match:', { matchId, winnerId, team1Score, team2Score });
       
       await completeMatch(matchId, team1Score, team2Score, winnerId);
       await reloadTournamentData();
@@ -869,7 +823,6 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     
     // Set up real-time listener for user teams
     const unsubscribe = onUserTeamsChange(userId, (teams) => {
-      console.log('🔍 DEBUG: Real-time user teams update:', teams);
       setUserTeams(teams);
     });
     
@@ -878,17 +831,13 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
   // Add a function to withdraw the user's team from the tournament
   const handleWithdraw = async (teamId: string) => {
-    if (!tournament || !teamId) return;
+    if (!tournament || !teamId || !authUser?.uid) return;
     try {
-      const tournamentRef = doc(db, 'tournaments', tournament.id);
-      const updatedTeams = (tournament.teams || []).filter(id => id !== teamId);
-      await updateDoc(tournamentRef, {
-        teams: updatedTeams,
-        updatedAt: new Date()
-      });
+      await withdrawTeamFromTournament(tournament.id, teamId, authUser.uid);
       toast.success('Your team has been withdrawn from the tournament.');
       await reloadTournamentData();
     } catch (error) {
+      console.error('Error withdrawing from tournament:', error);
       toast.error('Failed to withdraw from tournament.');
     }
   };
@@ -1173,12 +1122,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           <div className="text-red-400 font-bold text-sm mb-3">TOURNAMENT REQUIREMENTS</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-gray-400">Start Date:</span>
+              <span className="text-gray-400">Starting Time:</span>
               <span className="text-gray-200 ml-2">{formatDate(tournament.schedule?.startDate)}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">End Date:</span>
-              <span className="text-gray-200 ml-2">{formatDate(tournament.schedule?.endDate)}</span>
             </div>
             <div>
               <span className="text-gray-400">Format:</span>
@@ -1273,6 +1218,13 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           <div className="fixed top-28 right-8 z-40 bg-black/80 border border-yellow-700 rounded-lg p-3 w-64 shadow-lg">
             <div className="text-yellow-400 font-bold text-xs mb-2 text-center">ADMIN TOOLS</div>
             <div className="grid grid-cols-1 gap-2">
+              {/* Fix Tournament Dates Button */}
+              <button
+                onClick={handleFixDates}
+                className="bg-orange-700 hover:bg-orange-800 text-white font-bold py-1 px-2 rounded text-xs border border-orange-900 transition-all duration-200"
+              >
+                Fix Dates
+              </button>
               {/* Bracket Reveal Button */}
               <button
                 onClick={() => navigate(`/admin/bracket-reveal/${id}`)}

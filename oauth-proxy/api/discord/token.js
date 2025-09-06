@@ -21,12 +21,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Debug: Log environment variables (remove in production)
-  console.log('Environment variables:', {
-    DISCORD_CLIENT_ID: process.env.DISCORD_CLIENT_ID ? 'SET' : 'NOT SET',
-    DISCORD_CLIENT_SECRET: process.env.DISCORD_CLIENT_SECRET ? 'SET' : 'NOT SET',
-    NODE_ENV: process.env.NODE_ENV
-  });
 
   try {
     const { code, redirect_uri } = req.body;

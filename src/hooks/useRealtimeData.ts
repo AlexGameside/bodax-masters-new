@@ -159,84 +159,118 @@ export const useRealtimeUserMatches = (userId: string) => {
     if (!userId) return;
 
     setLoading(true);
-    console.log('[useRealtimeUserMatches] Starting with userId:', userId);
-    
-    // Listen to all matches
-    const matchesQuery = query(
-      collection(db, 'matches'),
-      orderBy('createdAt', 'desc')
-    );
 
-    const matchesUnsubscribe = onSnapshotCollection(matchesQuery, (snapshot) => {
-      const allMatches = snapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Match[];
-      
-      console.log('[useRealtimeUserMatches] All matches loaded:', allMatches.length);
-      console.log('[useRealtimeUserMatches] Match details:', allMatches.map(m => ({
-        id: m.id,
-        team1Id: m.team1Id,
-        team2Id: m.team2Id,
-        matchState: m.matchState,
-        tournamentId: m.tournamentId
-      })));
-      
-      setMatches(allMatches);
-      
-      // Extract unique team IDs from matches
-      const teamIds = new Set<string>();
-      allMatches.forEach(match => {
-        if (match.team1Id) teamIds.add(match.team1Id);
-        if (match.team2Id) teamIds.add(match.team2Id);
-      });
-      
-      console.log('[useRealtimeUserMatches] Team IDs found:', Array.from(teamIds));
-      
-      // Fetch teams data for all team IDs found in matches
-      if (teamIds.size > 0) {
-        const teamsQuery = query(
-          collection(db, 'teams'),
-          where('__name__', 'in', Array.from(teamIds))
+    // Set up real-time listeners for teams and matches
+    const loadData = async () => {
+      try {
+        // Import the service functions dynamically to avoid circular dependencies
+        const { getTeams, getMatches } = await import('../services/firebaseService');
+        
+        // Get user's teams using the secure service function
+        const userTeams = await getTeams(userId, false);
+        setTeams(userTeams);
+        
+        // Get matches using the secure service function
+        const allMatches = await getMatches();
+        
+        // Filter matches to only include those where user's teams are participating
+        const userTeamIds = userTeams.map(team => team.id);
+        const userMatches = allMatches.filter(match => 
+          (match.team1Id && userTeamIds.includes(match.team1Id)) || 
+          (match.team2Id && userTeamIds.includes(match.team2Id))
         );
         
-        getDocs(teamsQuery).then((teamsSnapshot) => {
-          const teamsData = teamsSnapshot.docs.map((doc: any) => ({
-            id: doc.id,
-            ...doc.data()
-          })) as Team[];
-          
-          console.log('[useRealtimeUserMatches] Teams loaded:', teamsData.length);
-          console.log('[useRealtimeUserMatches] Team details:', teamsData.map(t => ({
-            id: t.id,
-            name: t.name,
-            ownerId: t.ownerId
-          })));
-          
-          setTeams(teamsData);
-        }).catch((error) => {
-          console.error('Error fetching teams:', error);
-        });
-      } else {
-        setTeams([]);
+        setMatches(userMatches);
+        setError(null);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setError(error instanceof Error ? error.message : 'Unknown error');
+        setLoading(false);
       }
+    };
+
+    // Initial load
+    loadData();
+
+    // Set up real-time listeners for matches
+    const matchesQuery = query(
+      collection(db, 'matches'),
+      where('isComplete', '==', false)
+    );
+    
+    const unsubscribeMatches = onSnapshot(matchesQuery, (snapshot) => {
+      const updatedMatches: Match[] = [];
       
-      setError(null);
-      setLoading(false);
+      snapshot.forEach((doc) => {
+        const matchData = {
+          id: doc.id,
+          ...doc.data()
+        } as Match;
+        
+        // Convert Firestore Timestamps to Date objects
+        if (matchData.scheduledTime && typeof matchData.scheduledTime === 'object' && 'seconds' in matchData.scheduledTime) {
+          matchData.scheduledTime = new Date((matchData.scheduledTime as any).seconds * 1000);
+        }
+        if (matchData.createdAt && typeof matchData.createdAt === 'object' && 'seconds' in matchData.createdAt) {
+          matchData.createdAt = new Date((matchData.createdAt as any).seconds * 1000);
+        }
+        
+        // Only include matches where user's teams are participating
+        // We'll filter this in the component using the teams state
+        updatedMatches.push(matchData);
+      });
+      
+      setMatches(updatedMatches);
     }, (error) => {
       console.error('Error listening to matches:', error);
       setError(error.message);
-      setLoading(false);
     });
 
-    return () => matchesUnsubscribe();
+    // Set up real-time listeners for user's teams
+    const teamsQuery = query(collection(db, 'teams'));
+    
+    const unsubscribeTeams = onSnapshot(teamsQuery, (snapshot) => {
+      const updatedTeams: Team[] = [];
+      
+      snapshot.forEach((doc) => {
+        const teamData = {
+          id: doc.id,
+          ...doc.data()
+        } as Team;
+        
+        // Convert Firestore Timestamps to Date objects
+        if (teamData.createdAt && typeof teamData.createdAt === 'object' && 'seconds' in teamData.createdAt) {
+          teamData.createdAt = new Date((teamData.createdAt as any).seconds * 1000);
+        }
+        
+        // Filter teams to only include those where the user is a member
+        const isOwner = teamData.ownerId === userId;
+        const isCaptain = teamData.captainId === userId;
+        const isMember = teamData.members && teamData.members.some((member: any) => member.userId === userId);
+        
+        if (isOwner || isCaptain || isMember) {
+          updatedTeams.push(teamData);
+        }
+      });
+      
+      setTeams(updatedTeams);
+    }, (error) => {
+      console.error('Error listening to teams:', error);
+      setError(error.message);
+    });
+
+    return () => {
+      unsubscribeMatches();
+      unsubscribeTeams();
+    };
   }, [userId]);
 
   return { matches, teams, loading, error };
 };
 
 // Real-time tournaments hook
-export const useRealtimeTournaments = () => {
+export const useRealtimeTournaments = (currentUserId?: string) => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -244,39 +278,38 @@ export const useRealtimeTournaments = () => {
   useEffect(() => {
     setLoading(true);
     
-    const tournamentsQuery = query(
-      collection(db, 'tournaments'),
-      orderBy('createdAt', 'desc')
-    );
+    // Use the secure service function instead of direct Firestore access
+    const loadTournaments = async () => {
+      try {
+        // Import the service function dynamically to avoid circular dependencies
+        const { getTournaments } = await import('../services/firebaseService');
+        
+        // Get tournaments using the secure service function with current user ID
+        const tournamentsData = await getTournaments(currentUserId, false);
+        
+        // Convert Firestore Timestamps to Date objects
+        const processedTournaments = tournamentsData.map(tournament => ({
+          ...tournament,
+          createdAt: tournament.createdAt && typeof tournament.createdAt === 'object' && 'seconds' in tournament.createdAt
+            ? new Date((tournament.createdAt as any).seconds * 1000)
+            : tournament.createdAt,
+          updatedAt: tournament.updatedAt && typeof tournament.updatedAt === 'object' && 'seconds' in tournament.updatedAt
+            ? new Date((tournament.updatedAt as any).seconds * 1000)
+            : tournament.updatedAt,
+        }));
+        
+        setTournaments(processedTournaments);
+        setError(null);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error loading tournaments:', error);
+        setError(error instanceof Error ? error.message : 'Unknown error');
+        setLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshotCollection(tournamentsQuery, (snapshot) => {
-      const tournamentsData = snapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Tournament[];
-      
-      // Convert Firestore Timestamps to Date objects
-      const processedTournaments = tournamentsData.map(tournament => ({
-        ...tournament,
-        createdAt: tournament.createdAt && typeof tournament.createdAt === 'object' && 'seconds' in tournament.createdAt
-          ? new Date((tournament.createdAt as any).seconds * 1000)
-          : tournament.createdAt,
-        updatedAt: tournament.updatedAt && typeof tournament.updatedAt === 'object' && 'seconds' in tournament.updatedAt
-          ? new Date((tournament.updatedAt as any).seconds * 1000)
-          : tournament.updatedAt,
-      }));
-      
-      setTournaments(processedTournaments);
-      setError(null);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error listening to tournaments:', error);
-      setError(error.message);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+    loadTournaments();
+  }, [currentUserId]);
 
   return { tournaments, loading, error };
 };
@@ -292,41 +325,26 @@ export const useRealtimeUserTeams = (userId: string) => {
 
     setLoading(true);
     
-    // Listen to all teams and filter for the current user
-    const teamsQuery = query(
-      collection(db, 'teams'),
-      orderBy('createdAt', 'desc')
-    );
+    // Use the secure service function instead of direct Firestore access
+    const loadTeams = async () => {
+      try {
+        // Import the service function dynamically to avoid circular dependencies
+        const { getTeams } = await import('../services/firebaseService');
+        
+        // Get user's teams using the secure service function
+        const userTeams = await getTeams(userId, false);
+        
+        setTeams(userTeams);
+        setError(null);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error loading user teams:', error);
+        setError(error instanceof Error ? error.message : 'Unknown error');
+        setLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshotCollection(teamsQuery, (snapshot) => {
-      const allTeams = snapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Team[];
-      
-      // Filter teams where user is a member
-      const userTeams = allTeams.filter(team => 
-        team.members && team.members.some(member => member.userId === userId)
-      );
-      
-      console.log('[useRealtimeUserTeams] Debug:', {
-        userId,
-        totalTeams: allTeams.length,
-        userTeams: userTeams.length,
-        teamIds: userTeams.map(t => t.id),
-        teamNames: userTeams.map(t => t.name)
-      });
-      
-      setTeams(userTeams);
-      setError(null);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error listening to teams:', error);
-      setError(error.message);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    loadTeams();
   }, [userId]);
 
   return { teams, loading, error };

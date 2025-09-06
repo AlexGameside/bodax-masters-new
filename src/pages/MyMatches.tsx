@@ -10,20 +10,6 @@ const MyMatches: React.FC = () => {
   // Use real-time hook for user matches and teams
   const { matches, teams, loading, error } = useRealtimeUserMatches(currentUser?.id || '');
   
-  // Add some debugging
-  console.log('[MyMatches] Debug:', {
-    currentUserId: currentUser?.id,
-    matchesCount: matches.length,
-    teamsCount: teams.length,
-    matches: matches.map(m => ({ id: m.id, team1Id: m.team1Id, team2Id: m.team2Id, matchState: m.matchState })),
-    teams: teams.map(t => ({ id: t.id, name: t.name, ownerId: t.ownerId })),
-    loading,
-    error
-  });
-  
-  // No need to create fake teams anymore - we get real team data from the hook
-  console.log('[MyMatches] Using teams from hook:', teams.map(t => ({ id: t.id, name: t.name, ownerId: t.ownerId })));
-  
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">

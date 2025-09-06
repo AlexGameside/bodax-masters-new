@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, ExternalLink, Heart } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, ExternalLink, Heart, MessageSquare } from 'lucide-react';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -45,7 +45,17 @@ const Footer = () => {
                   Contact Us
                 </Link>
               </li>
-
+              <li>
+                <a 
+                  href="https://discord.gg/ewAk7wBgHT" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-pink-200 hover:text-cyan-400 transition-colors duration-200 flex items-center"
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Discord Community
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -85,6 +95,15 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-semibold text-white mb-4">Follow Us</h3>
             <div className="flex space-x-4">
+              <a 
+                href="https://discord.gg/ewAk7wBgHT" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-pink-200 hover:text-cyan-400 transition-colors duration-200"
+                title="Join our Discord Community"
+              >
+                <MessageSquare className="w-5 h-5" />
+              </a>
               <a href="#" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
                 <Facebook className="w-5 h-5" />
               </a>
@@ -99,7 +118,7 @@ const Footer = () => {
               </a>
             </div>
             <p className="text-pink-200 text-sm mt-4">
-              Join our community for updates, tournaments, and more!
+              Join our Discord community for updates, tournaments, and more!
             </p>
           </div>
         </div>

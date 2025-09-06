@@ -12,13 +12,11 @@ export const useAuth = () => {
 
   const fetchUserData = async (firebaseUser: FirebaseUser) => {
     try {
-      console.log('🔍 DEBUG: Fetching user data for Firebase UID:', firebaseUser.uid);
-      
       // Get user data from Firestore
       const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        console.log('✅ DEBUG: Found user document:', userData.username);
+
         
         const customUser: User = {
           id: userDoc.id,
@@ -40,19 +38,18 @@ export const useAuth = () => {
         console.error('❌ DEBUG: This means the registration process failed to create the Firestore document');
         
         // Try to get the user by email as a fallback
-        console.log('🔍 DEBUG: Attempting fallback lookup by email...');
+
         const emailQuery = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
         const emailSnapshot = await getDocs(emailQuery);
         
                 if (!emailSnapshot.empty) {
           const userDoc = emailSnapshot.docs[0];
           const userData = userDoc.data();
-          console.log('✅ DEBUG: Found user by email fallback:', userData.username);
-          console.log('✅ DEBUG: Using document ID from fallback:', userDoc.id);
+          
           
           // Fix the document ID mismatch automatically
           if (userDoc.id !== firebaseUser.uid) {
-            console.log('🔧 DEBUG: Document ID mismatch detected, fixing...');
+    
             await fixDocumentIdMismatch(firebaseUser, userDoc.id);
             
             // Now fetch the user data again with the correct UID
@@ -124,9 +121,7 @@ export const useAuth = () => {
   // Function to fix document ID mismatch
   const fixDocumentIdMismatch = async (firebaseUser: FirebaseUser, correctDocId: string) => {
     try {
-      console.log('🔧 DEBUG: Fixing document ID mismatch...');
-      console.log('🔧 DEBUG: Firebase UID:', firebaseUser.uid);
-      console.log('🔧 DEBUG: Correct document ID:', correctDocId);
+      
       
       // Get the user data from the correct document
       const correctDoc = await getDoc(doc(db, 'users', correctDocId));
@@ -147,7 +142,7 @@ export const useAuth = () => {
       // Delete the old document
       await deleteDoc(doc(db, 'users', correctDocId));
       
-      console.log('✅ DEBUG: Document ID mismatch fixed successfully');
+      
     } catch (error) {
       console.error('❌ DEBUG: Error fixing document ID mismatch:', error);
     }

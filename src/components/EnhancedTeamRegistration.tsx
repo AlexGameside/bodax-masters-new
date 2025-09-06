@@ -52,10 +52,7 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
       try {
         const realUserData: {[key: string]: {username: string, riotId: string}} = {};
         
-        // Debug: Log team members to check for duplicates
-        console.log('Team members:', team.members);
-        console.log('Team owner ID:', team.ownerId);
-        console.log('Team captain ID:', team.captainId);
+
         
         // Fetch real user data for each team member
         for (const member of team.members) {
@@ -95,10 +92,6 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
     setSelectedMembers(prev => {
       const newState = { ...prev };
       
-      // Debug: Log the selection action
-      console.log(`Adding user ${userId} to role ${role}`);
-      console.log('Current state before:', prev);
-      
       // Remove user from all other roles first
       newState.mainPlayers = newState.mainPlayers.filter(id => id !== userId);
       newState.substitutes = newState.substitutes.filter(id => id !== userId);
@@ -111,7 +104,6 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
         case 'main_player':
           if (newState.mainPlayers.length < requirements.maxMainPlayers) {
             newState.mainPlayers.push(userId);
-            console.log(`Added ${userId} to main players. New count: ${newState.mainPlayers.length}`);
           } else {
             console.warn(`Cannot add ${userId} to main players. Already at max: ${requirements.maxMainPlayers}`);
           }
@@ -119,7 +111,6 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
         case 'substitute':
           if (newState.substitutes.length < requirements.maxSubstitutes) {
             newState.substitutes.push(userId);
-            console.log(`Added ${userId} to substitutes. New count: ${newState.substitutes.length}`);
           } else {
             console.warn(`Cannot add ${userId} to substitutes. Already at max: ${requirements.maxSubstitutes}`);
           }
@@ -127,24 +118,20 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
         case 'coach':
           if (requirements.allowCoaches) {
             newState.coach = userId;
-            console.log(`Set ${userId} as coach`);
           }
           break;
         case 'assistant_coach':
           if (requirements.allowAssistantCoaches) {
             newState.assistantCoach = userId;
-            console.log(`Set ${userId} as assistant coach`);
           }
           break;
         case 'manager':
           if (requirements.allowManagers) {
             newState.manager = userId;
-            console.log(`Set ${userId} as manager`);
           }
           break;
       }
       
-      console.log('New state after:', newState);
       return newState;
     });
   };
@@ -153,33 +140,24 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
     setSelectedMembers(prev => {
       const newState = { ...prev };
       
-      console.log(`Removing user ${userId} from role ${role}`);
-      console.log('Current state before removal:', prev);
-      
       switch (role) {
         case 'main_player':
           newState.mainPlayers = newState.mainPlayers.filter(id => id !== userId);
-          console.log(`Removed ${userId} from main players. New count: ${newState.mainPlayers.length}`);
           break;
         case 'substitute':
           newState.substitutes = newState.substitutes.filter(id => id !== userId);
-          console.log(`Removed ${userId} from substitutes. New count: ${newState.substitutes.length}`);
           break;
         case 'coach':
           newState.coach = undefined;
-          console.log(`Removed ${userId} as coach`);
           break;
         case 'assistant_coach':
           newState.assistantCoach = undefined;
-          console.log(`Removed ${userId} as assistant coach`);
           break;
         case 'manager':
           newState.manager = undefined;
-          console.log(`Removed ${userId} as manager`);
           break;
       }
       
-      console.log('New state after removal:', newState);
       return newState;
     });
   };

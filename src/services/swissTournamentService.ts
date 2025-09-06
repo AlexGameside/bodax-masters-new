@@ -34,9 +34,9 @@ export class SwissTournamentService {
   // Generate Swiss rounds for a tournament
   static async generateSwissRounds(tournamentId: string, teams: string[], rounds: number): Promise<void> {
     try {
-      console.log('🔍 DEBUG: Starting generateSwissRounds for tournament:', tournamentId);
-      console.log('🔍 DEBUG: Teams:', teams);
-      console.log('🔍 DEBUG: Rounds:', rounds);
+      
+      
+      
       
       const batch = writeBatch(db);
       
@@ -61,18 +61,19 @@ export class SwissTournamentService {
         };
         
         batch.set(matchdayRef, matchdayData);
-        console.log('🔍 DEBUG: Created matchday', matchday, 'with ID:', matchdayRef.id);
+        
       }
       
       // Generate first round pairings (random for now, can be improved with seeding)
       const firstRoundMatches = this.generateFirstRoundPairings(teams);
-      console.log('🔍 DEBUG: Generated first round pairings:', firstRoundMatches);
+      
       
       // Store matchday IDs for later use
       const matchdayIds: string[] = [];
       
       // Create first round matches
-      for (const [team1Id, team2Id] of firstRoundMatches) {
+      for (let i = 0; i < firstRoundMatches.length; i++) {
+        const [team1Id, team2Id] = firstRoundMatches[i];
         const matchRef = doc(collection(db, 'matches'));
         const matchData: Partial<Match> = {
           id: matchRef.id,
@@ -86,7 +87,7 @@ export class SwissTournamentService {
           team2Score: 0,
           isComplete: false,
           round: 1,
-          matchNumber: firstRoundMatches.indexOf([team1Id, team2Id]) + 1,
+          matchNumber: i + 1,
           matchState: 'pending_scheduling', // Teams need to schedule first
           currentSchedulingStatus: 'pending', // Waiting for scheduling
           schedulingProposals: [],
@@ -100,23 +101,23 @@ export class SwissTournamentService {
         };
         
         batch.set(matchRef, matchData);
-        console.log('🔍 DEBUG: Created match:', team1Id, 'vs', team2Id, 'with ID:', matchRef.id);
+        
       }
       
-      console.log('🔍 DEBUG: Committing batch...');
+      
       // Commit the batch first to create matchdays and matches
       await batch.commit();
-      console.log('🔍 DEBUG: Batch committed successfully');
+      
       
       // Now get the first matchday and add matches to it
-      console.log('🔍 DEBUG: Getting first matchday...');
+      
       const firstMatchday = await this.getMatchdayByNumber(tournamentId, 1);
-      console.log('🔍 DEBUG: Found first matchday:', firstMatchday);
+      
       
       const matchdayRef = doc(db, 'matchdays', firstMatchday.id);
       
       // Get all matches for this tournament and matchday
-      console.log('🔍 DEBUG: Querying for matches...');
+      
       const matchesQuery = query(
         collection(db, 'matches'),
         where('tournamentId', '==', tournamentId),
@@ -124,14 +125,14 @@ export class SwissTournamentService {
       );
       const matchesSnapshot = await getDocs(matchesQuery);
       const matchIds = matchesSnapshot.docs.map(doc => doc.id);
-      console.log('🔍 DEBUG: Found matches:', matchIds);
+      
       
       // Update the first matchday with all match IDs
-      console.log('🔍 DEBUG: Updating matchday with matches...');
+      
       await updateDoc(matchdayRef, {
         matches: matchIds
       });
-      console.log('🔍 DEBUG: Matchday updated successfully');
+      
       
       // Update tournament with Swiss stage
       const tournamentRef = doc(db, 'tournaments', tournamentId);
@@ -253,7 +254,8 @@ export class SwissTournamentService {
       // Create matches for next round
       const batch = writeBatch(db);
       
-      for (const [team1Id, team2Id] of pairings) {
+      for (let i = 0; i < pairings.length; i++) {
+        const [team1Id, team2Id] = pairings[i];
         if (team2Id === 'BYE') continue; // Skip bye matches
         
         const matchRef = doc(collection(db, 'matches'));
@@ -269,7 +271,7 @@ export class SwissTournamentService {
           team2Score: 0,
           isComplete: false,
           round: nextRound,
-          matchNumber: pairings.indexOf([team1Id, team2Id]) + 1,
+          matchNumber: i + 1,
           matchState: 'pending_scheduling', // Teams need to schedule first
           currentSchedulingStatus: 'pending', // Waiting for scheduling
           schedulingProposals: [],
@@ -470,7 +472,7 @@ export class SwissTournamentService {
   // Update Swiss standings when a match is completed
   static async updateSwissStandings(tournamentId: string, match: Match): Promise<void> {
     try {
-      console.log('🔍 DEBUG: Updating Swiss standings for match:', match.id);
+      
       
       const tournamentRef = doc(db, 'tournaments', tournamentId);
       const tournamentDoc = await getDoc(tournamentRef);
@@ -483,7 +485,7 @@ export class SwissTournamentService {
       const swissStage = tournament.stageManagement?.swissStage;
       
       if (!swissStage || !swissStage.isActive) {
-        console.log('⚠️ DEBUG: Swiss stage not active, skipping standings update');
+        
         return;
       }
       
@@ -624,7 +626,7 @@ export class SwissTournamentService {
         updatedAt: serverTimestamp(),
       });
       
-      console.log('✅ DEBUG: Swiss standings updated successfully');
+      
       
       // Note: Next round generation is now manual - admin must trigger it
       // await this.checkAndGenerateNextRound(tournamentId, match);
@@ -647,7 +649,7 @@ export class SwissTournamentService {
     warnings?: string[];
   }> {
     try {
-      console.log('🔍 DEBUG: Manual next round generation requested for tournament:', tournamentId);
+      
       
       const tournamentRef = doc(db, 'tournaments', tournamentId);
       const tournamentDoc = await getDoc(tournamentRef);
@@ -675,7 +677,7 @@ export class SwissTournamentService {
       const currentRound = swissStage.currentRound;
       const totalRounds = swissStage.totalRounds;
       
-      console.log('🔍 DEBUG: Current state:', { currentMatchday, currentRound, totalRounds });
+      
       
       // Check if we can generate next round
       if (currentRound >= totalRounds) {
@@ -710,7 +712,7 @@ export class SwissTournamentService {
       // Check if matchday has ended and process forfeits first
       const matchday = await this.getMatchdayByNumber(tournamentId, currentMatchday);
       if (new Date() > matchday.endDate) {
-        console.log('⏰ DEBUG: Matchday ended, processing forfeits before manual round generation');
+        
         await this.processMatchdayForfeits(tournamentId, currentMatchday);
         
         // Re-check completion after forfeits
@@ -758,7 +760,7 @@ export class SwissTournamentService {
         updatedAt: serverTimestamp(),
       });
       
-      console.log('✅ DEBUG: Manually advanced to next round:', currentRound + 1);
+      
       
       return {
         success: true,
@@ -844,7 +846,7 @@ export class SwissTournamentService {
   // Process forfeits at the end of matchdays (1-1 draw, no rounds)
   static async processMatchdayForfeits(tournamentId: string, matchdayNumber: number): Promise<void> {
     try {
-      console.log(`🔍 DEBUG: Processing forfeits for matchday ${matchdayNumber}`);
+      
       
       // Get all matches for this matchday that aren't complete
       const matchesQuery = query(
@@ -863,7 +865,7 @@ export class SwissTournamentService {
         // Check if matchday has ended
         const matchday = await this.getMatchdayByNumber(tournamentId, matchdayNumber);
         if (now > matchday.endDate) {
-          console.log(`🔍 DEBUG: Matchday ${matchdayNumber} ended, forfeiting match ${matchDoc.id}`);
+          
           
           // Forfeit with 1-1 draw, no rounds
           await updateDoc(matchDoc.ref, {
@@ -877,7 +879,7 @@ export class SwissTournamentService {
             mapResults: undefined
           });
           
-          console.log(`✅ DEBUG: Match ${matchDoc.id} forfeited with 1-1 draw`);
+          
         }
       }
       
@@ -1075,9 +1077,9 @@ export class MatchSchedulingService {
       // Add the new proposal to the updated list
       updatedProposals.push(cleanProposal);
       
-      console.log('🔍 DEBUG: Original proposal:', newProposal);
-      console.log('🔍 DEBUG: Cleaned proposal:', cleanProposal);
-      console.log('🔍 DEBUG: Updated proposals array:', updatedProposals);
+      
+      
+      
       
       // Update match with updated proposals array (instead of using arrayUnion)
       await updateDoc(matchRef, {
@@ -1194,19 +1196,19 @@ export class MatchSchedulingService {
       };
       
       if (response === 'accept') {
-        console.log('🔍 DEBUG: Processing accept response for proposal:', proposal);
-        console.log('🔍 DEBUG: proposal.proposedTime:', proposal.proposedTime, 'type:', typeof proposal.proposedTime);
+        
+        
         
         // Convert Firestore Timestamp to Date if needed
         let scheduledTime: Date;
         if (proposal.proposedTime && typeof proposal.proposedTime === 'object' && 'seconds' in proposal.proposedTime) {
           // It's a Firestore Timestamp
           scheduledTime = new Date(proposal.proposedTime.seconds * 1000);
-          console.log('🔍 DEBUG: Converted Firestore Timestamp to Date:', scheduledTime);
+          
         } else if (proposal.proposedTime instanceof Date) {
           // It's already a Date
           scheduledTime = proposal.proposedTime;
-          console.log('🔍 DEBUG: proposal.proposedTime is already a Date:', scheduledTime);
+          
         } else {
           console.error('🔍 DEBUG: Invalid proposedTime format:', proposal.proposedTime);
           throw new Error('Invalid proposedTime format');
@@ -1226,7 +1228,7 @@ export class MatchSchedulingService {
       } else {
         // When denying with alternative proposal, create a new proposal for the other team
         if (alternativeProposal) {
-          console.log('🔍 DEBUG: Creating new proposal from alternative time');
+          
           
           // Create new proposal from the alternative time
           const newProposal: SchedulingProposal = {
@@ -1245,16 +1247,16 @@ export class MatchSchedulingService {
           updateData.schedulingProposals = cleanProposals;
           updateData.currentSchedulingStatus = 'proposed';
           
-          console.log('🔍 DEBUG: New alternative proposal created:', newProposal);
-          console.log('🔍 DEBUG: Updated proposals array:', cleanProposals);
-          console.log('🔍 DEBUG: Final update data:', updateData);
+          
+          
+          
         } else {
           updateData.currentSchedulingStatus = 'denied';
         }
       }
       
-      console.log('🔍 DEBUG: Final update data:', updateData);
-      console.log('🔍 DEBUG: Cleaned proposals:', cleanProposals);
+      
+      
       
       await updateDoc(matchRef, updateData);
       

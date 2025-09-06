@@ -62,10 +62,10 @@ const AdminStats: React.FC = () => {
       
       // Fetch all data
       const [users, teams, matches, tournaments] = await Promise.all([
-        getAllUsers(),
-        getTeams(),
+        getAllUsers(), // Admins can see all user data
+        getTeams(undefined, true), // Admins can see all teams
         getMatches(),
-        getTournaments()
+        getTournaments(undefined, true) // Admins can see all tournaments
       ]);
 
       

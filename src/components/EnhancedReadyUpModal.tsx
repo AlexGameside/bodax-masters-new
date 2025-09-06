@@ -258,23 +258,23 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-8">
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 max-w-3xl w-full mx-4 max-h-[85vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-white">Ready Up - Match #{match.matchNumber}</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-white">Ready Up - Match #{match.matchNumber}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl"
+            className="text-gray-400 hover:text-white text-xl"
           >
             ×
           </button>
         </div>
 
         {/* Match Info */}
-        <div className="bg-gray-700 rounded-lg p-4 mb-6">
-          <div className="text-white font-medium mb-2">
-            {team.name} vs {match.team1Id === team.id ? 'Opponent' : 'Opponent'}
+        <div className="bg-gray-700 rounded-lg p-3 mb-4">
+          <div className="text-white font-medium mb-1">
+            {team.name} vs Opponent
           </div>
           <div className="text-gray-300 text-sm">
             Round {match.round} • {match.tournamentType === 'swiss-round' ? `Swiss Round ${match.swissRound}` : 'Playoff'}
@@ -283,7 +283,7 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
 
         {/* Time Remaining */}
         {timeRemaining > 0 && (
-          <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4 mb-6">
+          <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-3 mb-4">
             <div className="text-yellow-400 font-medium text-center">
               ⏰ Match starts in: {formatTime(timeRemaining)}
             </div>
@@ -294,9 +294,9 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
         )}
 
         {/* Requirements */}
-        <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-6">
+        <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-3 mb-4">
           <h4 className="text-blue-400 font-medium mb-2">Roster Requirements:</h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <div>
               <div className="text-blue-300">Main Players:</div>
               <div className="text-white font-medium">5 Required</div>
@@ -317,22 +317,22 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
         </div>
 
         {/* Roster Selection */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Main Players */}
           <div>
-            <h4 className="text-lg font-semibold text-white mb-3">
+            <h4 className="text-base font-semibold text-white mb-2">
               Main Players ({selectedRoster.mainPlayers.length}/5) *
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
               {selectedRoster.mainPlayers.map(userId => (
-                <div key={userId} className="flex items-center justify-between bg-green-900/20 border border-green-700 rounded-lg p-3">
+                <div key={userId} className="flex items-center justify-between bg-green-900/20 border border-green-700 rounded-lg p-2">
                   <div className="flex items-center gap-2">
-                    <span className={`w-3 h-3 rounded-full ${getRoleColor('member')}`}></span>
-                    <span className="text-white font-medium">{getMemberName(userId)}</span>
+                    <span className={`w-2 h-2 rounded-full ${getRoleColor('member')}`}></span>
+                    <span className="text-white text-sm font-medium">{getMemberName(userId)}</span>
                   </div>
                   <button
                     onClick={() => removePlayer(userId, 'main_player')}
-                    className="text-red-400 hover:text-red-300 text-sm"
+                    className="text-red-400 hover:text-red-300 text-xs"
                   >
                     Remove
                   </button>
@@ -342,8 +342,8 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
             
             {selectedRoster.mainPlayers.length < 5 && (
               <div>
-                <div className="text-gray-400 text-sm mb-2">Select Main Players:</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="text-gray-400 text-xs mb-1">Select Main Players:</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
                   {availableMembers
                     .filter(member => !selectedRoster.mainPlayers.includes(member.userId) && 
                                      !selectedRoster.substitutes.includes(member.userId) &&
@@ -354,12 +354,12 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
                       <button
                         key={member.userId}
                         onClick={() => handlePlayerSelection(member.userId, 'main_player')}
-                        className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-3 transition-colors"
+                        className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-2 transition-colors"
                       >
                         <div className="flex items-center gap-2">
-                          <span className={`w-3 h-3 rounded-full ${getRoleColor(member.role)}`}></span>
+                          <span className={`w-2 h-2 rounded-full ${getRoleColor(member.role)}`}></span>
                           <div>
-                            <div className="text-white font-medium">{userData[member.userId]?.username || member.userId}</div>
+                            <div className="text-white text-sm font-medium">{userData[member.userId]?.username || member.userId}</div>
                             <div className="text-gray-400 text-xs">{userData[member.userId]?.riotId || 'No Riot ID'}</div>
                           </div>
                         </div>
@@ -373,19 +373,19 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
 
           {/* Substitutes */}
           <div>
-            <h4 className="text-lg font-semibold text-white mb-3">
+            <h4 className="text-base font-semibold text-white mb-2">
               Substitutes ({selectedRoster.substitutes.length}/2)
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
               {selectedRoster.substitutes.map(userId => (
-                <div key={userId} className="flex items-center justify-between bg-blue-900/20 border border-blue-700 rounded-lg p-3">
+                <div key={userId} className="flex items-center justify-between bg-blue-900/20 border border-blue-700 rounded-lg p-2">
                   <div className="flex items-center gap-2">
-                    <span className={`w-3 h-3 rounded-full ${getRoleColor('member')}`}></span>
-                    <span className="text-white">{getMemberName(userId)}</span>
+                    <span className={`w-2 h-2 rounded-full ${getRoleColor('member')}`}></span>
+                    <span className="text-white text-sm">{getMemberName(userId)}</span>
                   </div>
                   <button
                     onClick={() => removePlayer(userId, 'substitute')}
-                    className="text-red-400 hover:text-red-300 text-sm"
+                    className="text-red-400 hover:text-red-300 text-xs"
                   >
                     Remove
                   </button>
@@ -395,8 +395,8 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
             
             {selectedRoster.substitutes.length < 2 && (
               <div>
-                <div className="text-gray-400 text-sm mb-2">Select Substitutes:</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="text-gray-400 text-xs mb-1">Select Substitutes:</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
                   {availableMembers
                     .filter(member => !selectedRoster.mainPlayers.includes(member.userId) && 
                                      !selectedRoster.substitutes.includes(member.userId) &&
@@ -407,12 +407,12 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
                       <button
                         key={member.userId}
                         onClick={() => handlePlayerSelection(member.userId, 'substitute')}
-                        className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-3 transition-colors"
+                        className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-2 transition-colors"
                       >
                         <div className="flex items-center gap-2">
-                          <span className={`w-3 h-3 rounded-full ${getRoleColor(member.role)}`}></span>
+                          <span className={`w-2 h-2 rounded-full ${getRoleColor(member.role)}`}></span>
                           <div>
-                            <div className="text-white font-medium">{userData[member.userId]?.username || member.userId}</div>
+                            <div className="text-white text-sm font-medium">{userData[member.userId]?.username || member.userId}</div>
                             <div className="text-gray-400 text-xs">{userData[member.userId]?.riotId || 'No Riot ID'}</div>
                           </div>
                         </div>
@@ -426,24 +426,24 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
 
           {/* Coach Selection */}
           <div>
-            <h4 className="text-lg font-semibold text-white mb-3">
+            <h4 className="text-base font-semibold text-white mb-2">
               Coach (Optional)
             </h4>
             {selectedRoster.coach ? (
-              <div className="flex items-center justify-between bg-green-900/20 border border-green-700 rounded-lg p-3">
+              <div className="flex items-center justify-between bg-green-900/20 border border-green-700 rounded-lg p-2">
                 <div className="flex items-center gap-2">
-                  <span className={`w-3 h-3 rounded-full ${getRoleColor('coach')}`}></span>
-                  <span className="text-white">{getMemberName(selectedRoster.coach)}</span>
+                  <span className={`w-2 h-2 rounded-full ${getRoleColor('coach')}`}></span>
+                  <span className="text-white text-sm">{getMemberName(selectedRoster.coach)}</span>
                 </div>
                 <button
                   onClick={() => removePlayer(selectedRoster.coach!, 'coach')}
-                  className="text-red-400 hover:text-red-300 text-sm"
+                  className="text-red-400 hover:text-red-300 text-xs"
                 >
                   Remove
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
                 {availableMembers
                   .filter(member => !selectedRoster.mainPlayers.includes(member.userId) && 
                                    !selectedRoster.substitutes.includes(member.userId) &&
@@ -453,12 +453,12 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
                     <button
                       key={member.userId}
                       onClick={() => handlePlayerSelection(member.userId, 'coach')}
-                      className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-3 transition-colors"
+                      className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-2 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <span className={`w-3 h-3 rounded-full ${getRoleColor(member.role)}`}></span>
+                        <span className={`w-2 h-2 rounded-full ${getRoleColor(member.role)}`}></span>
                         <div>
-                          <div className="text-white font-medium">{userData[member.userId]?.username || member.userId}</div>
+                          <div className="text-white text-sm font-medium">{userData[member.userId]?.username || member.userId}</div>
                           <div className="text-gray-400 text-xs">{userData[member.userId]?.riotId || 'No Riot ID'}</div>
                         </div>
                       </div>
@@ -471,24 +471,24 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
 
           {/* Manager Selection */}
           <div>
-            <h4 className="text-lg font-semibold text-white mb-3">
+            <h4 className="text-base font-semibold text-white mb-2">
               Manager (Optional)
             </h4>
             {selectedRoster.manager ? (
-              <div className="flex items-center justify-between bg-orange-900/20 border border-orange-700 rounded-lg p-3">
+              <div className="flex items-center justify-between bg-orange-900/20 border border-orange-700 rounded-lg p-2">
                 <div className="flex items-center gap-2">
-                  <span className={`w-3 h-3 rounded-full ${getRoleColor('manager')}`}></span>
-                  <span className="text-white">{getMemberName(selectedRoster.manager)}</span>
+                  <span className={`w-2 h-2 rounded-full ${getRoleColor('manager')}`}></span>
+                  <span className="text-white text-sm">{getMemberName(selectedRoster.manager)}</span>
                 </div>
                 <button
                   onClick={() => removePlayer(selectedRoster.manager!, 'manager')}
-                  className="text-red-400 hover:text-red-300 text-sm"
+                  className="text-red-400 hover:text-red-300 text-xs"
                 >
                   Remove
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
                 {availableMembers
                   .filter(member => !selectedRoster.mainPlayers.includes(member.userId) && 
                                    !selectedRoster.substitutes.includes(member.userId) &&
@@ -498,12 +498,12 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
                     <button
                       key={member.userId}
                       onClick={() => handlePlayerSelection(member.userId, 'manager')}
-                      className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-3 transition-colors"
+                      className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-2 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <span className={`w-3 h-3 rounded-full ${getRoleColor(member.role)}`}></span>
+                        <span className={`w-2 h-2 rounded-full ${getRoleColor(member.role)}`}></span>
                         <div>
-                          <div className="text-white font-medium">{userData[member.userId]?.username || member.userId}</div>
+                          <div className="text-white text-sm font-medium">{userData[member.userId]?.username || member.userId}</div>
                           <div className="text-gray-400 text-xs">{userData[member.userId]?.riotId || 'No Riot ID'}</div>
                         </div>
                       </div>
@@ -517,23 +517,23 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 mt-6">
-            <div className="text-red-400">{error}</div>
+          <div className="bg-red-900/20 border border-red-700 rounded-lg p-3 mt-4">
+            <div className="text-red-400 text-sm">{error}</div>
           </div>
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-4 mt-6">
+        <div className="flex gap-3 mt-4">
           <button
             onClick={onClose}
-            className="px-6 py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors"
+            className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors text-sm"
           >
             Cancel
           </button>
           <button
             onClick={handleReadyUp}
             disabled={!isRosterValid() || isSubmitting}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
               !isRosterValid() || isSubmitting
                 ? 'bg-gray-600 cursor-not-allowed'
                 : 'bg-green-600 hover:bg-green-500'

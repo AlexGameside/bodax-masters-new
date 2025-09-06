@@ -90,18 +90,7 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
     if (match.schedulingProposals) {
       const messages: ChatMessage[] = [];
       
-      console.log('🔍 DEBUG: Processing scheduling proposals:', match.schedulingProposals);
-      
       match.schedulingProposals.forEach(proposal => {
-        console.log('🔍 DEBUG: Processing proposal:', {
-          id: proposal.id,
-          createdAt: proposal.createdAt,
-          createdAtType: typeof proposal.createdAt,
-          createdAtConstructor: proposal.createdAt?.constructor?.name,
-          respondedAt: proposal.respondedAt,
-          respondedAtType: typeof proposal.respondedAt,
-          respondedAtConstructor: proposal.respondedAt?.constructor?.name
-        });
         // Add proposal message
         const proposingTeam = teams.find(t => t.id === proposal.proposedBy);
         
@@ -281,25 +270,6 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
     // Simple team ID handling - no complex validation
     const teamIdToUse = selectedTeamId || teams[0]?.id;
     
-    // Check if this team has already proposed this exact time
-    console.log('🔍 DEBUG: Checking for duplicate proposals:', {
-      selectedTeamId,
-      teamIdToUse,
-      proposedDateTime: proposedDateTime.toISOString(),
-      existingProposals: match.schedulingProposals?.map(p => ({
-        id: p.id,
-        proposedBy: p.proposedBy,
-        proposedTime: p.proposedTime ? new Date(p.proposedTime).toISOString() : null,
-        status: p.status
-      }))
-    });
-    
-
-    
-
-
-
-
     setIsSubmitting(true);
     setError('');
 
@@ -510,12 +480,6 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
     p => p.status === 'pending' && p.proposedBy === currentTeamId
   ) : false;
   
-  // Debug logging for proposals
-  console.log('🔍 DEBUG: Scheduling proposals:', match.schedulingProposals);
-  console.log('🔍 DEBUG: Pending proposal:', pendingProposal);
-  console.log('🔍 DEBUG: Needs response:', needsResponse);
-  console.log('🔍 DEBUG: Current team has pending:', currentTeamHasPendingProposal);
-
   // Check if match should show ready-up interface
   let shouldShowReadyUp: boolean = (match.matchState === 'scheduled' || match.matchState === 'ready_up') && !!match.scheduledTime;
   
@@ -548,53 +512,18 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
   }
 
   return (
-    <div className="bg-gradient-to-br from-pink-500/10 via-magenta-600/10 to-purple-700/10 backdrop-blur-sm rounded-2xl p-8 border border-pink-400/30 shadow-2xl">
-      {/* Header with Unity League styling */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="bg-gradient-to-br from-cyan-500 to-blue-600 p-2 rounded-xl">
-          <Trophy className="w-5 h-5 text-white" />
-        </div>
-        <div>
-          <h3 className="text-xl font-bold text-white">Schedule Match</h3>
-          <div className="text-sm text-pink-200">
-            {constraints.daysRemaining} days remaining
-          </div>
-        </div>
-      </div>
-      
-      {/* Match Info with Unity styling */}
-      <div className="bg-black/60 border border-cyan-400/30 rounded-xl p-3 mb-4 shadow-lg backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-cyan-300 text-sm font-medium">Match #{match.matchNumber}</div>
-          <div className="bg-pink-600/20 px-2 py-1 rounded-full text-pink-300 text-xs">
-            R{match.swissRound} • MD{match.matchday}
-          </div>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="text-white font-bold text-lg">{currentTeam?.name}</div>
-          <div className="bg-gradient-to-r from-pink-500 to-purple-600 px-4 py-1 rounded-full text-white font-bold text-sm">vs</div>
-          <div className="text-white font-bold text-lg">{opponentTeam?.name}</div>
-        </div>
-      </div>
-
-      {/* Scheduling Constraints Warning */}
-      <div className="bg-gradient-to-r from-yellow-600/20 to-orange-600/20 border border-yellow-500/30 rounded-lg p-2 mb-3">
-        <div className="text-yellow-200 text-xs text-center">
-          Deadline: {constraints.deadline.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' })}
-        </div>
-      </div>
-
-      {/* Chat Interface with Unity styling */}
-      <div className="bg-black/60 rounded-2xl border border-cyan-400/30 h-[600px] flex flex-col shadow-xl backdrop-blur-sm">
+    <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
+      {/* Compact Chat Interface */}
+      <div className="bg-gray-800 rounded-lg border border-gray-600 h-[350px] flex flex-col">
         {/* Chat Header */}
-        <div className="p-3 border-b border-cyan-400/30 bg-gradient-to-r from-cyan-600/20 to-blue-600/20 rounded-t-2xl">
+        <div className="p-3 border-b border-gray-600 bg-gray-750 rounded-t-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <MessageCircle className="w-4 h-4 text-cyan-400" />
-              <h4 className="text-white font-bold text-sm">Chat</h4>
+              <MessageCircle className="w-4 h-4 text-blue-400" />
+              <h4 className="text-white text-sm font-medium">Schedule Match</h4>
             </div>
             {needsResponse && (
-              <div className="flex items-center bg-yellow-600/20 px-2 py-1 rounded-full text-yellow-400 text-xs font-medium border border-yellow-500/30">
+              <div className="flex items-center bg-yellow-600/20 px-2 py-1 rounded text-yellow-400 text-xs font-medium">
                 <AlertCircle className="w-3 h-3 mr-1" />
                 Response needed
               </div>
@@ -603,12 +532,12 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {chatMessages.length === 0 ? (
-            <div className="text-center text-gray-400 py-12">
-              <MessageCircle className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p className="text-lg mb-2">No scheduling messages yet</p>
-              <p className="text-sm text-pink-200">Send a proposal to get started!</p>
+            <div className="text-center text-gray-400 py-8">
+              <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No messages yet</p>
+              <p className="text-xs text-gray-500 mt-1">Start the conversation by sending a proposal</p>
             </div>
           ) : (
             chatMessages.map((msg) => (
@@ -617,26 +546,26 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
                 className={`flex ${msg.teamId === currentTeamId ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                  className={`max-w-[280px] px-3 py-2 rounded-lg text-sm ${
                     msg.status === 'cancelled'
-                      ? 'bg-gray-800/40 text-gray-400 border border-gray-700/30 opacity-60'
+                      ? 'bg-gray-700 text-gray-400 opacity-60'
                       : msg.teamId === currentTeamId
-                      ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg'
-                      : 'bg-gray-700/80 text-white border border-gray-600/50'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-white'
                   }`}
                 >
                   {/* Message Header */}
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-1">
                     <span className="text-xs opacity-75 font-medium">{msg.teamName}</span>
                     <span className="text-xs opacity-75">{formatMessageTime(msg.timestamp)}</span>
                   </div>
 
                   {/* Message Content */}
-                  <div className="mb-3">
+                  <div className="mb-1">
                     {msg.type === 'proposal' && msg.proposedTime && (
-                      <div className="flex items-center mb-3 bg-white/10 rounded-lg p-2">
-                        <Calendar className="w-4 h-4 mr-2 text-cyan-300" />
-                        <span className="font-bold">{formatDateTime(msg.proposedTime)}</span>
+                      <div className="flex items-center mb-1 bg-white/10 rounded px-2 py-1">
+                        <Calendar className="w-3 h-3 mr-1 text-blue-300" />
+                        <span className="font-semibold text-xs">{formatDateTime(msg.proposedTime)}</span>
                       </div>
                     )}
                     <p className="text-sm leading-relaxed">{msg.content}</p>
@@ -644,14 +573,14 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
 
                   {/* Status Badge */}
                   {msg.status && (
-                    <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                    <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                       msg.status === 'accepted' 
-                        ? 'bg-green-600/20 text-green-400 border border-green-500/30' 
+                        ? 'bg-green-600/20 text-green-400 border border-green-600' 
                         : msg.status === 'denied' 
-                        ? 'bg-red-600/20 text-red-400 border border-red-500/30'
+                        ? 'bg-red-600/20 text-red-400 border border-red-600'
                         : msg.status === 'cancelled'
-                        ? 'bg-gray-600/20 text-gray-400 border border-gray-500/30'
-                        : 'bg-yellow-600/20 text-yellow-400 border border-yellow-500/30'
+                        ? 'bg-gray-600/20 text-gray-400 border border-gray-600'
+                        : 'bg-yellow-600/20 text-yellow-400 border border-yellow-600'
                     }`}>
                       {msg.status === 'accepted' && <CheckCircle className="w-3 h-3 mr-1" />}
                       {msg.status === 'denied' && <XCircle className="w-3 h-3 mr-1" />}
@@ -663,10 +592,10 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
 
                   {/* Alternative Proposal */}
                   {msg.alternativeProposal && (
-                    <div className="mt-3 p-3 bg-cyan-600/20 rounded-lg text-sm border border-cyan-500/30">
+                    <div className="mt-2 p-2 bg-blue-600/20 rounded text-xs border border-blue-600">
                       <div className="flex items-center">
-                        <Clock className="w-4 h-4 mr-2 text-cyan-400" />
-                        <span className="text-cyan-300 font-medium">Alternative: {formatDateTime(msg.alternativeProposal)}</span>
+                        <Clock className="w-3 h-3 mr-1 text-blue-400" />
+                        <span className="text-blue-300 font-medium">Alternative: {formatDateTime(msg.alternativeProposal)}</span>
                       </div>
                     </div>
                   )}
@@ -678,32 +607,31 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
         </div>
 
         {/* Action Area */}
-        <div className="p-3 border-t border-cyan-400/30 bg-gradient-to-r from-cyan-600/20 to-blue-600/20 rounded-b-2xl">
+        <div className="p-3 border-t border-gray-600 bg-gray-750 rounded-b-lg">
           {needsResponse ? (
             /* Response Form */
-            <div className="space-y-4">
+            <div className="space-y-2">
               <div className="text-center">
-                <div className="text-yellow-400 text-lg font-bold mb-2">
+                <div className="text-yellow-400 text-sm font-medium">
                   Respond to {teams.find(t => t.id === pendingProposal?.proposedBy)?.name}'s proposal
                 </div>
-                <div className="text-pink-200 text-sm">You have {constraints.daysRemaining} days remaining to schedule</div>
               </div>
               
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleRespondToProposal(pendingProposal!.id, 'accept')}
                   disabled={isSubmitting}
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-700 text-white px-3 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center text-sm"
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors flex items-center justify-center"
                 >
-                  <CheckCircle className="w-4 h-4 mr-1" />
+                  <CheckCircle className="w-3 h-3 mr-1" />
                   Accept
                 </button>
                 <button
                   onClick={() => setShowProposalForm(true)}
                   disabled={isSubmitting}
-                  className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-700 text-white px-3 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center text-sm"
+                  className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors flex items-center justify-center"
                 >
-                  <XCircle className="w-4 h-4 mr-1" />
+                  <XCircle className="w-3 h-3 mr-1" />
                   Deny
                 </button>
               </div>
@@ -713,29 +641,19 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
           {/* Always show proposal form for admins without a team, or when no response is needed */}
           {(isAdmin && !currentTeamId) || !needsResponse ? (
             /* Send New/Update Proposal Button */
-            <div className="space-y-2">
+            <div>
               {currentTeamHasPendingProposal && (
-                <div className="text-center text-yellow-400 text-xs">
+                <div className="text-center text-yellow-400 text-xs mb-2">
                   You have a pending proposal. Sending a new one will replace it.
                 </div>
               )}
               <button
                 onClick={() => setShowProposalForm(true)}
                 disabled={isSubmitting}
-                className="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 text-white py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center text-sm"
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white py-2 rounded text-sm font-medium transition-colors flex items-center justify-center"
               >
-                <Send className="w-4 h-4 mr-1" />
+                <Send className="w-3 h-3 mr-1" />
                 {currentTeamHasPendingProposal ? 'Update Proposal' : 'Send Proposal'}
-                {isAdmin && !currentTeamId && selectedTeamId && (
-                  <span className="block text-xs text-cyan-300 mt-1">
-                    for {teams.find(t => t.id === selectedTeamId)?.name}
-                  </span>
-                )}
-                {isAdmin && currentTeamId && (
-                  <span className="block text-xs text-cyan-300 mt-1">
-                    for your team
-                  </span>
-                )}
               </button>
             </div>
           ) : null}
@@ -744,38 +662,28 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
 
       {/* Proposal Form Modal */}
       {showProposalForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 max-w-md w-full mx-4 border border-cyan-400/30 shadow-2xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="bg-gradient-to-br from-cyan-500 to-blue-600 p-3 rounded-xl">
-                <Calendar className="w-6 h-6 text-white" />
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-start justify-center z-50 pt-8">
+          <div className="bg-gray-800 rounded-lg p-4 max-w-md w-full mx-4 border border-gray-600">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="bg-blue-600 p-1.5 rounded">
+                <Calendar className="w-4 h-4 text-white" />
               </div>
-              <h4 className="text-xl font-bold text-white">
+              <h4 className="text-sm font-bold text-white">
                 {needsResponse ? 'Propose Alternative Time' : 'Send Scheduling Proposal'}
-                {isAdmin && !currentTeamId && selectedTeamId && (
-                  <span className="block text-sm text-cyan-300 mt-1">
-                    on behalf of {teams.find(t => t.id === selectedTeamId)?.name}
-                  </span>
-                )}
-                {isAdmin && currentTeamId && (
-                  <span className="block text-sm text-cyan-300 mt-1">
-                    for your team: {teams.find(t => t.id === currentTeamId)?.name}
-                  </span>
-                )}
               </h4>
             </div>
             
-            <div className="space-y-6">
+            <div className="space-y-3">
               {/* Team Selection for Admins without a team */}
               {isAdmin && !currentTeamId && (
                 <div>
-                  <label className="block text-cyan-300 text-sm font-medium mb-3">
+                  <label className="block text-blue-300 text-sm font-medium mb-1">
                     Act on behalf of
                   </label>
                   <select
                     value={selectedTeamId}
                     onChange={(e) => setSelectedTeamId(e.target.value)}
-                    className="w-full bg-gray-700 border border-cyan-500/30 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     {teams.map(team => (
                       <option key={team.id} value={team.id}>
@@ -786,40 +694,35 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
                 </div>
               )}
               
-              <div>
-                <label className="block text-cyan-300 text-sm font-medium mb-3">
-                  Proposed Date
-                </label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  min={constraints.minDate.toISOString().split('T')[0]}
-                  max={constraints.maxDate.toISOString().split('T')[0]}
-                  className="w-full bg-gray-700 border border-cyan-500/30 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
-                />
-                <div className="text-xs text-pink-200 mt-1">
-                  Available: {constraints.minDate.toLocaleDateString()} - {constraints.maxDate.toLocaleDateString()}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-blue-300 text-sm font-medium mb-1">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    min={constraints.minDate.toISOString().split('T')[0]}
+                    max={constraints.maxDate.toISOString().split('T')[0]}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-blue-300 text-sm font-medium mb-1">
+                    Time
+                  </label>
+                  <input
+                    type="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="block text-cyan-300 text-sm font-medium mb-3">
-                  Proposed Time
-                </label>
-                <input
-                  type="time"
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                  className="w-full bg-gray-700 border border-cyan-500/30 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
-                />
-                <div className="text-xs text-pink-200 mt-1">
-                  Choose any time, but you can't propose the same time twice
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-cyan-300 text-sm font-medium mb-3">
+                <label className="block text-blue-300 text-sm font-medium mb-1">
                   Message (Optional)
                 </label>
                 <textarea
@@ -827,24 +730,24 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder={needsResponse ? "Why are you denying and what's your alternative?" : "Add a message for your opponent..."}
                   rows={3}
-                  className="w-full bg-gray-700 border border-cyan-500/30 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none transition-all duration-200"
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
                 />
               </div>
 
               {/* Error Message Display */}
               {error && (
-                <div className="bg-gradient-to-r from-red-600/20 to-pink-600/20 border border-red-500/30 rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <XCircle className="w-5 h-5 text-red-400" />
-                    <div className="text-red-300 font-medium">{error}</div>
+                <div className="bg-red-900/20 border border-red-600 rounded p-2">
+                  <div className="flex items-center gap-1">
+                    <XCircle className="w-3 h-3 text-red-400" />
+                    <div className="text-red-300 text-sm">{error}</div>
                   </div>
                 </div>
               )}
 
-              <div className="flex gap-4">
+              <div className="flex gap-3">
                 <button
                   onClick={() => setShowProposalForm(false)}
-                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-xl font-medium transition-all duration-200"
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 rounded text-sm font-medium transition-colors"
                 >
                   Cancel
                 </button>
@@ -854,7 +757,7 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
                     handleSendProposal
                   }
                   disabled={isSubmitting || !selectedDate || !selectedTime}
-                  className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-700 text-white py-3 rounded-xl font-bold transition-all duration-200 shadow-lg hover:shadow-xl"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white py-2 rounded text-sm font-bold transition-colors"
                 >
                   {isSubmitting ? 'Sending...' : (needsResponse ? 'Send Alternative' : 'Send Proposal')}
                 </button>
@@ -863,38 +766,6 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
           </div>
         </div>
       )}
-
-
-
-      {/* Help Text with Unity styling */}
-      <div className="mt-8 p-6 bg-black/60 rounded-2xl border border-pink-400/30">
-        <div className="flex items-center gap-3 mb-4">
-          <Zap className="w-6 h-6 text-pink-400" />
-          <h5 className="text-pink-400 font-bold text-lg">How Unity League Scheduling Works</h5>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-cyan-300">
-              <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
-              <span>Send a proposal within the 7-day window</span>
-            </div>
-            <div className="flex items-center gap-2 text-pink-300">
-              <div className="w-2 h-2 bg-pink-400 rounded-full"></div>
-              <span>Can't propose same time twice or within 59 minutes</span>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-purple-300">
-              <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-              <span>Your opponent can accept or propose alternative</span>
-            </div>
-            <div className="flex items-center gap-2 text-yellow-300">
-              <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-              <span>Keep negotiating until you agree on a time</span>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

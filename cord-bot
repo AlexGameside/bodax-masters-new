@@ -1,0 +1,5 @@
+[33m0154a19[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Complete Swiss tournament system implementation with manual round management, enhanced match scheduling, and improved admin controls
+[33m0cad14c[m feat: Implement Coming Soon mode with auth state fixes and username display
+[33m62c4870[m Add tournament management features and UI improvements
+[33ma72decf[m Fix authentication loading state - prevent redirect to login during user data fetch
+[33m2e60dc7[m Add admin chat functionality - admins can now chat in matches and are clearly identified with [ADMIN] prefix and purple color

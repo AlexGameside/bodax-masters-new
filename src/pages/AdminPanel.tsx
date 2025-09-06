@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Team, Match, User, Tournament } from '../types/tournament';
-import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink, MessageCircle, FileText, Activity, RefreshCw, User as UserIcon, BarChart3 } from 'lucide-react';
+import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink, MessageCircle, FileText, Activity, RefreshCw, User as UserIcon, BarChart3, Link } from 'lucide-react';
 import { getAllUsers, updateUserAdminStatus, createTestScenario, clearTestData, createTestUsersWithAuth, getTestUsers, migrateAllTeams, updateAllInvitationsExpiration, sendDiscordNotificationToUser, getUsersWithDiscord, getSignupLogs, getGeneralLogs, logAdminAction, type AdminLog } from '../services/firebaseService';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { toast } from 'react-hot-toast';
 import AdminStats from './AdminStats';
+import { exportTeamsWithTournamentStatus, getTournamentTeamsData } from '../scripts/enhancedTeamExport';
 
 interface AdminPanelProps {
   teams: Team[];
@@ -34,7 +36,7 @@ const AdminPanel = ({
   onGenerateFinalBracket
 }: AdminPanelProps) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs' | 'users' | 'stats'>('tournaments');
+  const [activeTab, setActiveTab] = useState<'tournaments' | 'teams' | 'matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs' | 'users' | 'stats' | 'stream-overlays'>('tournaments');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -58,10 +60,16 @@ const AdminPanel = ({
   const [userMatches, setUserMatches] = useState<Record<string, { active: Match[], history: Match[] }>>({});
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [expandedTeamRoster, setExpandedTeamRoster] = useState<string | null>(null);
 
   // Add null checks for teams and matches
   const safeTeams = teams || [];
   const safeMatches = matches || [];
+
+  // Helper function to get user details for team members
+  const getUserDetails = (userId: string): User | undefined => {
+    return allUsers.find(user => user.id === userId);
+  };
 
   // Load tournaments on component mount
   useEffect(() => {
@@ -72,7 +80,7 @@ const AdminPanel = ({
     setLoadingTournaments(true);
     try {
       const { getTournaments } = await import('../services/firebaseService');
-      const tournamentsData = await getTournaments();
+      const tournamentsData = await getTournaments(undefined, true); // Admins can see all tournaments
       setTournaments(tournamentsData);
     } catch (error) {
       console.error('Error loading tournaments:', error);
@@ -84,12 +92,19 @@ const AdminPanel = ({
   // If not admin, show access denied
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="card max-w-md mx-auto">
+      <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 flex items-center justify-center">
+        <div className="bg-black/20 backdrop-blur-sm rounded-xl p-8 border border-white/20 shadow-2xl max-w-md mx-auto">
           <div className="text-center mb-8">
+            <div className="mb-6">
+              <img 
+                src="/logos/bodax-pfp.png" 
+                alt="Bodax Masters Logo" 
+                className="w-24 h-24 mx-auto mb-4 rounded-full shadow-lg"
+              />
+            </div>
             <Shield className="w-16 h-16 text-red-400 mx-auto mb-4" />
-            <h1 className="text-3xl font-bold text-white mb-4">Access Denied</h1>
-            <p className="text-gray-300">You don't have permission to access the admin panel.</p>
+            <h1 className="text-3xl font-bold text-white mb-4 font-mono tracking-tight">ACCESS DENIED</h1>
+            <p className="text-white/80 font-mono tracking-tight">You don't have permission to access the admin panel.</p>
           </div>
         </div>
       </div>
@@ -99,10 +114,20 @@ const AdminPanel = ({
   // Show loading state if data is not yet available
   if (!teams || !matches) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
-          <p className="text-gray-300">Loading admin panel...</p>
+      <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 flex items-center justify-center">
+        <div className="bg-black/20 backdrop-blur-sm rounded-xl p-8 border border-white/20 shadow-2xl max-w-md mx-auto">
+          <div className="text-center">
+            <div className="mb-6">
+              <img 
+                src="/logos/bodax-pfp.png" 
+                alt="Bodax Masters Logo" 
+                className="w-24 h-24 mx-auto mb-4 rounded-full shadow-lg"
+              />
+            </div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-400 mx-auto mb-4"></div>
+            <h2 className="text-2xl font-bold text-white mb-2 font-mono tracking-tight">LOADING ADMIN PANEL</h2>
+            <p className="text-white/80 font-mono tracking-tight">Please wait while we prepare your dashboard...</p>
+          </div>
         </div>
       </div>
     );
@@ -463,26 +488,116 @@ const AdminPanel = ({
   };
 
   const exportTeamsCSV = () => {
-    const headers = ['ID', 'Name', 'Captain ID', 'Members Count', 'Team Tag', 'Registered'];
+    const headers = [
+      'Team Name',
+      'Team Tag', 
+      'Captain',
+      'Captain Email',
+      'Total Members',
+      'Registered for Tournament',
+      'Members List',
+      'Member Roles'
+    ];
+    
     const csvContent = [
       headers.join(','),
-      ...safeTeams.map(team => [
-        team.id,
-        team.name,
-        team.captainId,
-        (team.members || []).length,
-        team.teamTag || '',
-        team.registeredForTournament ? 'Yes' : 'No'
-      ].join(','))
+      ...safeTeams.map(team => {
+        const captain = getUserDetails(team.captainId);
+        const memberList = team.members?.map(member => {
+          const user = getUserDetails(member.userId);
+          return user?.username || 'Unknown User';
+        }).join('; ') || 'No members';
+        
+        const memberRoles = team.members?.map(member => {
+          const user = getUserDetails(member.userId);
+          return `${user?.username || 'Unknown'}: ${member.role}`;
+        }).join('; ') || 'No roles';
+        
+        return [
+          `"${team.name}"`,
+          `"${team.teamTag || 'N/A'}"`,
+          `"${captain?.username || 'Unknown Captain'}"`,
+          `"${captain?.email || 'N/A'}"`,
+          team.members ? team.members.length : 0,
+          team.registeredForTournament ? 'Yes' : 'No',
+          `"${memberList}"`,
+          `"${memberRoles}"`
+        ].join(',');
+      })
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'bodax-masters-teams.csv';
+    a.download = `bodax-masters-teams-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+    
+    toast.success('Teams exported successfully!');
+  };
+
+  const exportTeamsWithTournamentStatusCSV = async () => {
+    try {
+      toast.loading('Generating enhanced team export...');
+      const result = await exportTeamsWithTournamentStatus();
+      
+      if (result.success) {
+        toast.success('Enhanced team export completed!');
+        
+        // Show tournament summary
+        if (result.tournamentData && result.tournamentData.tournament) {
+          const { tournament, teams } = result.tournamentData;
+          toast.success(
+            `Tournament: ${tournament.name} - ${tournament.registeredCount}/${tournament.maxTeams} teams registered`,
+            { duration: 4000 }
+          );
+        }
+      } else {
+        toast.error(result.message || 'Export failed');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export teams with tournament status');
+    }
+  };
+
+  const checkTournamentRegistration = async () => {
+    try {
+      toast.loading('Checking tournament registration...');
+      const result = await getTournamentTeamsData();
+      
+      if (result.success && result.tournament && result.teams && result.summary) {
+        const { tournament, teams, summary } = result;
+        
+        // Create a detailed message
+        let message = `Tournament: ${tournament.name}\n`;
+        message += `Status: ${tournament.status}\n`;
+        message += `Teams: ${summary.registered}/${summary.capacity}\n`;
+        message += `Waitlist: ${summary.waitlisted}\n`;
+        message += `Rejected: ${summary.rejected}\n`;
+        
+        if (teams.registered.length > 0) {
+          message += '\nRegistered Teams:\n';
+          teams.registered.forEach((team, index) => {
+            message += `${index + 1}. ${team.name} [${team.teamTag}] - ${team.activeMemberCount} active members\n`;
+          });
+        }
+        
+        // Show in console for detailed view
+        console.log('Tournament Registration Status:', result);
+        
+        toast.success('Tournament registration check completed!', { duration: 5000 });
+        
+        // Also show alert with details
+        alert(message);
+      } else {
+        toast.error(result.message || 'Failed to check tournament registration');
+      }
+    } catch (error) {
+      console.error('Tournament check error:', error);
+      toast.error('Failed to check tournament registration');
+    }
   };
 
   const handleGenerateRandomTeams = async () => {
@@ -524,14 +639,11 @@ const AdminPanel = ({
   };
 
   const handleDeleteTeam = async (teamId: string) => {
-    if (!confirm('Are you sure you want to delete this team?')) return;
-    
     try {
       await onDeleteTeam(teamId);
-      alert('Team deleted successfully!');
     } catch (error) {
       console.error('Error deleting team:', error);
-      alert('Error deleting team. Please try again.');
+      toast.error('Error deleting team. Please try again.');
     }
   };
 
@@ -692,7 +804,8 @@ const AdminPanel = ({
             { id: 'signup-logs', label: 'SIGNUP LOGS', icon: FileText },
             { id: 'general-logs', label: 'GENERAL LOGS', icon: Activity },
             { id: 'users', label: 'USERS', icon: Users },
-            { id: 'stats', label: 'STATISTICS', icon: BarChart3 }
+            { id: 'stats', label: 'STATISTICS', icon: BarChart3 },
+            { id: 'stream-overlays', label: 'STREAM OVERLAYS', icon: Link }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -725,6 +838,20 @@ const AdminPanel = ({
                   <Download className="w-4 h-4 mr-2" />
                   Export CSV
                 </button>
+                <button
+                  onClick={exportTeamsWithTournamentStatusCSV}
+                  className="btn-secondary"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export with Tournament Status
+                </button>
+                <button
+                  onClick={checkTournamentRegistration}
+                  className="btn-secondary"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Check Tournament Registration
+                </button>
                 {safeTeams.length > 0 && (
                   <button
                     onClick={handleDeleteAllTeams}
@@ -751,43 +878,106 @@ const AdminPanel = ({
                 </thead>
                 <tbody>
                   {safeTeams.map((team) => (
-                    <tr key={team.id} className="border-b border-gray-700 hover:bg-gray-700/50">
-                      <td className="p-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-white font-medium">{team.name}</span>
-                          {team.teamTag && (
-                            <span className="text-xs bg-gray-600 text-gray-300 px-2 py-1 rounded">
-                              {team.teamTag}
+                    <React.Fragment key={team.id}>
+                      <tr className="border-b border-gray-700 hover:bg-gray-700/50">
+                        <td className="p-3">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-white font-medium">{team.name}</span>
+                            {team.teamTag && (
+                              <span className="text-xs bg-gray-600 text-gray-300 px-2 py-1 rounded">
+                                {team.teamTag}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 text-gray-300">
+                          {getUserDetails(team.captainId)?.username || team.captainId}
+                        </td>
+                        <td className="p-3 text-gray-300">
+                          <div className="flex items-center space-x-2">
+                            <span>{team.members ? team.members.length : 0} members</span>
+                            <button
+                              onClick={() => setExpandedTeamRoster(expandedTeamRoster === team.id ? null : team.id)}
+                              className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+                            >
+                              {expandedTeamRoster === team.id ? 'Hide' : 'View'} Roster
+                            </button>
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          {team.registeredForTournament ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-300 border border-green-700">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Registered
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-700 text-gray-300 border border-gray-600">
+                              <XCircle className="w-3 h-3 mr-1" />
+                              Not Registered
                             </span>
                           )}
-                        </div>
-                      </td>
-                      <td className="p-3 text-gray-300">{team.captainId}</td>
-                      <td className="p-3 text-gray-300">
-                        {team.members ? team.members.length : 0} members
-                      </td>
-                      <td className="p-3">
-                        {team.registeredForTournament ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-300 border border-green-700">
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Registered
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-700 text-gray-300 border border-gray-600">
-                            <XCircle className="w-3 h-3 mr-1" />
-                            Not Registered
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <button
-                          onClick={() => handleDeleteTeam(team.id)}
-                          className="btn-danger btn-sm"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="p-3">
+                          <button
+                            onClick={() => handleDeleteTeam(team.id)}
+                            className="btn-danger btn-sm"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                      {/* Roster Dropdown */}
+                      {expandedTeamRoster === team.id && (
+                        <tr className="bg-gray-800/50">
+                          <td colSpan={5} className="p-4">
+                            <div className="space-y-4">
+                              <h4 className="text-lg font-semibold text-white mb-3">Team Roster</h4>
+                              {team.members && team.members.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  {team.members.map((member) => {
+                                    const user = getUserDetails(member.userId);
+                                    return (
+                                      <div key={member.userId} className="bg-gray-700 rounded-lg p-3 border border-gray-600">
+                                        <div className="flex items-center justify-between">
+                                          <div>
+                                            <p className="text-white font-medium">
+                                              {user?.username || 'Unknown User'}
+                                            </p>
+                                            <p className="text-sm text-gray-400">
+                                              {user?.email || 'No email'}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              Riot ID: {user?.riotId || 'N/A'}
+                                            </p>
+                                          </div>
+                                          <div className="text-right">
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                              member.role === 'owner' ? 'bg-purple-900/50 text-purple-300 border border-purple-700' :
+                                              member.role === 'captain' ? 'bg-blue-900/50 text-blue-300 border border-blue-700' :
+                                              member.role === 'coach' ? 'bg-orange-900/50 text-orange-300 border border-orange-700' :
+                                              member.role === 'assistant_coach' ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700' :
+                                              member.role === 'manager' ? 'bg-green-900/50 text-green-300 border border-green-700' :
+                                              'bg-gray-700 text-gray-300 border border-gray-600'
+                                            }`}>
+                                              {member.role.replace('_', ' ')}
+                                            </span>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                              Joined: {member.joinedAt instanceof Date ? member.joinedAt.toLocaleDateString() : 'N/A'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <p className="text-gray-400 text-center py-4">No members found.</p>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -1604,6 +1794,28 @@ const AdminPanel = ({
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stream Overlays Tab */}
+        {activeTab === 'stream-overlays' && (
+          <div className="card">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white mb-4 flex items-center justify-center">
+                <Link className="w-6 h-6 mr-3 text-blue-400" />
+                Stream Overlay Manager
+              </h2>
+              <p className="text-white/80 mb-6">
+                Generate and manage stream overlay URLs for casters and streamers
+              </p>
+              <button
+                onClick={() => navigate('/admin/stream-overlays')}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center space-x-2 mx-auto"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Open Stream Overlay Manager</span>
+              </button>
             </div>
           </div>
         )}

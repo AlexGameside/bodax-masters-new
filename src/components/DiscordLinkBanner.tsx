@@ -45,7 +45,8 @@ const DiscordLinkBanner: React.FC<DiscordLinkBannerProps> = ({
 
   const handleLinkDiscord = () => {
     // Use OAuth flow instead of manual linking
-    window.location.href = getDiscordAuthUrl();
+    const authUrl = getDiscordAuthUrl();
+    window.location.href = authUrl;
   };
 
   const handleJoinServer = () => {

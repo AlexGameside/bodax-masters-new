@@ -14,7 +14,7 @@ import SideSelection from '../components/SideSelection';
 import MatchInProgress from '../components/MatchInProgress';
 import MatchChat from '../components/MatchChat';
 import TicketCreationModal from '../components/TicketCreationModal';
-import { ArrowLeft, Trophy, Clock, CheckCircle, User as UserIcon, BarChart3, Target, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Trophy, Clock, CheckCircle, User as UserIcon, BarChart3, Target, AlertTriangle, MessageSquare } from 'lucide-react';
 
 const MatchPage = () => {
   const params = useParams<{ matchId: string }>();
@@ -145,14 +145,6 @@ const MatchPage = () => {
         if (currentUser) {
           // Always try to get user team, regardless of admin status
           const userTeamData = await getUserTeamForMatch(currentUser.id, matchData);
-          console.log('MatchPage Debug - getUserTeamForMatch result:', {
-            userId: currentUser.id,
-            matchId: matchData.id,
-            team1Id: matchData.team1Id,
-            team2Id: matchData.team2Id,
-            userTeamData: userTeamData ? { id: userTeamData.id, name: userTeamData.name } : null,
-            isAdmin: currentUser.isAdmin
-          });
           setUserTeam(userTeamData);
 
           if (userTeamData) {
@@ -358,9 +350,9 @@ const MatchPage = () => {
   };
 
   const getMatchProgress = () => {
-    if (!match) return { step: 0, total: 6, label: 'Loading...' };
+    if (!match) return { step: 0, total: 7, label: 'Loading...' };
     
-    // Define the correct progression of match states
+    // Define the correct progression of match states for Swiss system
     const stateProgression = {
       'pending_scheduling': 1,
       'scheduled': 2,
@@ -371,9 +363,9 @@ const MatchPage = () => {
       'side_selection_decider': 5,
       'playing': 6,
       'waiting_results': 6,
-      'completed': 6,
-      'disputed': 5,
-      'forfeited': 6
+      'completed': 7,
+      'disputed': 6,
+      'forfeited': 7
     };
     
     const currentStep = stateProgression[match.matchState] || 1;
@@ -395,7 +387,7 @@ const MatchPage = () => {
     
     return {
       step: currentStep,
-      total: 6,
+      total: 7,
       label: labels[match.matchState] || 'Unknown'
     };
   };
@@ -411,6 +403,11 @@ const MatchPage = () => {
      (!match.team1Ready || !match.team2Ready));
   
   const userTeamAlreadyReady = userTeam && 
+    ((userTeam.id === match?.team1Id && match?.team1Ready) || 
+     (userTeam.id === match?.team2Id && match?.team2Ready));
+
+  // Check if user's team has already ready up
+  const userTeamReady = userTeam && 
     ((userTeam.id === match?.team1Id && match?.team1Ready) || 
      (userTeam.id === match?.team2Id && match?.team2Ready));
 
@@ -568,46 +565,23 @@ const MatchPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Swiss System Match Scheduling */}
         {match.tournamentType === 'swiss-round' && match.matchState === 'pending_scheduling' && (
-          <div className="unity-card-cyan mb-8">
-            <div className="text-cyan-400 font-bold text-xl mb-6 flex items-center">
-              <Clock className="w-6 h-6 mr-3" />
-              MATCH SCHEDULING REQUIRED
-            </div>
-            <div className="text-cyan-200 text-base mb-6 leading-relaxed">
-              This Swiss system match needs to be scheduled before it can begin. Teams must agree on a match time within the allowed timeframe.
-            </div>
-            
-            {/* Timeframe Information */}
-            <div className="bg-black/40 border border-cyan-400/30 rounded-xl p-6 mb-6 backdrop-blur-sm">
-              <div className="text-cyan-300 font-bold text-lg mb-3 flex items-center">
-                ⏰ SCHEDULING TIMEFRAME
-              </div>
-              <div className="text-cyan-200 text-sm space-y-2">
-                <div>• Matchday {match.matchday} runs for 7 days</div>
-                <div>• Teams must schedule within this timeframe</div>
-                <div>• After scheduling deadline, admin can auto-schedule</div>
-                <div>• Once scheduled, match can proceed to Ready Up phase</div>
-              </div>
-            </div>
-            
-            <div className="bg-black/40 border border-cyan-400/30 rounded-xl p-6 backdrop-blur-sm">
-              <MatchSchedulingInterface 
-                match={match}
-                currentTeamId={userTeam?.id || ''}
-                teams={teams}
-                teamPlayers={teamPlayers}
-                isAdmin={currentUser?.isAdmin}
-                onSchedulingUpdate={() => {
-                  // Refresh match data after scheduling update without page reload
-                  if (match) {
-                    // Trigger a re-fetch of the match data
-                    window.dispatchEvent(new CustomEvent('refreshMatchData'));
-                  }
-                }}
-                onReadyUp={handleSchedulingReadyUp}
-                onStartMatch={handleSchedulingStartMatch}
-              />
-            </div>
+          <div className="mb-8">
+            <MatchSchedulingInterface 
+              match={match}
+              currentTeamId={userTeam?.id || ''}
+              teams={teams}
+              teamPlayers={teamPlayers}
+              isAdmin={currentUser?.isAdmin}
+              onSchedulingUpdate={() => {
+                // Refresh match data after scheduling update without page reload
+                if (match) {
+                  // Trigger a re-fetch of the match data
+                  window.dispatchEvent(new CustomEvent('refreshMatchData'));
+                }
+              }}
+              onReadyUp={handleSchedulingReadyUp}
+              onStartMatch={handleSchedulingStartMatch}
+            />
           </div>
         )}
 
@@ -627,11 +601,12 @@ const MatchPage = () => {
             ></div>
           </div>
           <div className="flex justify-between text-xs text-gray-400 mt-2">
+            <span>Scheduling</span>
+            <span>Scheduled</span>
             <span>Ready Up</span>
             <span>Map Banning</span>
             <span>Side Selection</span>
             <span>Playing</span>
-            <span>Results</span>
             <span>Completed</span>
           </div>
         </div>
@@ -739,7 +714,7 @@ const MatchPage = () => {
               </div>
               
               {/* Dispute Ticket Creation Button */}
-              {match.matchState === 'disputed' && currentUser?.discordLinked && (
+              {match.matchState === 'disputed' && (
                 <div className="mb-4">
                   <button
                     onClick={() => setShowDisputeTicketModal(true)}
@@ -751,6 +726,17 @@ const MatchPage = () => {
                   <p className="text-xs text-gray-400 mt-1 text-center">
                     Report this dispute to support staff
                   </p>
+                  <div className="mt-2 text-center">
+                    <a 
+                      href="https://discord.gg/ewAk7wBgHT" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-cyan-400 hover:text-cyan-300 text-xs transition-colors"
+                    >
+                      <MessageSquare className="w-3 h-3 mr-1" />
+                      Need help? Join our Discord
+                    </a>
+                  </div>
                 </div>
               )}
               
@@ -855,7 +841,7 @@ const MatchPage = () => {
                 Select your 5 active players and ready up to start the match.
               </p>
               
-              {canReadyUp ? (
+              {canReadyUp && !userTeamReady ? (
                 <button
                   onClick={handleReadyUp}
                   disabled={readyingUp}

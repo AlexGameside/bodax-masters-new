@@ -26,7 +26,7 @@ A modern, full-stack tournament management platform for Valorant competitions bu
 
 ## 🚀 Live Demo
 
-Visit the live application: **[https://unity-league.web.app](https://unity-league.web.app)**
+Visit the live application: **[https://unityleauge.com](https://unityleauge.com)**
 
 ## 🛠️ Tech Stack
 

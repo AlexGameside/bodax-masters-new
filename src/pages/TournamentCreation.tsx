@@ -23,6 +23,9 @@ const cleanForFirestore = (obj: any): any => {
   if (obj === null || obj === undefined) return null;
   if (typeof obj !== 'object') return obj;
   
+  // Preserve Date objects
+  if (obj instanceof Date) return obj;
+  
   if (Array.isArray(obj)) {
     return obj.map(cleanForFirestore).filter(item => item !== null);
   }
@@ -255,9 +258,6 @@ const TournamentCreation = () => {
 
       // Clean the entire tournament data for Firestore
       const cleanTournamentData = cleanForFirestore(tournamentData);
-
-      // Debug: Log what we're sending to Firestore
-      console.log('Tournament data being sent to Firestore:', cleanTournamentData);
 
       const tournamentId = await createTournament(cleanTournamentData, currentUser.id);
 
@@ -517,7 +517,9 @@ const TournamentCreation = () => {
                     type="datetime-local"
                     id="startDate"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                    }}
                     className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     required
                   />

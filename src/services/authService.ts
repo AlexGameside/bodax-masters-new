@@ -21,7 +21,7 @@ const notifyAuthStateListeners = (user: User | null) => {
 
 export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { password: string }): Promise<void> => {
   try {
-    console.log('🔍 DEBUG: Starting registration for:', userData.username, userData.email);
+
     
     // Check if username already exists
     const usernameQuery = query(collection(db, 'users'), where('username', '==', userData.username));
@@ -37,16 +37,14 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { 
       throw new Error('Email already registered');
     }
 
-    console.log('🔍 DEBUG: Creating Firebase auth user...');
+    
     // Create Firebase auth user first
     const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
     const userId = userCredential.user.uid;
-    console.log('✅ DEBUG: Firebase auth user created with UID:', userId);
     
     // Create user document in Firestore with the Firebase UID
     const { password, ...userDocData } = userData;
     
-    console.log('🔍 DEBUG: Creating Firestore document...');
     // Create the user document directly in Firestore
     const userDocRef = doc(db, 'users', userId);
     await setDoc(userDocRef, {
@@ -60,8 +58,9 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { 
       throw new Error('Failed to create user document in Firestore');
     }
     
-    console.log('✅ DEBUG: User registered successfully with Firebase UID:', userId);
-    console.log('✅ DEBUG: Firestore document verified:', verifyDoc.data());
+    if (!verifyDoc.exists()) {
+      throw new Error('Failed to create user document in Firestore');
+    }
   } catch (error: any) {
     console.error('❌ DEBUG: Registration error:', error);
     if (error.code === 'auth/email-already-in-use') {
@@ -73,7 +72,7 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { 
 
 export const loginUser = async (usernameOrEmail: string, password: string): Promise<void> => {
   try {
-    console.log('🔍 DEBUG: Attempting login for:', usernameOrEmail);
+
     
     // Try to find user by username first
     let userQuery = query(collection(db, 'users'), where('username', '==', usernameOrEmail));
@@ -86,19 +85,19 @@ export const loginUser = async (usernameOrEmail: string, password: string): Prom
     }
     
     if (userSnapshot.empty) {
-      console.log('❌ DEBUG: User not found in Firestore');
+
       throw new Error('User not found');
     }
     
     const userDoc = userSnapshot.docs[0];
     const userData = userDoc.data();
     
-    console.log('🔍 DEBUG: Found user in Firestore:', userData.email);
+
     
     // Sign in with Firebase auth using the email from Firestore
     await signInWithEmailAndPassword(auth, userData.email, password);
     
-    console.log('✅ DEBUG: Firebase auth successful');
+
     
     // The useAuth hook will automatically detect the user via onAuthStateChanged
     // No need to manually update state here

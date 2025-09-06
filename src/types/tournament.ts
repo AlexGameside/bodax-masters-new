@@ -178,6 +178,31 @@ export interface Match {
     map2?: { team1Score: number; team2Score: number; winner?: string };
     map3?: { team1Score: number; team2Score: number; winner?: string };
   };
+  
+  // Map submission system for BO3
+  mapSubmissions?: {
+    map1?: {
+      team1Submitted: boolean;
+      team2Submitted: boolean;
+      team1SubmittedScore: { team1Score: number; team2Score: number } | null;
+      team2SubmittedScore: { team1Score: number; team2Score: number } | null;
+      submittedAt?: Date;
+    };
+    map2?: {
+      team1Submitted: boolean;
+      team2Submitted: boolean;
+      team1SubmittedScore: { team1Score: number; team2Score: number } | null;
+      team2SubmittedScore: { team1Score: number; team2Score: number } | null;
+      submittedAt?: Date;
+    };
+    map3?: {
+      team1Submitted: boolean;
+      team2Submitted: boolean;
+      team1SubmittedScore: { team1Score: number; team2Score: number } | null;
+      team2SubmittedScore: { team1Score: number; team2Score: number } | null;
+      submittedAt?: Date;
+    };
+  };
 }
 
 // Tournament Types and Formats
@@ -326,7 +351,7 @@ export interface RegistrationRequirements {
   entryFee?: number | null;
   approvalProcess: RegistrationApproval;
   maxTeams: number;
-  registrationDeadline: Date;
+  registrationDeadline: Date | any; // Allow Firestore Timestamp
   teamValidationRules: string[];
   
   // Team composition requirements
@@ -346,15 +371,15 @@ export interface RegistrationRequirements {
 
 // Tournament Schedule
 export interface TournamentSchedule {
-  startDate: Date;
-  endDate: Date;
+  startDate: Date | any; // Allow Firestore Timestamp
+  endDate: Date | any; // Allow Firestore Timestamp
   timeZone: string;
   matchDuration: number; // minutes
   breakTime: number; // minutes between matches
   checkInTime: number; // minutes before match
   maxMatchesPerDay: number;
   preferredMatchTimes: string[]; // ["18:00", "20:00", "22:00"]
-  blackoutDates: Date[]; // dates when no matches should be scheduled
+  blackoutDates: (Date | any)[]; // Allow Firestore Timestamps
 }
 
 // Prize Pool
@@ -466,9 +491,9 @@ export interface Tournament {
   stageManagement: TournamentStageManagement;
   createdBy: string; // Admin ID
   adminIds: string[]; // Additional admin IDs
-  createdAt: Date;
-  updatedAt: Date;
-  publishedAt?: Date;
+  createdAt: Date | any; // Allow Firestore Timestamp
+  updatedAt: Date | any; // Allow Firestore Timestamp
+  publishedAt?: Date | any; // Allow Firestore Timestamp
   
   // Teams and Participants
   teams: string[]; // Registered team IDs

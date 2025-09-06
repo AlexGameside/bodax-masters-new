@@ -17,8 +17,6 @@ const DiscordCallback = () => {
       const code = searchParams.get('code');
       const error = searchParams.get('error');
 
-      console.log('DiscordCallback: Starting with code:', code, 'error:', error);
-
       if (error) {
         setStatus('error');
         setMessage('Discord authorization was cancelled or failed.');
@@ -38,15 +36,11 @@ const DiscordCallback = () => {
       }
 
       try {
-        console.log('DiscordCallback: Starting Discord linking process...');
-        
         // Exchange code for access token
         const accessToken = await exchangeCodeForToken(code);
-        console.log('DiscordCallback: Got access token successfully');
         
         // Get Discord user information
         const discordUser = await getDiscordUser(accessToken);
-        console.log('DiscordCallback: Got Discord user:', discordUser);
         
         // Update user profile with Discord information
         await updateUserDiscordInfo(currentUser.id, {
@@ -55,8 +49,6 @@ const DiscordCallback = () => {
           discordAvatar: discordUser.avatar,
           discordLinked: true,
         });
-        
-        console.log('DiscordCallback: Updated Firebase successfully');
 
         // Show success and redirect
         setStatus('success');

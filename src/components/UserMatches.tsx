@@ -13,14 +13,6 @@ const UserMatches: React.FC<UserMatchesProps> = ({ userId, teams, matches }) => 
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [userMatches, setUserMatches] = useState<Match[]>([]);
 
-  // Debug logging
-  console.log('[UserMatches] Props received:', {
-    userId,
-    teamsCount: teams.length,
-    teams: teams.map(t => ({ id: t.id, name: t.name })),
-    matchesCount: matches.length
-  });
-
   useEffect(() => {
     // Find teams the user is a member of
     const userTeamIds = teams.filter(team => 
@@ -94,14 +86,6 @@ const UserMatches: React.FC<UserMatchesProps> = ({ userId, teams, matches }) => 
   const getMatchTeamNames = (match: Match) => {
     const team1 = teams.find(t => t.id === match.team1Id);
     const team2 = teams.find(t => t.id === match.team2Id);
-    
-    console.log('[UserMatches] getMatchTeamNames for match:', match.id, {
-      team1Id: match.team1Id,
-      team2Id: match.team2Id,
-      team1: team1 ? { id: team1.id, name: team1.name } : null,
-      team2: team2 ? { id: team2.id, name: team2.name } : null,
-      availableTeams: teams.map(t => ({ id: t.id, name: t.name }))
-    });
     
     if (!team1 && !team2) {
       return 'Loading teams...';

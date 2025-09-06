@@ -68,8 +68,6 @@ const retryOperation = async <T>(
 // Tournament Creation
 export const createTournament = async (tournamentData: Partial<Tournament>, adminId: string): Promise<string> => {
   try {
-    console.log('🚀 DEBUG: createTournament called with:', { tournamentData, adminId });
-
     // Validate required fields
     if (!tournamentData.name?.trim()) {
       throw new Error('Tournament name is required');
@@ -83,11 +81,10 @@ export const createTournament = async (tournamentData: Partial<Tournament>, admi
       throw new Error('Number of teams is required');
     }
 
-    // Create the tournament document
-    const tournamentRef = await addDoc(collection(db, 'tournaments'), {
+    // Convert dates to Firestore Timestamps
+    const tournamentDataWithTimestamps = {
       ...tournamentData,
-      status: 'registration',
-      createdAt: new Date(),
+      createdAt: serverTimestamp(),
       createdBy: adminId,
       adminIds: [adminId],
       teams: [],
@@ -110,18 +107,93 @@ export const createTournament = async (tournamentData: Partial<Tournament>, admi
       },
       brackets: {},
       matches: [],
-    });
+    };
+
+    // Handle schedule dates
+    if (tournamentData.schedule) {
+      tournamentDataWithTimestamps.schedule = {
+        ...tournamentData.schedule,
+        startDate: (() => {
+          try {
+            const date = tournamentData.schedule.startDate instanceof Date 
+              ? tournamentData.schedule.startDate
+              : new Date(tournamentData.schedule.startDate);
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid startDate, using default:', tournamentData.schedule.startDate);
+              return Timestamp.fromDate(new Date()); // Use current date as fallback
+            }
+            return Timestamp.fromDate(date);
+          } catch (error) {
+            console.warn('Error converting startDate, using default:', error);
+            return Timestamp.fromDate(new Date()); // Use current date as fallback
+          }
+        })(),
+        endDate: (() => {
+          try {
+            const date = tournamentData.schedule.endDate instanceof Date 
+              ? tournamentData.schedule.endDate
+              : new Date(tournamentData.schedule.endDate);
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid endDate, using default:', tournamentData.schedule.endDate);
+              return Timestamp.fromDate(new Date()); // Use current date as fallback
+            }
+            return Timestamp.fromDate(date);
+          } catch (error) {
+            console.warn('Error converting endDate, using default:', error);
+            return Timestamp.fromDate(new Date()); // Use current date as fallback
+          }
+        })(),
+        blackoutDates: tournamentData.schedule.blackoutDates?.map(date => {
+          try {
+            const dateObj = date instanceof Date ? date : new Date(date);
+            if (isNaN(dateObj.getTime())) {
+              console.warn('Invalid blackoutDate, skipping:', date);
+              return null;
+            }
+            return Timestamp.fromDate(dateObj);
+          } catch (error) {
+            console.warn('Error converting blackoutDate, skipping:', error);
+            return null;
+          }
+        }).filter(Boolean) || [],
+      };
+    }
+
+    // Handle requirements registration deadline
+    if (tournamentData.requirements?.registrationDeadline) {
+      tournamentDataWithTimestamps.requirements = {
+        ...tournamentData.requirements,
+        registrationDeadline: (() => {
+          try {
+            const date = tournamentData.requirements.registrationDeadline instanceof Date
+              ? tournamentData.requirements.registrationDeadline
+              : new Date(tournamentData.requirements.registrationDeadline);
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid registrationDeadline, using default:', tournamentData.requirements.registrationDeadline);
+              return Timestamp.fromDate(new Date()); // Use current date as fallback
+            }
+            return Timestamp.fromDate(date);
+          } catch (error) {
+            console.warn('Error converting registrationDeadline, using default:', error);
+            return Timestamp.fromDate(new Date()); // Use current date as fallback
+          }
+        })(),
+      };
+    }
+
+    // Create the tournament document
+    const tournamentRef = await addDoc(collection(db, 'tournaments'), tournamentDataWithTimestamps);
 
     const tournamentId = tournamentRef.id;
-    console.log('✅ DEBUG: Tournament created with ID:', tournamentId);
+    
 
     // Generate brackets based on tournament type
     if (tournamentData.format?.type === 'double-elimination') {
-      console.log('🔍 DEBUG: Generating double elimination bracket for tournament:', tournamentId);
+      
       // For double elimination, we'll generate brackets when teams register
       // The bracket generation will happen when the tournament starts
     } else {
-      console.log('🔍 DEBUG: Single elimination tournament - brackets will be generated when tournament starts');
+      
     }
 
     return tournamentId;
@@ -145,16 +217,70 @@ export const updateTournament = async (tournamentId: string, updates: Partial<To
     if (updates.schedule) {
       updateData.schedule = {
         ...updates.schedule,
-        startDate: Timestamp.fromDate(updates.schedule.startDate),
-        endDate: Timestamp.fromDate(updates.schedule.endDate),
-        blackoutDates: updates.schedule.blackoutDates.map(date => Timestamp.fromDate(date)),
+        startDate: (() => {
+          try {
+            const date = updates.schedule.startDate instanceof Date 
+              ? updates.schedule.startDate
+              : new Date(updates.schedule.startDate);
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid startDate, using default:', updates.schedule.startDate);
+              return Timestamp.fromDate(new Date()); // Use current date as fallback
+            }
+            return Timestamp.fromDate(date);
+          } catch (error) {
+            console.warn('Error converting startDate, using default:', error);
+            return Timestamp.fromDate(new Date()); // Use current date as fallback
+          }
+        })(),
+        endDate: (() => {
+          try {
+            const date = updates.schedule.endDate instanceof Date 
+              ? updates.schedule.endDate
+              : new Date(updates.schedule.endDate);
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid endDate, using default:', updates.schedule.endDate);
+              return Timestamp.fromDate(new Date()); // Use current date as fallback
+            }
+            return Timestamp.fromDate(date);
+          } catch (error) {
+            console.warn('Error converting endDate, using default:', error);
+            return Timestamp.fromDate(new Date()); // Use current date as fallback
+          }
+        })(),
+        blackoutDates: updates.schedule.blackoutDates.map(date => {
+          try {
+            const dateObj = date instanceof Date ? date : new Date(date);
+            if (isNaN(dateObj.getTime())) {
+              console.warn('Invalid blackoutDate, skipping:', date);
+              return null;
+            }
+            return Timestamp.fromDate(dateObj);
+          } catch (error) {
+            console.warn('Error converting blackoutDate, skipping:', error);
+            return null;
+          }
+        }).filter(Boolean),
       };
     }
 
     if (updates.requirements?.registrationDeadline) {
       updateData.requirements = {
         ...updates.requirements,
-        registrationDeadline: Timestamp.fromDate(updates.requirements.registrationDeadline),
+        registrationDeadline: (() => {
+          try {
+            const date = updates.requirements.registrationDeadline instanceof Date
+              ? updates.requirements.registrationDeadline
+              : new Date(updates.requirements.registrationDeadline);
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid registrationDeadline, using default:', updates.requirements.registrationDeadline);
+              return Timestamp.fromDate(new Date()); // Use current date as fallback
+            }
+            return Timestamp.fromDate(date);
+          } catch (error) {
+            console.warn('Error converting registrationDeadline, using default:', error);
+            return Timestamp.fromDate(new Date()); // Use current date as fallback
+          }
+        })(),
       };
     }
 
@@ -168,7 +294,38 @@ export const updateTournament = async (tournamentId: string, updates: Partial<To
 export const deleteTournament = async (tournamentId: string): Promise<void> => {
   try {
     const tournamentRef = doc(db, 'tournaments', tournamentId);
-    await deleteDoc(tournamentRef);
+    
+    // First, delete all subcollections
+    const batch = writeBatch(db);
+    
+    // Delete participants
+    const participantsRef = collection(tournamentRef, 'participants');
+    const participantsSnapshot = await getDocs(participantsRef);
+    participantsSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    
+    // Delete matches and their subcollections
+    const matchesRef = collection(tournamentRef, 'matches');
+    const matchesSnapshot = await getDocs(matchesRef);
+    
+    for (const matchDoc of matchesSnapshot.docs) {
+      // Delete match results
+      const resultsRef = collection(matchDoc.ref, 'results');
+      const resultsSnapshot = await getDocs(resultsRef);
+      resultsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      
+      // Delete the match itself
+      batch.delete(matchDoc.ref);
+    }
+    
+    // Finally, delete the tournament document
+    batch.delete(tournamentRef);
+    
+    // Commit all deletions
+    await batch.commit();
   } catch (error) {
     console.error('Error deleting tournament:', error);
     throw new Error('Failed to delete tournament');
@@ -311,7 +468,7 @@ export const closeRegistration = async (tournamentId: string): Promise<void> => 
 
 export const startTournament = async (tournamentId: string): Promise<void> => {
   try {
-    console.log('🚀 DEBUG: startTournament called for tournament:', tournamentId);
+    
 
     const tournament = await getTournament(tournamentId);
     if (!tournament) {
@@ -328,12 +485,12 @@ export const startTournament = async (tournamentId: string): Promise<void> => {
 
     // Get the configured team count from tournament format
     const configuredTeamCount = tournament.format.teamCount;
-    console.log(`🔍 DEBUG: Tournament configured for ${configuredTeamCount} teams, but ${tournament.teams.length} teams registered`);
+    
 
     // Use the configured team count for bracket generation, not the actual registered teams
     // If more teams registered than configured, use the first N teams
     const teamsForBracket = tournament.teams.slice(0, configuredTeamCount);
-    console.log(`🔍 DEBUG: Using first ${teamsForBracket.length} teams for bracket generation`);
+    
 
     // Update tournament status
     await updateDoc(doc(db, 'tournaments', tournamentId), {
@@ -344,21 +501,21 @@ export const startTournament = async (tournamentId: string): Promise<void> => {
 
     // Generate brackets based on tournament type using the configured team count
     if (tournament.format.type === 'swiss-system') {
-      console.log('🔍 DEBUG: Generating Swiss system tournament');
+      
       const swissConfig = tournament.format.swissConfig;
       if (!swissConfig) {
         throw new Error('Swiss system configuration missing');
       }
       await SwissTournamentService.generateSwissRounds(tournamentId, teamsForBracket, swissConfig.rounds);
     } else if (tournament.format.type === 'double-elimination') {
-      console.log('🔍 DEBUG: Generating double elimination bracket');
+      
       await generateDoubleEliminationBracket(tournamentId, teamsForBracket);
     } else {
-      console.log('🔍 DEBUG: Generating single elimination bracket');
+      
       await generateSingleEliminationBracket(tournamentId, teamsForBracket);
     }
 
-    console.log('✅ DEBUG: Tournament started successfully');
+    
   } catch (error) {
     console.error('❌ DEBUG: Error starting tournament:', error);
     throw error;
@@ -708,5 +865,133 @@ export const registerTeamForTournamentWithVerification = async (
       message: 'Failed to register team',
       errors: [error instanceof Error ? error.message : 'Unknown error']
     };
+  }
+}; 
+
+// Fix existing tournaments with invalid start dates
+export const fixExistingTournamentDates = async (): Promise<number> => {
+  try {
+    console.log('🔧 Starting to fix tournament dates...');
+    
+    // Get all tournaments
+    const tournamentsRef = collection(db, 'tournaments');
+    const querySnapshot = await getDocs(tournamentsRef);
+    
+    let fixedCount = 0;
+    
+    for (const docSnapshot of querySnapshot.docs) {
+      const tournament = docSnapshot.data();
+      const tournamentId = docSnapshot.id;
+      
+      // Check if startDate is an empty object or invalid
+      const startDate = tournament.schedule?.startDate;
+      const needsFix = !startDate || 
+                      (typeof startDate === 'object' && Object.keys(startDate).length === 0) ||
+                      (startDate && typeof startDate === 'object' && !startDate.toDate);
+      
+      if (needsFix) {
+        console.log(`🔧 Fixing tournament ${tournamentId}: ${tournament.name}`);
+        
+        // Set a default start date (7 days from now)
+        const defaultStartDate = new Date();
+        defaultStartDate.setDate(defaultStartDate.getDate() + 7);
+        
+        // Update the tournament with proper Timestamp
+        await updateDoc(doc(db, 'tournaments', tournamentId), {
+          'schedule.startDate': Timestamp.fromDate(defaultStartDate),
+          updatedAt: serverTimestamp()
+        });
+        
+        fixedCount++;
+        console.log(`✅ Fixed tournament ${tournamentId}`);
+      }
+    }
+    
+    console.log(`🎉 Fixed ${fixedCount} tournaments out of ${querySnapshot.docs.length} total tournaments`);
+    return fixedCount;
+  } catch (error) {
+    console.error('❌ Error fixing tournament dates:', error);
+    throw error;
+  }
+}; 
+
+// Get actual valid team count for a tournament
+export const getValidTeamCount = async (tournamentId: string): Promise<number> => {
+  try {
+    const tournament = await getTournament(tournamentId);
+    if (!tournament) {
+      throw new Error('Tournament not found');
+    }
+
+    const teamIds = tournament.teams || [];
+    if (teamIds.length === 0) {
+      return 0;
+    }
+
+    // Check which team IDs actually exist in the database
+    const validTeamIds: string[] = [];
+    
+    for (const teamId of teamIds) {
+      try {
+        const teamDoc = await getDoc(doc(db, 'teams', teamId));
+        if (teamDoc.exists()) {
+          validTeamIds.push(teamId);
+        }
+      } catch (error) {
+        console.warn(`Team ${teamId} not found in database`);
+      }
+    }
+
+    return validTeamIds.length;
+  } catch (error) {
+    console.error('Error getting valid team count:', error);
+    throw error;
+  }
+};
+
+// Clean up invalid team references in tournaments
+export const cleanupInvalidTeamReferences = async (tournamentId: string): Promise<{
+  removedTeams: string[];
+  validTeams: string[];
+}> => {
+  try {
+    const tournament = await getTournament(tournamentId);
+    if (!tournament) {
+      throw new Error('Tournament not found');
+    }
+
+    const teamIds = tournament.teams || [];
+    const validTeamIds: string[] = [];
+    const invalidTeamIds: string[] = [];
+
+    // Check each team ID
+    for (const teamId of teamIds) {
+      try {
+        const teamDoc = await getDoc(doc(db, 'teams', teamId));
+        if (teamDoc.exists()) {
+          validTeamIds.push(teamId);
+        } else {
+          invalidTeamIds.push(teamId);
+        }
+      } catch (error) {
+        invalidTeamIds.push(teamId);
+      }
+    }
+
+    // Update tournament with only valid team IDs
+    if (invalidTeamIds.length > 0) {
+      await updateDoc(doc(db, 'tournaments', tournamentId), {
+        teams: validTeamIds,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    return {
+      removedTeams: invalidTeamIds,
+      validTeams: validTeamIds,
+    };
+  } catch (error) {
+    console.error('Error cleaning up invalid team references:', error);
+    throw error;
   }
 }; 

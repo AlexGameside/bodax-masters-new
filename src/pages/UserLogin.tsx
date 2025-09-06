@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, Mail, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { resetPassword } from '../services/authService';
 
 interface UserLoginProps {
   onLogin: (username: string, password: string) => Promise<void>;
@@ -9,17 +10,50 @@ interface UserLoginProps {
 
 const UserLogin = ({ onLogin }: UserLoginProps) => {
   const navigate = useNavigate();
+  const [isResetMode, setIsResetMode] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     password: ''
   });
+  const [resetEmail, setResetEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (isResetMode) {
+      // Handle password reset
+      if (!resetEmail.trim()) {
+        setError('Please enter your email address');
+        return;
+      }
+
+      setIsLoading(true);
+      setError('');
+      setMessage('');
+      
+      try {
+        await resetPassword(resetEmail.trim());
+        setMessage('Password reset email sent! Check your inbox.');
+        toast.success('Password reset email sent! 📧');
+        setTimeout(() => {
+          setIsResetMode(false);
+          setMessage('');
+          setResetEmail('');
+        }, 3000);
+      } catch (error: any) {
+        setError(error.message || 'Failed to send reset email');
+        toast.error(error.message || 'Failed to send reset email');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Handle login
     if (!formData.username.trim() || !formData.password) {
       setError('Please enter both username and password');
       return;
@@ -48,6 +82,19 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
     if (error) setError('');
   };
 
+  const goToResetMode = () => {
+    setIsResetMode(true);
+    setError('');
+    setMessage('');
+  };
+
+  const goBackToLogin = () => {
+    setIsResetMode(false);
+    setError('');
+    setMessage('');
+    setResetEmail('');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 text-white font-sans relative overflow-hidden flex items-center justify-center py-12">
       {/* Geometric background pattern inspired by Unity League */}
@@ -70,12 +117,30 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
 
       <div className="relative z-20 max-w-md w-full mx-4">
         <div className="bg-black/60 border border-pink-400/30 rounded-2xl shadow-2xl p-8 backdrop-blur-sm">
+          {/* Back button for reset mode */}
+          {isResetMode && (
+            <button
+              onClick={goBackToLogin}
+              className="flex items-center space-x-2 text-pink-200 hover:text-cyan-400 transition-colors mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Login</span>
+            </button>
+          )}
+
           <div className="text-center mb-8">
             <div className="bg-gradient-to-r from-cyan-500 to-blue-600 p-3 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-              <User className="w-8 h-8 text-white" />
+              {isResetMode ? <Mail className="w-8 h-8 text-white" /> : <User className="w-8 h-8 text-white" />}
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome Back</h1>
-            <p className="text-pink-200">Sign in to your Unity League account</p>
+            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
+              {isResetMode ? 'Reset Password' : 'Welcome Back'}
+            </h1>
+            <p className="text-pink-200">
+              {isResetMode 
+                ? 'Enter your email to reset your password'
+                : 'Sign in to your Unity League account'
+              }
+            </p>
           </div>
 
           {error && (
@@ -84,47 +149,75 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Username/Email */}
-            <div>
-              <label className="block text-sm font-medium text-pink-200 mb-2">
-                Username or Email
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
-                <input
-                  type="text"
-                  value={formData.username}
-                  onChange={(e) => handleInputChange('username', e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-black/40 border border-pink-400/30 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300"
-                  placeholder="Enter username or email"
-                />
-              </div>
+          {message && (
+            <div className="bg-green-900/20 border border-green-700 rounded-lg p-4 mb-6">
+              <p className="text-green-300 text-sm">{message}</p>
             </div>
+          )}
 
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-pink-200 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 bg-black/40 border border-pink-400/30 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300"
-                  placeholder="Enter your password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-pink-300 hover:text-cyan-400 transition-colors"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {isResetMode ? (
+              // Password reset form - only email field
+              <div>
+                <label className="block text-sm font-medium text-pink-200 mb-2">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-black/40 border border-pink-400/30 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300"
+                    placeholder="Enter your email address"
+                  />
+                </div>
               </div>
-            </div>
+            ) : (
+              // Login form
+              <>
+                {/* Username/Email */}
+                <div>
+                  <label className="block text-sm font-medium text-pink-200 mb-2">
+                    Username or Email
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
+                    <input
+                      type="text"
+                      value={formData.username}
+                      onChange={(e) => handleInputChange('username', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-black/40 border border-pink-400/30 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300"
+                      placeholder="Enter username or email"
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-sm font-medium text-pink-200 mb-2">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      className="w-full pl-10 pr-12 py-3 bg-black/40 border border-pink-400/30 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300"
+                      placeholder="Enter your password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-pink-300 hover:text-cyan-400 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Submit Button */}
             <button
@@ -132,22 +225,39 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
               disabled={isLoading}
               className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-black font-bold py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading 
+                ? (isResetMode ? 'Sending Email...' : 'Signing In...') 
+                : (isResetMode ? 'Reset Password' : 'Sign In')
+              }
             </button>
           </form>
 
-          {/* Additional Links */}
-          <div className="mt-6 text-center">
-            <p className="text-pink-200 text-sm">
-              Don't have an account?{' '}
+          {/* Forgot Password Link (only show on login mode) */}
+          {!isResetMode && (
+            <div className="mt-4 text-center">
               <button
-                onClick={() => navigate('/register')}
+                onClick={goToResetMode}
                 className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
               >
-                Sign up here
+                Forgot Password?
               </button>
-            </p>
-          </div>
+            </div>
+          )}
+
+          {/* Additional Links (only show when not in reset mode) */}
+          {!isResetMode && (
+            <div className="mt-6 text-center">
+              <p className="text-pink-200 text-sm">
+                Don't have an account?{' '}
+                <button
+                  onClick={() => navigate('/register')}
+                  className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                >
+                  Sign up here
+                </button>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
