@@ -2202,6 +2202,7 @@ const AdminPanel = ({
             matches={matches}
             teams={teams}
             tournaments={tournaments}
+            currentUser={currentUser}
           />
         )}
 

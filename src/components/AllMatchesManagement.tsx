@@ -22,12 +22,13 @@ import {
   Gamepad2
 } from 'lucide-react';
 import type { Match, Team, Tournament, User } from '../types/tournament';
-import { getUsersByIds } from '../services/firebaseService';
+import { getUsersByIds, updateMatchTickbox } from '../services/firebaseService';
 
 interface AllMatchesManagementProps {
   matches: Match[];
   teams: Team[];
   tournaments: Tournament[];
+  currentUser: User | null;
 }
 
 type MatchState = 'all' | 'pending_scheduling' | 'scheduled' | 'ready_up' | 'map_banning' | 'playing' | 'completed' | 'cancelled' | 'scheduling_requested';
@@ -35,7 +36,8 @@ type MatchState = 'all' | 'pending_scheduling' | 'scheduled' | 'ready_up' | 'map
 const AllMatchesManagement: React.FC<AllMatchesManagementProps> = ({
   matches,
   teams,
-  tournaments
+  tournaments,
+  currentUser
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [stateFilter, setStateFilter] = useState<MatchState>('all');
@@ -46,7 +48,7 @@ const AllMatchesManagement: React.FC<AllMatchesManagementProps> = ({
   const [expandedMatches, setExpandedMatches] = useState<Set<string>>(new Set());
   const [teamRosters, setTeamRosters] = useState<Record<string, User[]>>({});
   const [loadingRosters, setLoadingRosters] = useState<Set<string>>(new Set());
-  const [matchTickboxes, setMatchTickboxes] = useState<Set<string>>(new Set());
+  const [updatingTickbox, setUpdatingTickbox] = useState<Set<string>>(new Set());
 
   // Get unique tournaments for filter
   const tournamentOptions = useMemo(() => {
@@ -120,14 +122,32 @@ const AllMatchesManagement: React.FC<AllMatchesManagementProps> = ({
   };
 
   // Toggle match tickbox
-  const toggleMatchTickbox = (matchId: string) => {
-    const newTickboxes = new Set(matchTickboxes);
-    if (newTickboxes.has(matchId)) {
-      newTickboxes.delete(matchId);
-    } else {
-      newTickboxes.add(matchId);
+  const toggleMatchTickbox = async (matchId: string) => {
+    if (!currentUser?.id) {
+      console.error('No current user found');
+      return;
     }
-    setMatchTickboxes(newTickboxes);
+
+    const match = matches.find(m => m.id === matchId);
+    if (!match) {
+      console.error('Match not found');
+      return;
+    }
+
+    setUpdatingTickbox(prev => new Set(prev).add(matchId));
+
+    try {
+      const newTickboxState = !match.adminTickbox;
+      await updateMatchTickbox(matchId, newTickboxState, currentUser.id);
+    } catch (error) {
+      console.error('Error updating match tickbox:', error);
+    } finally {
+      setUpdatingTickbox(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(matchId);
+        return newSet;
+      });
+    }
   };
 
   // Generate Valorant Tracker URLs
@@ -239,7 +259,7 @@ const AllMatchesManagement: React.FC<AllMatchesManagementProps> = ({
 
       // Tickbox filter
       if (tickboxFilter !== 'all') {
-        const hasTickbox = matchTickboxes.has(match.id);
+        const hasTickbox = match.adminTickbox || false;
         if (tickboxFilter === 'ticked' && !hasTickbox) {
           return false;
         }
@@ -250,7 +270,7 @@ const AllMatchesManagement: React.FC<AllMatchesManagementProps> = ({
 
       return true;
     });
-  }, [matches, teams, tournaments, searchTerm, stateFilter, tournamentFilter, matchdayFilter, doneFilter, tickboxFilter, matchTickboxes]);
+  }, [matches, teams, tournaments, searchTerm, stateFilter, tournamentFilter, matchdayFilter, doneFilter, tickboxFilter]);
 
   // Get team name helper
   const getTeamName = (teamId: string | null) => {
@@ -530,14 +550,17 @@ const AllMatchesManagement: React.FC<AllMatchesManagementProps> = ({
                     {/* Tickbox */}
                     <button
                       onClick={() => toggleMatchTickbox(match.id)}
+                      disabled={updatingTickbox.has(match.id)}
                       className={`p-2 rounded-lg border-2 transition-colors ${
-                        matchTickboxes.has(match.id)
+                        match.adminTickbox
                           ? 'bg-green-600 border-green-500 text-white'
                           : 'bg-gray-700 border-gray-600 hover:bg-gray-600 text-gray-300'
-                      }`}
-                      title={matchTickboxes.has(match.id) ? 'Untick' : 'Tick'}
+                      } ${updatingTickbox.has(match.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      title={match.adminTickbox ? 'Untick' : 'Tick'}
                     >
-                      {matchTickboxes.has(match.id) ? (
+                      {updatingTickbox.has(match.id) ? (
+                        <div className="w-5 h-5 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                      ) : match.adminTickbox ? (
                         <CheckCircle className="w-5 h-5" />
                       ) : (
                         <div className="w-5 h-5 border-2 border-current rounded-sm"></div>

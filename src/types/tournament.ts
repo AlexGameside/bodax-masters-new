@@ -261,6 +261,11 @@ export interface Match {
     isLive?: boolean;
     casters?: Array<{ name: string; role: string }>;
   };
+  
+  // Admin tickbox system
+  adminTickbox?: boolean; // Whether match is marked by admin
+  adminTickboxAt?: Date; // When it was ticked
+  adminTickboxBy?: string; // Who ticked it (admin ID)
 }
 
 // Tournament Types and Formats

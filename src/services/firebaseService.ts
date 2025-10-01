@@ -5256,6 +5256,21 @@ export const migrateExistingUsersToPublic = async (): Promise<{created: number, 
   }
 };
 
+// Update match tickbox state
+export const updateMatchTickbox = async (matchId: string, ticked: boolean, adminId: string): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    await updateDoc(matchRef, {
+      adminTickbox: ticked,
+      adminTickboxAt: ticked ? new Date() : null,
+      adminTickboxBy: ticked ? adminId : null
+    });
+  } catch (error) {
+    console.error('Error updating match tickbox:', error);
+    throw error;
+  }
+};
+
 // Get IP analysis
 export const getIPAnalysis = async (): Promise<any[]> => {
   try {
