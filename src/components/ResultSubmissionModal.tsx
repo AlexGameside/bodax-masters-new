@@ -76,9 +76,13 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
     try {
       await submitMatchResult(match.id, currentUserTeamId, score1, score2);
       toast.success('Results submitted successfully!');
+      
+      // Clear the input fields after successful submission
+      setTeam1Score('');
+      setTeam2Score('');
       onClose();
     } catch (error) {
-      console.error('Error submitting results:', error);
+
       toast.error('Failed to submit results. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -116,7 +120,7 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
       toast.success('Results force confirmed by admin!');
       onClose();
     } catch (error) {
-      console.error('Error force confirming results:', error);
+
       toast.error('Failed to force confirm results. Please try again.');
     } finally {
       setIsSubmitting(false);

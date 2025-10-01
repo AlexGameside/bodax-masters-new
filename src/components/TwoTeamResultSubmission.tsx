@@ -79,8 +79,12 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
     try {
       await submitMatchResult(match.id, currentUserTeamId, score1, score2);
       toast.success('Results submitted successfully!');
+      
+      // Clear the input fields after successful submission
+      setTeam1Score('');
+      setTeam2Score('');
     } catch (error) {
-      console.error('Error submitting results:', error);
+
       toast.error('Failed to submit results. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -99,9 +103,13 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
         otherTeamSubmission.team2Score
       );
       toast.success('Results agreed and match completed!');
+      
+      // Clear the input fields after successful agreement
+      setTeam1Score('');
+      setTeam2Score('');
       onClose();
     } catch (error) {
-      console.error('Error agreeing to results:', error);
+
       toast.error('Failed to agree to results. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -117,7 +125,7 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
       toast.success('Dispute created successfully. An admin will review this match.');
       onClose();
     } catch (error) {
-      console.error('Error creating dispute:', error);
+
       toast.error('Failed to create dispute. Please try again.');
     } finally {
       setIsDisputing(false);

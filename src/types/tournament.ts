@@ -4,7 +4,10 @@ export interface User {
   username: string;
   email: string;
   riotId: string;
+  riotIdSet?: boolean; // Whether Riot ID has been set (prevents user changes) - optional for backward compatibility
+  riotIdSetAt?: Date; // When Riot ID was first set
   discordUsername: string;
+  nationality?: string; // User's nationality
   // Discord OAuth fields
   discordId?: string;
   discordAvatar?: string;
@@ -59,6 +62,12 @@ export interface Team {
   maxCoaches: number; // 1 coach
   maxAssistantCoaches: number; // 1 assistant coach
   maxManagers: number; // 1 manager
+  
+  // Roster change tracking
+  rosterChangesUsed: number; // Number of roster changes used (max 3)
+  rosterLocked: boolean; // Whether roster is locked by admin
+  rosterLockDate?: Date; // When roster was locked
+  rosterChangeDeadline: Date; // Deadline for roster changes (21.09.2025)
 }
 
 export interface TeamInvitation {
@@ -70,6 +79,40 @@ export interface TeamInvitation {
   createdAt: Date;
   expiresAt: Date;
   message?: string; // Optional message from inviter
+}
+
+export interface RosterChange {
+  id: string;
+  teamId: string;
+  userId: string; // User who was added/removed
+  changeType: 'add' | 'remove';
+  role: 'owner' | 'captain' | 'member' | 'coach' | 'assistant_coach' | 'manager';
+  changedByUserId: string; // Who made the change
+  changedAt: Date;
+  reason?: string; // Optional reason for the change
+}
+
+export interface UserSession {
+  id: string;
+  userId: string;
+  ipAddress: string;
+  userAgent: string;
+  loginTime: Date;
+  lastActivity: Date;
+  isActive: boolean;
+}
+
+export interface IPAnalysis {
+  ipAddress: string;
+  userCount: number;
+  users: Array<{
+    userId: string;
+    username: string;
+    lastSeen: Date;
+    sessionCount: number;
+  }>;
+  riskLevel: 'low' | 'medium' | 'high';
+  suspiciousActivity: string[];
 }
 
 export interface Notification {
@@ -136,6 +179,11 @@ export interface Match {
     team1SubmittedScore: { team1Score: number; team2Score: number } | null;
     team2SubmittedScore: { team1Score: number; team2Score: number } | null;
     submittedAt?: Date;
+    adminOverride?: boolean;
+    adminOverrideAt?: Date;
+    adminId?: string;
+    forceComplete?: boolean;
+    byeMatch?: boolean;
   };
   // Dispute system
   dispute?: {
@@ -202,6 +250,16 @@ export interface Match {
       team2SubmittedScore: { team1Score: number; team2Score: number } | null;
       submittedAt?: Date;
     };
+  };
+  
+  // Streaming information
+  streamingInfo?: {
+    isStreamed: boolean;
+    streamUrl?: string;
+    streamPlatform?: 'twitch' | 'youtube';
+    username?: string;
+    isLive?: boolean;
+    casters?: Array<{ name: string; role: string }>;
   };
 }
 
@@ -537,4 +595,38 @@ export interface Tournament {
   wildcardSpots?: number;
   invitedTeams?: string[]; // Pre-invited team IDs
   customFields?: Record<string, any>; // For extensibility
+}
+
+// Prediction System Types
+export interface Prediction {
+  id: string;
+  userId: string;
+  matchId: string;
+  tournamentId: string;
+  predictedWinner: 'team1' | 'team2';
+  predictedScore: {
+    team1Score: number;
+    team2Score: number;
+  };
+  pointsAwarded?: number; // Points awarded when match completes
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PredictionLeaderboardEntry {
+  userId: string;
+  username: string;
+  totalPoints: number;
+  correctPredictions: number;
+  totalPredictions: number;
+  accuracy: number; // Percentage
+  recentPredictions: Prediction[];
+}
+
+export interface PredictionStats {
+  totalPredictions: number;
+  correctWinnerPredictions: number;
+  correctScorePredictions: number;
+  totalPoints: number;
+  averagePointsPerMatch: number;
 } 

@@ -28,7 +28,7 @@ const UpcomingMatches: React.FC<UpcomingMatchesProps> = ({ tournamentId }) => {
         setMatches(tournamentMatches);
         setTeams(teamsData);
       } catch (error) {
-        console.error('Error loading matches data:', error);
+
       } finally {
         setLoading(false);
       }
@@ -134,7 +134,7 @@ const UpcomingMatches: React.FC<UpcomingMatchesProps> = ({ tournamentId }) => {
         
         // Check if the date is valid
         if (isNaN(date.getTime())) {
-          console.warn('Invalid scheduledTime received:', match.scheduledTime);
+
           return 'Invalid date';
         }
         
@@ -156,7 +156,7 @@ const UpcomingMatches: React.FC<UpcomingMatchesProps> = ({ tournamentId }) => {
           });
         }
       } catch (error) {
-        console.error('Error formatting match time:', error, 'scheduledTime:', match.scheduledTime);
+
         return 'Error displaying time';
       }
     }

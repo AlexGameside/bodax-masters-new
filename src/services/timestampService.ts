@@ -38,11 +38,11 @@ export class TimestampService {
       }
       
       // Fallback to current time
-      console.warn('Invalid timestamp format, using current time:', timestamp);
+
       return new Date();
       
     } catch (error) {
-      console.error('Error converting timestamp:', error, 'Timestamp:', timestamp);
+
       return new Date();
     }
   }
@@ -81,7 +81,7 @@ export class TimestampService {
         timeZone: 'Europe/Berlin'
       });
     } catch (error) {
-      console.error('Error formatting date:', error);
+
       return date.toISOString();
     }
   }

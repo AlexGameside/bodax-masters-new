@@ -15,6 +15,8 @@ const SwissRoundManagement: React.FC<SwissRoundManagementProps> = ({
   const [completionStatus, setCompletionStatus] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [updatingStandings, setUpdatingStandings] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -36,7 +38,7 @@ const SwissRoundManagement: React.FC<SwissRoundManagementProps> = ({
       setError('');
     } catch (err) {
       setError('Failed to load completion status');
-      console.error('Error loading completion status:', err);
+
     } finally {
       setLoading(false);
     }
@@ -59,17 +61,79 @@ const SwissRoundManagement: React.FC<SwissRoundManagementProps> = ({
       } else {
         setError(result.message);
         if (result.errors) {
-          console.error('Generation errors:', result.errors);
+
         }
         if (result.warnings) {
-          console.warn('Generation warnings:', result.warnings);
+
         }
       }
     } catch (err) {
       setError('Failed to generate next round');
-      console.error('Error generating next round:', err);
+
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleForceUpdateStandings = async () => {
+    if (!swissStage?.isActive) return;
+    
+    setUpdatingStandings(true);
+    setMessage('');
+    setError('');
+    
+    try {
+      const result = await SwissTournamentService.forceUpdateStandings(tournament.id);
+      
+      if (result.success) {
+        setMessage(result.message);
+        onRoundGenerated?.(); // Notify parent component to refresh
+      } else {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError('Failed to update standings');
+
+    } finally {
+      setUpdatingStandings(false);
+    }
+  };
+
+  const handleRevertToRound2 = async () => {
+    if (!swissStage?.isActive) return;
+    
+    const currentRound = swissStage.currentRound;
+    if (currentRound <= 2) {
+      setError('Cannot revert to Round 2 - tournament is already at Round 2 or earlier');
+      return;
+    }
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to revert from Round ${currentRound} to Round 2?\n\n` +
+      `This will:\n` +
+      `• Delete all Round 3+ matches and their data\n` +
+      `• Reset tournament state to Round 2\n` +
+      `• Recalculate standings from Round 1-2 matches\n\n` +
+      `This action cannot be undone!`
+    );
+    
+    if (!confirmed) return;
+    
+    setReverting(true);
+    setMessage('');
+    setError('');
+    
+    try {
+      await SwissTournamentService.revertToRound2(tournament.id);
+      setMessage(`Successfully reverted from Round ${currentRound} to Round 2!`);
+      await loadCompletionStatus();
+      if (onRoundGenerated) {
+        onRoundGenerated();
+      }
+    } catch (err) {
+      setError('Failed to revert to Round 2');
+    } finally {
+      setReverting(false);
     }
   };
 
@@ -180,6 +244,25 @@ const SwissRoundManagement: React.FC<SwissRoundManagementProps> = ({
 
       {/* Action Buttons */}
       <div className="space-y-4">
+        {/* Force Update Standings Button */}
+        <button
+          onClick={handleForceUpdateStandings}
+          disabled={updatingStandings}
+          className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
+        >
+          {updatingStandings ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              <span>Updating Standings...</span>
+            </>
+          ) : (
+            <>
+              <AlertCircle className="w-5 h-5" />
+              <span>Force Update Standings</span>
+            </>
+          )}
+        </button>
+
         {!isLastRound && completionStatus?.canGenerateNextRound && (
           <button
             onClick={handleGenerateNextRound}
@@ -206,6 +289,27 @@ const SwissRoundManagement: React.FC<SwissRoundManagementProps> = ({
             <h4 className="text-green-300 font-medium mb-1">All Swiss Rounds Complete!</h4>
             <p className="text-green-200 text-sm">Tournament is ready to advance to playoffs.</p>
           </div>
+        )}
+
+        {/* Revert to Round 2 Button - Only show if current round is 3 or higher */}
+        {currentRound >= 3 && (
+          <button
+            onClick={handleRevertToRound2}
+            disabled={reverting}
+            className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
+          >
+            {reverting ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>Reverting to Round 2...</span>
+              </>
+            ) : (
+              <>
+                <AlertCircle className="w-5 h-5" />
+                <span>Revert to Round 2</span>
+              </>
+            )}
+          </button>
         )}
 
         <button

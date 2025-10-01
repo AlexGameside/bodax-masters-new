@@ -33,7 +33,7 @@ const ScoreSubmission: React.FC<ScoreSubmissionProps> = ({
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 2000);
     } catch (err) {
-      console.error('Failed to copy text: ', err);
+
     }
   };
 
@@ -52,7 +52,7 @@ const ScoreSubmission: React.FC<ScoreSubmissionProps> = ({
       setTeam1Score('');
       setTeam2Score('');
     } catch (err) {
-      console.error('Error submitting score:', err);
+
       alert('Failed to submit score');
     } finally {
       setIsLoading(false);
@@ -79,7 +79,7 @@ const ScoreSubmission: React.FC<ScoreSubmissionProps> = ({
           setTeam1Score('');
           setTeam2Score('');
         } catch (err) {
-          console.error('Error submitting score:', err);
+
           alert('Failed to submit score');
         } finally {
           setIsLoading(false);

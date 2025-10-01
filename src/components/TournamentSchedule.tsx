@@ -176,13 +176,13 @@ const TournamentSchedule: React.FC<TournamentScheduleProps> = ({ tournament, mat
       } else if (date instanceof Date) {
         dateObj = date;
       } else {
-        console.warn('Unsupported date type received:', date);
+
         return 'TBD';
       }
       
       // Check if the date is valid
       if (isNaN(dateObj.getTime())) {
-        console.warn('Invalid date received:', date);
+
         return 'TBD';
       }
       
@@ -194,7 +194,7 @@ const TournamentSchedule: React.FC<TournamentScheduleProps> = ({ tournament, mat
         timeZone: 'Europe/Berlin'
       });
     } catch (error) {
-      console.error('Error formatting date:', error, 'Date value:', date);
+
       return 'TBD';
     }
   };

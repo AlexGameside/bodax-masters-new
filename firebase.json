@@ -12,6 +12,10 @@
     ],
     "rewrites": [
       {
+        "source": "/riot.txt",
+        "destination": "/riot.txt"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

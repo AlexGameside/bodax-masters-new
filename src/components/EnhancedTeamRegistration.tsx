@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { signupTeamForTournament, getUserById } from '../services/firebaseService';
+import { signupTeamForTournament, getPublicUserData } from '../services/firebaseService';
 import type { User, Team, Tournament, TournamentTeamMember } from '../types/tournament';
 
 interface EnhancedTeamRegistrationProps {
@@ -57,11 +57,11 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
         // Fetch real user data for each team member
         for (const member of team.members) {
           try {
-            const user = await getUserById(member.userId);
-            if (user) {
+            const userData = await getPublicUserData(member.userId);
+            if (userData) {
               realUserData[member.userId] = {
-                username: user.username || 'Unknown',
-                riotId: user.riotId || 'Unknown'
+                username: userData.username,
+                riotId: userData.riotId
               };
             } else {
               // Fallback if user not found
@@ -71,7 +71,7 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
               };
             }
           } catch (error) {
-            console.warn(`Failed to fetch user ${member.userId}:`, error);
+
             realUserData[member.userId] = {
               username: 'Error',
               riotId: 'Error'
@@ -81,7 +81,7 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
         
         setUserData(realUserData);
       } catch (error) {
-        console.error('Failed to fetch user data:', error);
+
       }
     };
 
@@ -105,14 +105,14 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
           if (newState.mainPlayers.length < requirements.maxMainPlayers) {
             newState.mainPlayers.push(userId);
           } else {
-            console.warn(`Cannot add ${userId} to main players. Already at max: ${requirements.maxMainPlayers}`);
+
           }
           break;
         case 'substitute':
           if (newState.substitutes.length < requirements.maxSubstitutes) {
             newState.substitutes.push(userId);
           } else {
-            console.warn(`Cannot add ${userId} to substitutes. Already at max: ${requirements.maxSubstitutes}`);
+
           }
           break;
         case 'coach':

@@ -100,7 +100,7 @@ export class ValidationService {
       };
       
     } catch (error) {
-      console.error('Error validating team availability:', error);
+
       return {
         available: false,
         conflicts: [],
@@ -191,7 +191,7 @@ export class ValidationService {
       };
       
     } catch (error) {
-      console.error('Error validating player availability:', error);
+
       return {
         available: false,
         conflicts: [],
@@ -283,7 +283,7 @@ export class ValidationService {
       };
       
     } catch (error) {
-      console.error('Error validating tournament start:', error);
+
       return {
         canStart: false,
         errors: ['Error validating tournament start'],
@@ -338,7 +338,7 @@ export class ValidationService {
       };
       
     } catch (error) {
-      console.error('Error validating Swiss round:', error);
+
       return {
         canGenerate: false,
         errors: ['Error validating Swiss round'],

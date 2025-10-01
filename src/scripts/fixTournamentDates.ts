@@ -4,7 +4,7 @@ import { db } from '../config/firebase';
 
 export const fixTournamentDates = async () => {
   try {
-    console.log('🔧 Starting to fix tournament dates...');
+
     
     // Get all tournaments
     const tournamentsRef = collection(db, 'tournaments');
@@ -23,7 +23,7 @@ export const fixTournamentDates = async () => {
                       (startDate && typeof startDate === 'object' && !startDate.toDate);
       
       if (needsFix) {
-        console.log(`🔧 Fixing tournament ${tournamentId}: ${tournament.name}`);
+
         
         // Set a default start date (7 days from now)
         const defaultStartDate = new Date();
@@ -36,14 +36,14 @@ export const fixTournamentDates = async () => {
         });
         
         fixedCount++;
-        console.log(`✅ Fixed tournament ${tournamentId}`);
+
       }
     }
     
-    console.log(`🎉 Fixed ${fixedCount} tournaments out of ${querySnapshot.docs.length} total tournaments`);
+
     return fixedCount;
   } catch (error) {
-    console.error('❌ Error fixing tournament dates:', error);
+
     throw error;
   }
 };

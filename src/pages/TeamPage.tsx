@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTeamById, getMatches, getUserById } from '../services/firebaseService';
+import { getTeamById, getMatches, getPublicUserData } from '../services/firebaseService';
 import { useAuth } from '../hooks/useAuth';
 import type { Team, Match, User } from '../types/tournament';
 import { ArrowLeft, Users, Trophy, Calendar, Clock, CheckCircle, XCircle, User as UserIcon, Crown, Shield, Target } from 'lucide-react';
@@ -38,29 +38,30 @@ const TeamPage = () => {
         );
         setTeamMatches(teamMatches);
 
-        // Load user data for team members
+        // Load user data for team members - show usernames for all, but protect emails
         if (teamData.members) {
           const realUserData: {[key: string]: {username: string, riotId: string}} = {};
           
           for (const member of teamData.members) {
             try {
-              const user = await getUserById(member.userId);
-              if (user) {
+              const userData = await getPublicUserData(member.userId);
+              if (userData) {
                 realUserData[member.userId] = {
-                  username: user.username || 'Unknown',
-                  riotId: user.riotId || 'Unknown'
+                  username: userData.username,
+                  riotId: userData.riotId
                 };
               } else {
+                // If no public data available, show generic info
                 realUserData[member.userId] = {
-                  username: 'Unknown',
-                  riotId: 'Unknown'
+                  username: 'Player',
+                  riotId: 'No Riot ID'
                 };
               }
             } catch (error) {
-              console.warn(`Failed to fetch user ${member.userId}:`, error);
+
               realUserData[member.userId] = {
-                username: 'Error',
-                riotId: 'Error'
+                username: 'Player',
+                riotId: 'No Riot ID'
               };
             }
           }
@@ -69,7 +70,7 @@ const TeamPage = () => {
         }
 
       } catch (error) {
-        console.error('Error loading team data:', error);
+
         setError('Failed to load team data');
       } finally {
         setLoading(false);

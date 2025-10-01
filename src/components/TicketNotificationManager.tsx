@@ -45,7 +45,7 @@ const TicketNotificationManager: React.FC<TicketNotificationManagerProps> = ({
         setVisibleNotifications(new Set(parsedVisible));
       }
     } catch (error) {
-      console.error('Error loading persistent notifications:', error);
+
     }
   }, [currentUser?.id]);
 
@@ -57,7 +57,7 @@ const TicketNotificationManager: React.FC<TicketNotificationManagerProps> = ({
       localStorage.setItem(`ticket-notifications-${currentUser.id}`, JSON.stringify(notifications));
       localStorage.setItem(`ticket-visible-${currentUser.id}`, JSON.stringify([...visibleNotifications]));
     } catch (error) {
-      console.error('Error saving persistent notifications:', error);
+
     }
   }, [notifications, visibleNotifications, currentUser?.id]);
 

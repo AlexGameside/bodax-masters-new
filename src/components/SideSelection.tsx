@@ -104,7 +104,7 @@ const SideSelection: React.FC<SideSelectionProps> = ({ match, teams, currentUser
       
     } catch (error: any) {
       toast.error(error.message || 'Failed to select side');
-      console.error('Error selecting side:', error);
+
     } finally {
       setIsLoading(false);
     }

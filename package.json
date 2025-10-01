@@ -9,11 +9,14 @@
     "build:deploy": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "npm run build:deploy && firebase deploy"
+    "deploy": "npm run build:deploy && firebase deploy",
+    "fix-map3": "tsx src/scripts/fixMap3DataSimple.ts",
+    "analyze-map3": "tsx src/scripts/analyzeMap3Issues.ts"
   },
   "dependencies": {
     "@types/react-router-dom": "^5.3.3",
     "firebase": "^11.9.1",
+    "firebase-admin": "^13.5.0",
     "lucide-react": "^0.515.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -33,6 +36,7 @@
     "globals": "^16.0.0",
     "postcss": "^8.5.5",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5"

@@ -49,7 +49,7 @@ const TournamentManagement = () => {
       const data = await getTournaments(filters);
       setTournaments(data);
     } catch (error) {
-      console.error('Error loading tournaments:', error);
+
       toast.error('Failed to load tournaments');
     } finally {
       setLoading(false);
@@ -66,7 +66,7 @@ const TournamentManagement = () => {
       setSelectedTournament(null);
       loadTournaments();
     } catch (error) {
-      console.error('Error deleting tournament:', error);
+
       toast.error('Failed to delete tournament');
     }
   };
@@ -93,7 +93,7 @@ const TournamentManagement = () => {
       }
       loadTournaments();
     } catch (error) {
-      console.error('Error updating tournament status:', error);
+
       toast.error('Failed to update tournament status');
     }
   };

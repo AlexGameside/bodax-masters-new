@@ -5,7 +5,7 @@ const TOURNAMENT_ID = 'VRVlwqpXPLxmeScCWg6s';
 
 export const exportTeamsWithTournamentStatus = async () => {
   try {
-    console.log('📊 Generating enhanced team export with tournament registration status...');
+
     
     // Get all teams
     const allTeams = await getTeams(undefined, true); // Get all teams as admin
@@ -89,16 +89,16 @@ export const exportTeamsWithTournamentStatus = async () => {
     a.click();
     window.URL.revokeObjectURL(url);
     
-    console.log('✅ Enhanced team export completed!');
-    console.log(`📁 File downloaded: tournament-teams-export-${TOURNAMENT_ID}-${new Date().toISOString().split('T')[0]}.csv`);
+
+
     
     // Log summary
     if (tournamentData.found && tournamentData.tournament) {
-      console.log('\n📊 Tournament Registration Summary:');
-      console.log(`Tournament: ${tournamentData.tournament.name}`);
-      console.log(`Registered Teams: ${tournamentData.tournament.registeredCount}/${tournamentData.tournament.maxTeams}`);
-      console.log(`Waitlisted Teams: ${tournamentData.tournament.waitlistCount}`);
-      console.log(`Rejected Teams: ${tournamentData.tournament.rejectedCount}`);
+
+
+
+
+
     }
     
     return {
@@ -108,7 +108,7 @@ export const exportTeamsWithTournamentStatus = async () => {
     };
     
   } catch (error) {
-    console.error('❌ Error generating enhanced team export:', error);
+
     return {
       success: false,
       message: 'Failed to generate enhanced team export',
@@ -144,7 +144,7 @@ export const getTournamentTeamsData = async (tournamentId: string = TOURNAMENT_I
       }
     };
   } catch (error) {
-    console.error('Error getting tournament teams data:', error);
+
     return {
       success: false,
       message: 'Failed to retrieve tournament teams data',

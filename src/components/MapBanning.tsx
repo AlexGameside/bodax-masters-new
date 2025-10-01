@@ -80,6 +80,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
     map !== currentMatch.deciderMap
   );
 
+
   // BO3 Phase Logic - Corrected and simplified
   const totalBans = allBannedMaps.length;
   
@@ -408,7 +409,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
           await updateDoc(doc(db, 'matches', currentMatch.id), updateData);
           toast.success('Match is now starting!');
         } catch (error) {
-          console.error('Failed to transition match to playing state:', error);
+
         }
       };
       
@@ -445,17 +446,38 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
           <div className={`p-3 rounded-lg ${currentMatch.map1 && currentMatch.map1Side ? 'bg-green-600/20 border border-green-500/30' : 'bg-gray-700/20 border border-gray-600/30'}`}>
             <div className="text-sm text-gray-400 mb-1">Map 1</div>
             <div className="text-white font-bold">{currentMatch.map1 || 'Not Selected'}</div>
-            <div className="text-sm text-gray-300">{currentMatch.map1Side || 'No Side'}</div>
+            <div className="text-sm text-gray-300">
+              {currentMatch.map1 && currentMatch.map1Side ? (
+                <div>
+                  <div className="text-blue-300">Team 2: {currentMatch.map1Side}</div>
+                  <div className="text-red-300">Team 1: {currentMatch.map1Side === 'Attack' ? 'Defense' : 'Attack'}</div>
+                </div>
+              ) : 'No Side'}
+            </div>
           </div>
           <div className={`p-3 rounded-lg ${currentMatch.map2 && currentMatch.map2Side ? 'bg-green-600/20 border border-green-500/30' : 'bg-gray-700/20 border border-gray-600/30'}`}>
             <div className="text-sm text-gray-400 mb-1">Map 2</div>
             <div className="text-white font-bold">{currentMatch.map2 || 'Not Selected'}</div>
-            <div className="text-sm text-gray-300">{currentMatch.map2Side || 'No Side'}</div>
+            <div className="text-sm text-gray-300">
+              {currentMatch.map2 && currentMatch.map2Side ? (
+                <div>
+                  <div className="text-blue-300">Team 1: {currentMatch.map2Side}</div>
+                  <div className="text-red-300">Team 2: {currentMatch.map2Side === 'Attack' ? 'Defense' : 'Attack'}</div>
+                </div>
+              ) : 'No Side'}
+            </div>
           </div>
           <div className={`p-3 rounded-lg ${currentMatch.deciderMap && currentMatch.deciderMapSide ? 'bg-green-600/20 border border-green-500/30' : 'bg-gray-700/20 border border-gray-600/30'}`}>
             <div className="text-sm text-gray-400 mb-1">Decider</div>
             <div className="text-white font-bold">{currentMatch.deciderMap || 'Not Selected'}</div>
-            <div className="text-sm text-gray-300">{currentMatch.deciderMapSide || 'No Side'}</div>
+            <div className="text-sm text-gray-300">
+              {currentMatch.deciderMap && currentMatch.deciderMapSide ? (
+                <div>
+                  <div className="text-blue-300">Team 1: {currentMatch.deciderMapSide}</div>
+                  <div className="text-red-300">Team 2: {currentMatch.deciderMapSide === 'Attack' ? 'Defense' : 'Attack'}</div>
+                </div>
+              ) : 'No Side'}
+            </div>
           </div>
         </div>
       </div>

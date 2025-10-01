@@ -3,6 +3,12 @@
   "functions": {
     "api/discord/token.js": {
       "maxDuration": 10
+    },
+    "api/discord/user.js": {
+      "maxDuration": 10
+    },
+    "api/discord/send-notification.js": {
+      "maxDuration": 10
     }
   }
 } 

@@ -218,7 +218,7 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
         toast.success(`Match completed! Winner: ${overallWinnerId === currentMatch.team1Id ? sanitizedTeam1Name : sanitizedTeam2Name}`);
       }
     } catch (error) {
-      console.error('Error completing map:', error);
+
       toast.error('Failed to complete map');
     }
   };

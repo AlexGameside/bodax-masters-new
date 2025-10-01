@@ -142,7 +142,7 @@ const AdminStats: React.FC = () => {
       setStats(statsData);
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('❌ Error loading stats:', error);
+
     } finally {
       setLoading(false);
     }

@@ -56,7 +56,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ userId, onNavigate 
       await markNotificationAsRead(notificationId);
       // No need to manually update state - real-time listener will handle it
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+
     }
   };
 
@@ -65,13 +65,13 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ userId, onNavigate 
       await deleteNotification(notificationId);
       // No need to manually update state - real-time listener will handle it
     } catch (error) {
-      console.error('Error deleting notification:', error);
+
     }
   };
 
   const handleAcceptInvitation = async (notification: Notification) => {
     try {
-      console.log('Accepting invitation:', notification.data?.invitationId);
+
       if (notification.data?.invitationId) {
         await acceptTeamInvitation(notification.data.invitationId);
         await handleDeleteNotification(notification.id);
@@ -81,14 +81,14 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ userId, onNavigate 
         
         // Navigate to team management page
         if (onNavigate) {
-          console.log('Navigating to /team-management');
+
           onNavigate('/team-management');
         } else {
-          console.log('onNavigate is not available');
+
         }
       }
     } catch (error) {
-      console.error('Error accepting invitation:', error);
+
       // Show error to user
       toast.error('Failed to accept invitation. Please try again.');
     }
@@ -101,7 +101,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ userId, onNavigate 
         await handleDeleteNotification(notification.id);
       }
     } catch (error) {
-      console.error('Error declining invitation:', error);
+
       // Show error to user
       toast.error('Failed to decline invitation. Please try again.');
     }

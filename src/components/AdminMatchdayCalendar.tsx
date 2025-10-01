@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getMatches, getTeams } from '../services/firebaseService';
 import type { Match, Team } from '../types/tournament';
-import { Calendar, Clock, CheckCircle, AlertTriangle, Users, MapPin } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, AlertTriangle, Users, MapPin, AlertCircle } from 'lucide-react';
 
 interface AdminMatchdayCalendarProps {
   tournamentId: string;
@@ -23,12 +23,17 @@ const AdminMatchdayCalendar: React.FC<AdminMatchdayCalendarProps> = ({ tournamen
           getTeams()
         ]);
         
-        // Filter matches for this tournament
-        const tournamentMatches = matchesData.filter(match => match.tournamentId === tournamentId);
+        // Filter matches for this tournament (or show all if no tournamentId provided)
+        const tournamentMatches = tournamentId 
+          ? matchesData.filter(match => match.tournamentId === tournamentId)
+          : matchesData;
+        
+        
+        
         setMatches(tournamentMatches);
         setTeams(teamsData);
       } catch (error) {
-        console.error('Error loading calendar data:', error);
+
       } finally {
         setLoading(false);
       }
@@ -43,6 +48,22 @@ const AdminMatchdayCalendar: React.FC<AdminMatchdayCalendarProps> = ({ tournamen
       const matchDate = new Date(match.scheduledTime);
       return matchDate.toDateString() === date.toDateString();
     });
+  };
+
+  // Get matches grouped by matchday for the unscheduled section
+  const getMatchesByMatchday = () => {
+    const matchdayGroups: { [key: number]: Match[] } = {};
+    
+    matches.forEach(match => {
+      if (!match.scheduledTime && match.matchday) {
+        if (!matchdayGroups[match.matchday]) {
+          matchdayGroups[match.matchday] = [];
+        }
+        matchdayGroups[match.matchday].push(match);
+      }
+    });
+    
+    return matchdayGroups;
   };
 
   const getMatchesByDateRange = (startDate: Date, endDate: Date) => {
@@ -202,29 +223,96 @@ const AdminMatchdayCalendar: React.FC<AdminMatchdayCalendarProps> = ({ tournamen
                     </span>
                   </div>
                   
-                  {stats.total > 0 && (
-                    <div className="space-y-1">
-                      {stats.scheduled > 0 && (
-                        <div className="text-xs bg-blue-900/50 text-blue-300 px-1 py-0.5 rounded">
-                          {stats.scheduled} scheduled
-                        </div>
-                      )}
-                      {stats.pending > 0 && (
-                        <div className="text-xs bg-yellow-900/50 text-yellow-300 px-1 py-0.5 rounded">
-                          {stats.pending} pending
-                        </div>
-                      )}
-                      {stats.completed > 0 && (
-                        <div className="text-xs bg-green-900/50 text-green-300 px-1 py-0.5 rounded">
-                          {stats.completed} completed
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {(() => {
+                    const dayMatches = getMatchesForDate(date);
+                    if (dayMatches.length === 0) return null;
+                    
+                    return (
+                      <div className="space-y-1">
+                        {dayMatches.map(match => {
+                          const team1 = teams.find(t => t.id === match.team1Id);
+                          const team2 = teams.find(t => t.id === match.team2Id);
+                          const status = getMatchStatus(match);
+                          
+                          return (
+                            <div key={match.id} className="text-xs bg-blue-900/50 text-blue-300 px-1 py-0.5 rounded">
+                              <div className="font-medium truncate">
+                                {team1?.name?.slice(0, 8) || 'T1'} vs {team2?.name?.slice(0, 8) || 'T2'}
+                              </div>
+                              <div className="text-blue-200">
+                                {match.scheduledTime ? new Date(match.scheduledTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'TBD'}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {dayMatches.length > 5 && (
+                          <div className="text-xs bg-gray-900/50 text-gray-300 px-1 py-0.5 rounded text-center">
+                            +{dayMatches.length - 5} more
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
           </div>
+          
+          {/* Unscheduled Matches Section - Grouped by Matchday */}
+          {(() => {
+            const matchdayGroups = getMatchesByMatchday();
+            const totalUnscheduled = Object.values(matchdayGroups).flat().length;
+            
+            if (totalUnscheduled === 0) return null;
+            
+            return (
+              <div className="mt-8 bg-yellow-900/20 border border-yellow-400/30 rounded-lg p-6">
+                <h3 className="text-yellow-400 text-lg font-semibold mb-4 flex items-center">
+                  <AlertCircle className="w-5 h-5 mr-2" />
+                  Unscheduled Matches ({totalUnscheduled})
+                </h3>
+                <div className="space-y-6">
+                  {Object.entries(matchdayGroups)
+                    .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                    .map(([matchday, matchdayMatches]) => (
+                      <div key={matchday} className="bg-black/30 border border-yellow-400/20 rounded-lg p-4">
+                        <h4 className="text-yellow-300 font-medium mb-3">Matchday {matchday} ({matchdayMatches.length} matches)</h4>
+                        <div className="space-y-2">
+                          {matchdayMatches.map(match => {
+                            const team1 = teams.find(t => t.id === match.team1Id);
+                            const team2 = teams.find(t => t.id === match.team2Id);
+                            const status = getMatchStatus(match);
+                            
+                            return (
+                              <div key={match.id} className="bg-black/40 border border-yellow-400/10 rounded p-3">
+                                <div className="flex justify-between items-center">
+                                  <div className="flex-1">
+                                    <div className="text-white text-sm font-medium">
+                                      {team1?.name || `Team ${match.team1Id?.slice(-4)}`} vs {team2?.name || `Team ${match.team2Id?.slice(-4)}`}
+                                    </div>
+                                    <div className="text-yellow-200 text-xs">
+                                      Round {match.swissRound || match.round} • Match #{match.matchNumber}
+                                    </div>
+                                  </div>
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${status.color}`}>
+                                    {status.label}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {matchdayMatches.length > 10 && (
+                            <div className="text-yellow-300 text-xs text-center">
+                              ... and {matchdayMatches.length - 10} more matches in Matchday {matchday}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            );
+          })()}
         </>
       ) : (
         <>
@@ -252,7 +340,7 @@ const AdminMatchdayCalendar: React.FC<AdminMatchdayCalendarProps> = ({ tournamen
                   if (b.scheduledTime) return 1;
                   return 0;
                 })
-                .slice(0, 10)
+                // Show all matches, no limit
                 .map(match => {
                   const status = getMatchStatus(match);
                   const isTeam1 = match.team1Id === match.team1Id;

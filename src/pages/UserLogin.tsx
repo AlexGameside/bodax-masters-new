@@ -70,7 +70,7 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
         navigate('/profile');
       }, 1000);
     } catch (error: any) {
-      console.error('Login error:', error);
+
       setError(error.message || 'Invalid username or password');
     } finally {
       setIsLoading(false);

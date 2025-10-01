@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { MatchSchedulingService } from '../services/swissTournamentService';
-import type { Match, SchedulingProposal, Team, Matchday, User } from '../types/tournament';
+import type { Match, SchedulingProposal, Team, Matchday, User, Tournament } from '../types/tournament';
 import { Send, Clock, Calendar, MessageCircle, CheckCircle, XCircle, AlertCircle, Info, Zap, Users, Trophy } from 'lucide-react';
 import MatchReadyUpInterface from './MatchReadyUpInterface';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 interface MatchSchedulingInterfaceProps {
   match: Match;
@@ -45,6 +47,8 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
   onReadyUp,
   onStartMatch
 }) => {
+  const [tournament, setTournament] = useState<Tournament | null>(null);
+  const [currentMatchday, setCurrentMatchday] = useState<Matchday | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('20:00');
   const [message, setMessage] = useState<string>('');
@@ -60,27 +64,101 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
     t.id === (match.team1Id === currentTeamId ? match.team2Id : match.team1Id)
   );
 
-  // Calculate scheduling constraints
+  // Fetch tournament data and current matchday to get the correct scheduling window
+  useEffect(() => {
+    const fetchTournamentAndMatchday = async () => {
+      if (match.tournamentId) {
+        try {
+          // Fetch tournament data
+          const tournamentRef = doc(db, 'tournaments', match.tournamentId);
+          const tournamentDoc = await getDoc(tournamentRef);
+          if (tournamentDoc.exists()) {
+            const tournamentData = tournamentDoc.data() as Tournament;
+            setTournament(tournamentData);
+            
+            // Fetch current matchday data for Swiss tournaments
+            if (tournamentData.stageManagement?.swissStage?.currentRound && 
+                match.tournamentType === 'swiss-round') {
+              const currentRound = tournamentData.stageManagement.swissStage.currentRound;
+              
+              
+              // Import the SwissTournamentService to get matchday data
+              const { SwissTournamentService } = await import('../services/swissTournamentService');
+              const matchday = await SwissTournamentService.getMatchdayByNumber(match.tournamentId, currentRound);
+              
+              if (matchday) {
+                setCurrentMatchday(matchday);
+              } else {
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching tournament and matchday:', error);
+        }
+      }
+    };
+
+    fetchTournamentAndMatchday();
+  }, [match.tournamentId, match.tournamentType]);
+
+  // Calculate scheduling constraints based on matchday
   const getSchedulingConstraints = () => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
-    // Unity League uses a 7-day scheduling window
-    const schedulingWindow = 7; // days
-    const deadline = new Date(today.getTime() + schedulingWindow * 24 * 60 * 60 * 1000);
     
-    // Minimum time: tomorrow
-    const minDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-    
-    // Maximum time: 7 days from now
-    const maxDate = new Date(today.getTime() + schedulingWindow * 24 * 60 * 60 * 1000);
-    
-    return {
-      minDate,
-      maxDate,
-      deadline,
-      daysRemaining: Math.ceil((deadline.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
-    };
+    // Get matchday constraints if this is a Swiss tournament match
+    if (tournament?.stageManagement?.swissStage?.currentRound && (match.tournamentType === 'swiss-round')) {
+      // Use actual matchday data from database
+      if (currentMatchday) {
+        
+        // Use the actual matchday dates
+        const minDate = new Date(currentMatchday.startDate.getFullYear(), currentMatchday.startDate.getMonth(), currentMatchday.startDate.getDate());
+        const maxDate = new Date(currentMatchday.endDate.getFullYear(), currentMatchday.endDate.getMonth(), currentMatchday.endDate.getDate(), 23, 59, 59);
+        
+        return {
+          minDate,
+          maxDate,
+          deadline: currentMatchday.endDate,
+          daysRemaining: Math.ceil((currentMatchday.endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+        };
+      } else {
+        
+        // Fallback to calculation if matchday data not available
+        const matchdayNumber = tournament.stageManagement.swissStage.currentRound;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() + (matchdayNumber - 1) * 7);
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 6);
+        
+        const minDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+        const maxDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59);
+        
+        return {
+          minDate,
+          maxDate,
+          deadline: endDate,
+          daysRemaining: Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+        };
+      }
+    } else {
+      // Fallback to generic 7-day window for non-Swiss matches
+      const schedulingWindow = 7; // days
+      const deadline = new Date(today.getTime() + schedulingWindow * 24 * 60 * 60 * 1000);
+      
+      // Minimum time: tomorrow
+      const minDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+      
+      // Maximum time: 7 days from now
+      const maxDate = new Date(today.getTime() + schedulingWindow * 24 * 60 * 60 * 1000);
+      
+      return {
+        minDate,
+        maxDate,
+        deadline,
+        daysRemaining: Math.ceil((deadline.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+      };
+    }
   };
 
   const constraints = getSchedulingConstraints();
@@ -456,6 +534,8 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
       }
       
       return new Intl.DateTimeFormat('de-DE', {
+        month: 'short',
+        day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
         timeZone: 'Europe/Berlin'
@@ -481,22 +561,10 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
   ) : false;
   
   // Check if match should show ready-up interface
-  let shouldShowReadyUp: boolean = (match.matchState === 'scheduled' || match.matchState === 'ready_up') && !!match.scheduledTime;
+  let shouldShowReadyUp: boolean = match.matchState === 'ready_up' && !!match.scheduledTime;
   
-  // If match is scheduled, check if it's time for ready-up (15 minutes before scheduled time)
-  if (match.matchState === 'scheduled' && match.scheduledTime) {
-    const scheduledTime = match.scheduledTime instanceof Date 
-      ? match.scheduledTime 
-      : new Date((match.scheduledTime as any).seconds * 1000);
-    
-    const readyUpTime = new Date(scheduledTime.getTime() - (15 * 60 * 1000));
-    const now = new Date();
-    
-    // If it's time for ready-up, show the ready-up interface
-    if (now >= readyUpTime) {
-      shouldShowReadyUp = true;
-    }
-  }
+  // Don't show ready-up interface if match is still in 'scheduled' state
+  // Let the MatchPage handle the transition to 'ready_up' first
 
   if (shouldShowReadyUp) {
     return (
@@ -674,6 +742,24 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
             </div>
             
             <div className="space-y-3">
+              {/* Scheduling Window Info */}
+              {(tournament?.stageManagement?.swissStage?.currentRound && (match.tournamentType === 'swiss-round')) && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <div className="flex items-center space-x-2 text-blue-300 text-sm mb-1">
+                    <Calendar className="w-4 h-4" />
+                    <span className="font-medium">Round {tournament.stageManagement.swissStage.currentRound} Scheduling Window</span>
+                  </div>
+                  <div className="text-xs text-blue-200">
+                    Available: {constraints.minDate.toLocaleDateString()} - {constraints.maxDate.toLocaleDateString()}
+                    {constraints.daysRemaining > 0 && (
+                      <span className="ml-2 text-green-300">
+                        ({constraints.daysRemaining} days remaining)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               {/* Team Selection for Admins without a team */}
               {isAdmin && !currentTeamId && (
                 <div>

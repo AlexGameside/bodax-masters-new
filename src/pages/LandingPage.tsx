@@ -12,10 +12,13 @@ import {
   Award,
   MessageSquare
 } from 'lucide-react';
+import DiscordLinkPopup from '../components/DiscordLinkPopup';
 
 const LandingPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white font-sans relative overflow-hidden">
+      {/* Discord Link Popup */}
+      <DiscordLinkPopup />
       {/* Simplified background pattern */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-3" 
            style={{
@@ -107,8 +110,8 @@ const LandingPage = () => {
               </div>
               <h3 className="text-xl font-bold text-white mb-4">Playoffs</h3>
               <div className="text-gray-300 mb-4">
-                <p className="text-sm font-medium">Start: 27.10</p>
-                <p className="text-sm font-medium">Ende: 02.11</p>
+                <p className="text-sm font-medium">Start: 22.10</p>
+                <p className="text-sm font-medium">Ende: 25.10</p>
               </div>
               <p className="text-gray-400 leading-relaxed">
                 Die besten Teams kämpfen um den Einzug ins Finale

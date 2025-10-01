@@ -93,12 +93,26 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
       }, 1000);
     } catch (error: any) {
       console.error('Registration error:', error);
-      if (error.message.includes('username')) {
+      
+      // Handle specific error types with better messages
+      if (error.message === 'USERNAME_EXISTS') {
+        setErrors({ username: 'This username is already taken. Please choose a different one.' });
+      } else if (error.message === 'EMAIL_EXISTS') {
+        setErrors({ email: 'This email is already registered. Please use a different email or try logging in.' });
+      } else if (error.message.includes('Password is too weak')) {
+        setErrors({ password: 'Password is too weak. Please choose a stronger password with at least 6 characters.' });
+      } else if (error.message.includes('valid email')) {
+        setErrors({ email: 'Please enter a valid email address.' });
+      } else if (error.message.includes('Registration is currently disabled')) {
+        setErrors({ general: 'Registration is temporarily disabled. Please contact support for assistance.' });
+      } else if (error.message.includes('Too many registration attempts')) {
+        setErrors({ general: 'Too many registration attempts. Please wait a few minutes before trying again.' });
+      } else if (error.message.includes('username')) {
         setErrors({ username: 'Username already exists' });
       } else if (error.message.includes('email')) {
         setErrors({ email: 'Email already registered' });
       } else {
-        setErrors({ general: 'Registration failed. Please try again.' });
+        setErrors({ general: 'Registration failed. Please check your information and try again.' });
       }
     } finally {
       setIsLoading(false);

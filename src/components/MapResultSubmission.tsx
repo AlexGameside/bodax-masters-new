@@ -165,8 +165,12 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
 
       await updateDoc(matchRef, updateData);
       toast.success(`Map ${mapNumber} result submitted! Waiting for other team to confirm.`);
+      
+      // Clear the input fields after successful submission
+      setTeam1Score('');
+      setTeam2Score('');
     } catch (error) {
-      console.error('Error submitting map result:', error);
+
       toast.error('Failed to submit map result. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -208,8 +212,12 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
 
       await updateDoc(matchRef, updateData);
       toast.success(`Map ${mapNumber} result confirmed!`);
+      
+      // Clear the input fields after successful agreement
+      setTeam1Score('');
+      setTeam2Score('');
     } catch (error) {
-      console.error('Error agreeing to map result:', error);
+
       toast.error('Failed to confirm map result. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -230,7 +238,7 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
       });
       toast.success('Dispute created successfully. An admin will review this map.');
     } catch (error) {
-      console.error('Error creating dispute:', error);
+
       toast.error('Failed to create dispute. Please try again.');
     } finally {
       setIsDisputing(false);

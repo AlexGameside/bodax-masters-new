@@ -60,7 +60,7 @@ const DiscordCallback = () => {
         }, 2000);
         
       } catch (error) {
-        console.error('DiscordCallback: Error linking Discord account:', error);
+
         setStatus('error');
         setMessage(`Failed to link Discord account: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }

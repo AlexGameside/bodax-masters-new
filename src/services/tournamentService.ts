@@ -54,7 +54,7 @@ const retryOperation = async <T>(
       return await operation();
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Firebase operation failed (attempt ${attempt}/${maxRetries}):`, error);
+
       
       if (attempt < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, delay * attempt));
@@ -119,12 +119,12 @@ export const createTournament = async (tournamentData: Partial<Tournament>, admi
               ? tournamentData.schedule.startDate
               : new Date(tournamentData.schedule.startDate);
             if (isNaN(date.getTime())) {
-              console.warn('Invalid startDate, using default:', tournamentData.schedule.startDate);
+
               return Timestamp.fromDate(new Date()); // Use current date as fallback
             }
             return Timestamp.fromDate(date);
           } catch (error) {
-            console.warn('Error converting startDate, using default:', error);
+
             return Timestamp.fromDate(new Date()); // Use current date as fallback
           }
         })(),
@@ -134,12 +134,12 @@ export const createTournament = async (tournamentData: Partial<Tournament>, admi
               ? tournamentData.schedule.endDate
               : new Date(tournamentData.schedule.endDate);
             if (isNaN(date.getTime())) {
-              console.warn('Invalid endDate, using default:', tournamentData.schedule.endDate);
+
               return Timestamp.fromDate(new Date()); // Use current date as fallback
             }
             return Timestamp.fromDate(date);
           } catch (error) {
-            console.warn('Error converting endDate, using default:', error);
+
             return Timestamp.fromDate(new Date()); // Use current date as fallback
           }
         })(),
@@ -147,12 +147,12 @@ export const createTournament = async (tournamentData: Partial<Tournament>, admi
           try {
             const dateObj = date instanceof Date ? date : new Date(date);
             if (isNaN(dateObj.getTime())) {
-              console.warn('Invalid blackoutDate, skipping:', date);
+
               return null;
             }
             return Timestamp.fromDate(dateObj);
           } catch (error) {
-            console.warn('Error converting blackoutDate, skipping:', error);
+
             return null;
           }
         }).filter(Boolean) || [],
@@ -169,12 +169,12 @@ export const createTournament = async (tournamentData: Partial<Tournament>, admi
               ? tournamentData.requirements.registrationDeadline
               : new Date(tournamentData.requirements.registrationDeadline);
             if (isNaN(date.getTime())) {
-              console.warn('Invalid registrationDeadline, using default:', tournamentData.requirements.registrationDeadline);
+
               return Timestamp.fromDate(new Date()); // Use current date as fallback
             }
             return Timestamp.fromDate(date);
           } catch (error) {
-            console.warn('Error converting registrationDeadline, using default:', error);
+
             return Timestamp.fromDate(new Date()); // Use current date as fallback
           }
         })(),
@@ -198,7 +198,7 @@ export const createTournament = async (tournamentData: Partial<Tournament>, admi
 
     return tournamentId;
   } catch (error) {
-    console.error('❌ DEBUG: Error creating tournament:', error);
+
     throw error;
   }
 };
@@ -223,12 +223,12 @@ export const updateTournament = async (tournamentId: string, updates: Partial<To
               ? updates.schedule.startDate
               : new Date(updates.schedule.startDate);
             if (isNaN(date.getTime())) {
-              console.warn('Invalid startDate, using default:', updates.schedule.startDate);
+
               return Timestamp.fromDate(new Date()); // Use current date as fallback
             }
             return Timestamp.fromDate(date);
           } catch (error) {
-            console.warn('Error converting startDate, using default:', error);
+
             return Timestamp.fromDate(new Date()); // Use current date as fallback
           }
         })(),
@@ -238,12 +238,12 @@ export const updateTournament = async (tournamentId: string, updates: Partial<To
               ? updates.schedule.endDate
               : new Date(updates.schedule.endDate);
             if (isNaN(date.getTime())) {
-              console.warn('Invalid endDate, using default:', updates.schedule.endDate);
+
               return Timestamp.fromDate(new Date()); // Use current date as fallback
             }
             return Timestamp.fromDate(date);
           } catch (error) {
-            console.warn('Error converting endDate, using default:', error);
+
             return Timestamp.fromDate(new Date()); // Use current date as fallback
           }
         })(),
@@ -251,12 +251,12 @@ export const updateTournament = async (tournamentId: string, updates: Partial<To
           try {
             const dateObj = date instanceof Date ? date : new Date(date);
             if (isNaN(dateObj.getTime())) {
-              console.warn('Invalid blackoutDate, skipping:', date);
+
               return null;
             }
             return Timestamp.fromDate(dateObj);
           } catch (error) {
-            console.warn('Error converting blackoutDate, skipping:', error);
+
             return null;
           }
         }).filter(Boolean),
@@ -272,12 +272,12 @@ export const updateTournament = async (tournamentId: string, updates: Partial<To
               ? updates.requirements.registrationDeadline
               : new Date(updates.requirements.registrationDeadline);
             if (isNaN(date.getTime())) {
-              console.warn('Invalid registrationDeadline, using default:', updates.requirements.registrationDeadline);
+
               return Timestamp.fromDate(new Date()); // Use current date as fallback
             }
             return Timestamp.fromDate(date);
           } catch (error) {
-            console.warn('Error converting registrationDeadline, using default:', error);
+
             return Timestamp.fromDate(new Date()); // Use current date as fallback
           }
         })(),
@@ -286,7 +286,7 @@ export const updateTournament = async (tournamentId: string, updates: Partial<To
 
     await updateDoc(tournamentRef, updateData);
   } catch (error) {
-    console.error('Error updating tournament:', error);
+
     throw new Error('Failed to update tournament');
   }
 };
@@ -295,30 +295,119 @@ export const deleteTournament = async (tournamentId: string): Promise<void> => {
   try {
     const tournamentRef = doc(db, 'tournaments', tournamentId);
     
-    // First, delete all subcollections
+    // First, delete all associated data from top-level collections
     const batch = writeBatch(db);
     
-    // Delete participants
-    const participantsRef = collection(tournamentRef, 'participants');
-    const participantsSnapshot = await getDocs(participantsRef);
-    participantsSnapshot.docs.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-    
-    // Delete matches and their subcollections
-    const matchesRef = collection(tournamentRef, 'matches');
-    const matchesSnapshot = await getDocs(matchesRef);
-    
-    for (const matchDoc of matchesSnapshot.docs) {
-      // Delete match results
-      const resultsRef = collection(matchDoc.ref, 'results');
-      const resultsSnapshot = await getDocs(resultsRef);
-      resultsSnapshot.docs.forEach((doc) => {
+    try {
+      // Delete matches from the top-level matches collection
+      const matchesQuery = query(
+        collection(db, 'matches'),
+        where('tournamentId', '==', tournamentId)
+      );
+      const matchesSnapshot = await getDocs(matchesQuery);
+      matchesSnapshot.docs.forEach((doc) => {
         batch.delete(doc.ref);
       });
+    } catch (error) {
+      // Continue with other deletions even if matches query fails
+    }
+    
+    try {
+      // Delete matchdays (for Swiss tournaments)
+      const matchdaysQuery = query(
+        collection(db, 'matchdays'),
+        where('tournamentId', '==', tournamentId)
+      );
+      const matchdaysSnapshot = await getDocs(matchdaysQuery);
+      matchdaysSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+    } catch (error) {
+      // Continue with other deletions even if matchdays query fails
+    }
+    
+    try {
+      // Delete tournament registrations
+      const registrationsQuery = query(
+        collection(db, 'tournamentRegistrations'),
+        where('tournamentId', '==', tournamentId)
+      );
+      const registrationsSnapshot = await getDocs(registrationsQuery);
+      registrationsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+    } catch (error) {
+      // Continue with other deletions even if registrations query fails
+    }
+    
+    try {
+      // Delete tournament-related notifications
+      const notificationsQuery = query(
+        collection(db, 'notifications'),
+        where('tournamentId', '==', tournamentId)
+      );
+      const notificationsSnapshot = await getDocs(notificationsQuery);
+      notificationsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+    } catch (error) {
+      // Continue with other deletions even if notifications query fails
+    }
+    
+    try {
+      // Delete tournament-related admin logs
+      const adminLogsQuery = query(
+        collection(db, 'adminLogs'),
+        where('tournamentId', '==', tournamentId)
+      );
+      const adminLogsSnapshot = await getDocs(adminLogsQuery);
+      adminLogsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+    } catch (error) {
+      // Continue with other deletions even if admin logs query fails
+    }
+    
+    try {
+      // Delete tournament subcollections
+      const participantsRef = collection(tournamentRef, 'participants');
+      const participantsSnapshot = await getDocs(participantsRef);
+      participantsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+    } catch (error) {
+      // Continue with other deletions even if participants query fails
+    }
+    
+    try {
+      // Delete matches and their subcollections (if any exist as subcollections)
+      const matchesRef = collection(tournamentRef, 'matches');
+      const matchesSubSnapshot = await getDocs(matchesRef);
       
-      // Delete the match itself
-      batch.delete(matchDoc.ref);
+      for (const matchDoc of matchesSubSnapshot.docs) {
+        try {
+          // Delete match results
+          const resultsRef = collection(matchDoc.ref, 'results');
+          const resultsSnapshot = await getDocs(resultsRef);
+          resultsSnapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+          });
+          
+          // Delete match chat
+          const chatRef = collection(matchDoc.ref, 'chat');
+          const chatSnapshot = await getDocs(chatRef);
+          chatSnapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+          });
+        } catch (error) {
+          // Continue with other deletions even if subcollections query fails
+        }
+        
+        // Delete the match itself
+        batch.delete(matchDoc.ref);
+      }
+    } catch (error) {
+      // Continue with other deletions even if tournament matches query fails
     }
     
     // Finally, delete the tournament document
@@ -326,9 +415,9 @@ export const deleteTournament = async (tournamentId: string): Promise<void> => {
     
     // Commit all deletions
     await batch.commit();
+    
   } catch (error) {
-    console.error('Error deleting tournament:', error);
-    throw new Error('Failed to delete tournament');
+    throw new Error(`Failed to delete tournament: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 
@@ -363,7 +452,7 @@ export const getTournament = async (tournamentId: string): Promise<Tournament | 
       },
     } as Tournament;
   } catch (error) {
-    console.error('Error getting tournament:', error);
+
     throw new Error('Failed to get tournament');
   }
 };
@@ -432,7 +521,7 @@ export const getTournaments = async (filters?: {
 
       return tournaments;
     } catch (error) {
-      console.error('Error getting tournaments:', error);
+
       throw new Error('Failed to get tournaments');
     }
   });
@@ -448,7 +537,7 @@ export const publishTournament = async (tournamentId: string): Promise<void> => 
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error publishing tournament:', error);
+
     throw new Error('Failed to publish tournament');
   }
 };
@@ -461,7 +550,7 @@ export const closeRegistration = async (tournamentId: string): Promise<void> => 
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error closing registration:', error);
+
     throw new Error('Failed to close registration');
   }
 };
@@ -517,7 +606,7 @@ export const startTournament = async (tournamentId: string): Promise<void> => {
 
     
   } catch (error) {
-    console.error('❌ DEBUG: Error starting tournament:', error);
+
     throw error;
   }
 };
@@ -530,7 +619,7 @@ export const completeTournament = async (tournamentId: string): Promise<void> =>
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error completing tournament:', error);
+
     throw new Error('Failed to complete tournament');
   }
 };
@@ -582,7 +671,7 @@ export const registerTeamForTournament = async (
       registeredAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error registering team:', error);
+
     throw new Error('Failed to register team');
   }
 };
@@ -626,7 +715,7 @@ export const approveTeamRegistration = async (tournamentId: string, teamId: stri
       });
     }
   } catch (error) {
-    console.error('Error approving team registration:', error);
+
     throw new Error('Failed to approve team registration');
   }
 };
@@ -670,7 +759,7 @@ export const rejectTeamRegistration = async (tournamentId: string, teamId: strin
       });
     }
   } catch (error) {
-    console.error('Error rejecting team registration:', error);
+
     throw new Error('Failed to reject team registration');
   }
 };
@@ -684,7 +773,7 @@ export const updateTournamentStats = async (tournamentId: string, stats: Partial
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error updating tournament stats:', error);
+
     throw new Error('Failed to update tournament stats');
   }
 };
@@ -755,7 +844,7 @@ export const generateTournamentSeeding = async (tournamentId: string, seedingMet
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error generating tournament seeding:', error);
+
     throw new Error('Failed to generate tournament seeding');
   }
 };
@@ -784,7 +873,7 @@ export const generateTournamentBracket = async (tournamentId: string): Promise<v
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error generating tournament bracket:', error);
+
     throw new Error('Failed to generate tournament bracket');
   }
 };
@@ -807,7 +896,7 @@ export const searchTournaments = async (searchTerm: string, filters?: {
       tournament.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   } catch (error) {
-    console.error('Error searching tournaments:', error);
+
     throw new Error('Failed to search tournaments');
   }
 };
@@ -829,7 +918,7 @@ export const getTournamentAnalytics = async (tournamentId: string): Promise<{
       viewershipData: {},
     };
   } catch (error) {
-    console.error('Error getting tournament analytics:', error);
+
     throw new Error('Failed to get tournament analytics');
   }
 };
@@ -859,7 +948,7 @@ export const registerTeamForTournamentWithVerification = async (
       warnings: []
     };
   } catch (error) {
-    console.error('Error registering team:', error);
+
     return {
       success: false,
       message: 'Failed to register team',
@@ -871,7 +960,7 @@ export const registerTeamForTournamentWithVerification = async (
 // Fix existing tournaments with invalid start dates
 export const fixExistingTournamentDates = async (): Promise<number> => {
   try {
-    console.log('🔧 Starting to fix tournament dates...');
+
     
     // Get all tournaments
     const tournamentsRef = collection(db, 'tournaments');
@@ -890,7 +979,7 @@ export const fixExistingTournamentDates = async (): Promise<number> => {
                       (startDate && typeof startDate === 'object' && !startDate.toDate);
       
       if (needsFix) {
-        console.log(`🔧 Fixing tournament ${tournamentId}: ${tournament.name}`);
+
         
         // Set a default start date (7 days from now)
         const defaultStartDate = new Date();
@@ -903,14 +992,14 @@ export const fixExistingTournamentDates = async (): Promise<number> => {
         });
         
         fixedCount++;
-        console.log(`✅ Fixed tournament ${tournamentId}`);
+
       }
     }
     
-    console.log(`🎉 Fixed ${fixedCount} tournaments out of ${querySnapshot.docs.length} total tournaments`);
+
     return fixedCount;
   } catch (error) {
-    console.error('❌ Error fixing tournament dates:', error);
+
     throw error;
   }
 }; 
@@ -938,13 +1027,13 @@ export const getValidTeamCount = async (tournamentId: string): Promise<number> =
           validTeamIds.push(teamId);
         }
       } catch (error) {
-        console.warn(`Team ${teamId} not found in database`);
+
       }
     }
 
     return validTeamIds.length;
   } catch (error) {
-    console.error('Error getting valid team count:', error);
+
     throw error;
   }
 };
@@ -991,7 +1080,7 @@ export const cleanupInvalidTeamReferences = async (tournamentId: string): Promis
       validTeams: validTeamIds,
     };
   } catch (error) {
-    console.error('Error cleaning up invalid team references:', error);
+
     throw error;
   }
 }; 

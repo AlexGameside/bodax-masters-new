@@ -96,7 +96,7 @@ const TicketManagement: React.FC = () => {
       
       setTickets(allTickets);
     } catch (error) {
-      console.error('Error loading tickets:', error);
+
       toast.error('Failed to load tickets');
     } finally {
       setLoading(false);
@@ -150,7 +150,7 @@ const TicketManagement: React.FC = () => {
       await closeTicket(ticketId, currentUser?.id || '', currentUser?.username || currentUser?.email || '');
       toast.success('Ticket closed successfully');
     } catch (error) {
-      console.error('Error closing ticket:', error);
+
       toast.error('Failed to close ticket');
     }
   };
@@ -160,7 +160,7 @@ const TicketManagement: React.FC = () => {
       await claimTicket(ticketId, currentUser?.id || '', currentUser?.username || currentUser?.email || '');
       toast.success('Ticket claimed successfully');
     } catch (error) {
-      console.error('Error claiming ticket:', error);
+
       toast.error('Failed to claim ticket');
     }
   };
@@ -175,7 +175,7 @@ const TicketManagement: React.FC = () => {
       await deleteTicket(ticketId);
       toast.success('Ticket deleted successfully');
     } catch (error) {
-      console.error('Error deleting ticket:', error);
+
       toast.error('Failed to delete ticket');
     }
   };

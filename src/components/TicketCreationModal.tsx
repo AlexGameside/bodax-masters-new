@@ -78,7 +78,7 @@ const TicketCreationModal: React.FC<TicketCreationModalProps> = ({
       setPriority('medium');
       onClose();
     } catch (error) {
-      console.error('Error creating ticket:', error);
+
       toast.error(error instanceof Error ? error.message : 'Failed to create ticket');
     } finally {
       setIsSubmitting(false);

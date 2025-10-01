@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react';
-import { X, Mail, Lock, UserPlus, TestTube, User, ArrowLeft } from 'lucide-react';
+import { X, Mail, Lock, UserPlus, TestTube, User, ArrowLeft, Flag } from 'lucide-react';
 import { loginUser, registerUser, resetPassword } from '../services/authService';
+
+const NATIONALITIES = [
+  'Germany', 'Austria', 'Switzerland', 'France', 'Spain', 'Italy', 'Netherlands', 'Belgium',
+  'Poland', 'Czech Republic', 'Slovakia', 'Hungary', 'Romania', 'Bulgaria', 'Croatia', 'Slovenia',
+  'Serbia', 'Bosnia and Herzegovina', 'Montenegro', 'North Macedonia', 'Albania', 'Kosovo',
+  'United Kingdom', 'Ireland', 'Denmark', 'Sweden', 'Norway', 'Finland', 'Iceland', 'Portugal',
+  'Greece', 'Cyprus', 'Malta', 'Luxembourg', 'Estonia', 'Latvia', 'Lithuania', 'United States',
+  'Canada', 'Australia', 'New Zealand', 'Brazil', 'Argentina', 'Chile', 'Colombia', 'Mexico',
+  'Japan', 'South Korea', 'China', 'India', 'Russia', 'Ukraine', 'Belarus', 'Turkey', 'Israel',
+  'United Arab Emirates', 'Saudi Arabia', 'Egypt', 'South Africa', 'Nigeria', 'Kenya',
+  'Morocco', 'Tunisia', 'Algeria', 'Other'
+];
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -16,6 +28,8 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [riotId, setRiotId] = useState('');
+  const [nationality, setNationality] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -74,13 +88,34 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
           return;
         }
 
+        if (!riotId.trim()) {
+          setError('Riot ID is required');
+          setLoading(false);
+          return;
+        }
+
+        if (!riotId.includes('#')) {
+          setError('Riot ID must contain a # symbol');
+          setLoading(false);
+          return;
+        }
+
+        if (!nationality.trim()) {
+          setError('Nationality is required');
+          setLoading(false);
+          return;
+        }
+
         const userData = {
           username: username.trim(),
           email: email.trim(),
-          riotId: '',
+          riotId: riotId.trim(),
+          nationality: nationality.trim(),
           discordUsername: '',
           teamIds: [],
           isAdmin: false,
+          riotIdSet: !!riotId && riotId.trim() !== '',
+          riotIdSetAt: !!riotId && riotId.trim() !== '' ? new Date() : undefined,
           password
         };
         
@@ -89,7 +124,24 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
         onClose();
       }
     } catch (error: any) {
-      setError(error.message || 'An error occurred');
+      console.error('Registration error:', error);
+      
+      // Handle specific error types with better messages
+      if (error.message === 'USERNAME_EXISTS') {
+        setError('This username is already taken. Please choose a different one.');
+      } else if (error.message === 'EMAIL_EXISTS') {
+        setError('This email is already registered. Please use a different email or try logging in.');
+      } else if (error.message.includes('Password is too weak')) {
+        setError('Password is too weak. Please choose a stronger password with at least 6 characters.');
+      } else if (error.message.includes('valid email')) {
+        setError('Please enter a valid email address.');
+      } else if (error.message.includes('Registration is currently disabled')) {
+        setError('Registration is temporarily disabled. Please contact support for assistance.');
+      } else if (error.message.includes('Too many registration attempts')) {
+        setError('Too many registration attempts. Please wait a few minutes before trying again.');
+      } else {
+        setError(error.message || 'An error occurred during registration. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -272,6 +324,50 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
                   />
                 </div>
               </div>
+            )}
+
+            {!isLogin && !isResetMode && (
+              <>
+                <div>
+                  <label className="block text-gray-300 font-medium mb-2">Riot ID</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={riotId}
+                      onChange={(e) => setRiotId(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                      placeholder="Dein Riot ID eingeben (z.B. Username#1234)"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 font-medium mb-2">Nationality</label>
+                  <div className="relative">
+                    <Flag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <select
+                      value={nationality}
+                      onChange={(e) => setNationality(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="">Choose your nationality...</option>
+                      {NATIONALITIES.map((nat) => (
+                        <option key={nat} value={nat}>
+                          {nat}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
 
             {error && (

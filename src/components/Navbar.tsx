@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut, User, LogIn, Shield, Trophy, Users, Home, Settings, Bell, Gamepad2, Clock, MessageSquare } from 'lucide-react';
+import { Menu, X, LogOut, User, LogIn, Shield, Trophy, Users, Home, Settings, Bell, Gamepad2, Clock, MessageSquare, Target } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useRealtimeUserMatches } from '../hooks/useRealtimeData';
 import type { User as UserType, Match } from '../types/tournament';
@@ -33,7 +33,7 @@ const playNotificationSound = () => {
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.3);
   } catch (error) {
-    console.log('Sound notification not supported or blocked by browser');
+
   }
 };
 
@@ -68,6 +68,9 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
 
   // Get the most urgent match status for display
   const getMatchStatusMessage = () => {
+    // Don't show match status if user has no teams
+    if (teams.length === 0) return null;
+    
     if (userMatches.length === 0) return null;
     
     // Get user's team IDs
@@ -252,7 +255,7 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
         await onLogout();
       }
     } catch (error) {
-      console.error('Error logging out:', error);
+
     } finally {
       setLoading(false);
     }
@@ -290,6 +293,24 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
             >
               Tournaments
             </Link>
+            <Link
+              to="/upcoming-matches"
+              className={`text-sm font-medium transition-colors duration-150 ${
+                isActive('/upcoming-matches') ? 'text-cyan-400' : 'text-pink-200 hover:text-white'
+              }`}
+            >
+              Upcoming Matches
+            </Link>
+            {isAdmin && (
+              <Link
+                to="/predictions"
+                className={`text-sm font-medium transition-colors duration-150 ${
+                  isActive('/predictions') ? 'text-cyan-400' : 'text-pink-200 hover:text-white'
+                }`}
+              >
+                Predictions
+              </Link>
+            )}
             {isAdmin && (
               <Link
                 to="/admin"
@@ -317,8 +338,8 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
           <div className="hidden lg:flex items-center space-x-4">
             {currentUser ? (
               <div className="flex items-center space-x-3 relative">
-                {/* Match Status Button */}
-                {matchStatus && (
+                {/* Match Status Button - only show if user has teams */}
+                {matchStatus && teams.length > 0 && (
                   <button
                     onClick={() => navigate(`/match/${matchStatus.match.id}`)}
                     className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm bg-gradient-to-r ${getMatchStatusDisplay(matchStatus.state, matchStatus.match).color} ${getMatchStatusDisplay(matchStatus.state, matchStatus.match).textColor} ${getMatchStatusDisplay(matchStatus.state, matchStatus.match).hoverColor} shadow-lg transition-colors duration-150 cursor-pointer`}
@@ -338,13 +359,20 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
                     <span className="font-medium text-sm">{currentUser.username}</span>
                   </button>
                   {profileDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-40 bg-black border border-gray-700 rounded-lg shadow-lg z-50">
+                    <div className="absolute right-0 mt-2 w-48 bg-black border border-gray-700 rounded-lg shadow-lg z-50">
                       <Link
                         to="/profile"
                         className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white rounded-t-lg transition-colors duration-150"
                         onClick={() => setProfileDropdownOpen(false)}
                       >
                         Profile
+                      </Link>
+                      <Link
+                        to={`/streamer/${currentUser.username}`}
+                        className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors duration-150"
+                        onClick={() => setProfileDropdownOpen(false)}
+                      >
+                        Streamer Dashboard
                       </Link>
                       <button
                         onClick={handleLogout}
@@ -409,6 +437,26 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
               >
                 Tournaments
               </Link>
+              <Link
+                to="/upcoming-matches"
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ${
+                  isActive('/upcoming-matches') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                }`}
+                onClick={() => setIsOpen(false)}
+              >
+                Upcoming Matches
+              </Link>
+              {isAdmin && (
+                <Link
+                  to="/predictions"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ${
+                    isActive('/predictions') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                  }`}
+                  onClick={() => setIsOpen(false)}
+                >
+                  Predictions
+                </Link>
+              )}
               {currentUser ? (
                 <>
                   {/* Match Status for Mobile */}
@@ -431,14 +479,25 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
                     className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-150 flex items-center space-x-2 ${
                       isActive('/profile') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
                     }`}
+                    onClick={() => setIsOpen(false)}
                   >
                     <span>Profile</span>
+                  </Link>
+                  <Link
+                    to={`/streamer/${currentUser.username}`}
+                    className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-150 flex items-center space-x-2 ${
+                      isActive(`/streamer/${currentUser.username}`) ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                    }`}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <span>Streamer Dashboard</span>
                   </Link>
                   <Link
                     to="/team-management"
                     className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-150 flex items-center space-x-2 ${
                       isActive('/team-management') ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:text-white hover:bg-gray-800'
                     }`}
+                    onClick={() => setIsOpen(false)}
                   >
                     <span>Team Management</span>
                   </Link>

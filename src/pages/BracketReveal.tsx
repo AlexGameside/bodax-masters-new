@@ -141,7 +141,7 @@ const BracketReveal: React.FC<BracketRevealProps> = ({ currentUser }) => {
     // Play reveal sound (if audio file exists)
     if (audioRef.current && !muted) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(console.error);
+
     }
     
     setTimeout(() => {

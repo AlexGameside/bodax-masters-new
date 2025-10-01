@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { getTeams, getTeamById, getUserById } from '../services/firebaseService';
+import { getTeams, getTeamById, getPublicUserData } from '../services/firebaseService';
 import type { Match, Team, User } from '../types/tournament';
 import { Clock, Shield, Sword, Target, Trophy, Users, MapPin, AlertCircle, CheckCircle, XCircle, User as UserIcon, Crown, Zap } from 'lucide-react';
 
@@ -14,8 +14,8 @@ const StreamingOverlay = () => {
   const [match, setMatch] = useState<Match | null>(null);
   const [team1, setTeam1] = useState<Team | null>(null);
   const [team2, setTeam2] = useState<Team | null>(null);
-  const [team1Users, setTeam1Users] = useState<{[key: string]: User}>({});
-  const [team2Users, setTeam2Users] = useState<{[key: string]: User}>({});
+  const [team1Users, setTeam1Users] = useState<{[key: string]: {username: string, riotId: string, discordUsername: string}}>({});
+  const [team2Users, setTeam2Users] = useState<{[key: string]: {username: string, riotId: string, discordUsername: string}}>({});
   const [loading, setLoading] = useState(true);
   const [currentPhase, setCurrentPhase] = useState<string>('');
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
@@ -26,15 +26,15 @@ const StreamingOverlay = () => {
   useEffect(() => {
     if (!matchId) return;
 
-    console.log('StreamingOverlay: Starting data load for match:', matchId);
+
 
     const matchRef = doc(db, 'matches', matchId);
     const unsubscribe = onSnapshot(matchRef, async (docSnap) => {
-      console.log('StreamingOverlay: Match data received:', docSnap.exists());
+
       
       if (docSnap.exists()) {
         const matchData = { ...docSnap.data(), id: docSnap.id } as Match;
-        console.log('StreamingOverlay: Match data:', matchData);
+
         
         // Check for changes to trigger notifications
         if (match && matchData.bannedMaps !== match.bannedMaps) {
@@ -61,37 +61,37 @@ const StreamingOverlay = () => {
         // Load team data
         if (matchData.team1Id && matchData.team2Id) {
           try {
-            console.log('StreamingOverlay: Loading teams:', matchData.team1Id, matchData.team2Id);
+
             const [team1Data, team2Data] = await Promise.all([
               getTeamById(matchData.team1Id),
               getTeamById(matchData.team2Id)
             ]);
             
-            console.log('StreamingOverlay: Team 1 data:', team1Data);
-            console.log('StreamingOverlay: Team 2 data:', team2Data);
+
+
             
             setTeam1(team1Data);
             setTeam2(team2Data);
             
             // Load user data for team members with retry logic
             if (team1Data?.members) {
-              console.log('StreamingOverlay: Loading Team 1 members:', team1Data.members);
-              const team1UserData: {[key: string]: User} = {};
+
+              const team1UserData: {[key: string]: {username: string, riotId: string, discordUsername: string}} = {};
               
               // Use Promise.allSettled for better error handling
               const userPromises = team1Data.members.map(async (member) => {
                 try {
-                  console.log('StreamingOverlay: Fetching user:', member.userId);
-                  const user = await getUserById(member.userId);
-                  if (user) {
-                    console.log('StreamingOverlay: Found user:', user.username);
-                    return { userId: member.userId, user };
+
+                  const userData = await getPublicUserData(member.userId);
+                  if (userData) {
+
+                    return { userId: member.userId, user: userData };
                   } else {
-                    console.warn('StreamingOverlay: User not found:', member.userId);
+
                     return { userId: member.userId, user: null };
                   }
                 } catch (error) {
-                  console.warn(`StreamingOverlay: Failed to fetch user ${member.userId}:`, error);
+
                   return { userId: member.userId, user: null };
                 }
               });
@@ -103,28 +103,28 @@ const StreamingOverlay = () => {
                 }
               });
               
-              console.log('StreamingOverlay: Team 1 users loaded:', team1UserData);
+
               setTeam1Users(team1UserData);
             }
             
             if (team2Data?.members) {
-              console.log('StreamingOverlay: Loading Team 2 members:', team2Data.members);
-              const team2UserData: {[key: string]: User} = {};
+
+              const team2UserData: {[key: string]: {username: string, riotId: string, discordUsername: string}} = {};
               
               // Use Promise.allSettled for better error handling
               const userPromises = team2Data.members.map(async (member) => {
                 try {
-                  console.log('StreamingOverlay: Fetching user:', member.userId);
-                  const user = await getUserById(member.userId);
-                  if (user) {
-                    console.log('StreamingOverlay: Found user:', user.username);
-                    return { userId: member.userId, user };
+
+                  const userData = await getPublicUserData(member.userId);
+                  if (userData) {
+
+                    return { userId: member.userId, user: userData };
                   } else {
-                    console.warn('StreamingOverlay: User not found:', member.userId);
+
                     return { userId: member.userId, user: null };
                   }
                 } catch (error) {
-                  console.warn(`StreamingOverlay: Failed to fetch user ${member.userId}:`, error);
+
                   return { userId: member.userId, user: null };
                 }
               });
@@ -136,21 +136,21 @@ const StreamingOverlay = () => {
                 }
               });
               
-              console.log('StreamingOverlay: Team 2 users loaded:', team2UserData);
+
               setTeam2Users(team2UserData);
             }
           } catch (error) {
-            console.error('StreamingOverlay: Error loading team data:', error);
+
           }
         }
         
         setLoading(false);
       } else {
-        console.log('StreamingOverlay: Match not found');
+
         setLoading(false);
       }
     }, (error) => {
-      console.error('StreamingOverlay: Firebase listener error:', error);
+
       setLoading(false);
     });
 
@@ -164,7 +164,7 @@ const StreamingOverlay = () => {
     // Retry loading data every 5 seconds if teams are not loaded
     const retryInterval = setInterval(() => {
       if (!team1 || !team2) {
-        console.log('StreamingOverlay: Retrying data load...');
+
         // Force a re-render by updating a state
         setLoading(prev => !prev);
       }
@@ -176,7 +176,7 @@ const StreamingOverlay = () => {
   // Add error boundary for OBS
   useEffect(() => {
     const handleError = (error: ErrorEvent) => {
-      console.error('StreamingOverlay: Global error caught:', error);
+
     };
 
     window.addEventListener('error', handleError);

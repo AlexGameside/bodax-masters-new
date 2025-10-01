@@ -15,6 +15,25 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { notifyTicketCreated, notifyTicketAnswered } from './discordService';
+
+// Helper function to get admin users
+const getAdminUsers = async (): Promise<Array<{ id: string; discordId?: string; [key: string]: any }>> => {
+  try {
+    const adminQuery = query(
+      collection(db, 'users'),
+      where('isAdmin', '==', true)
+    );
+    const adminSnapshot = await getDocs(adminQuery);
+    return adminSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error fetching admin users:', error);
+    return [];
+  }
+};
 
 export interface Ticket {
   id: string;
@@ -113,9 +132,19 @@ export const createTicket = async (request: CreateTicketRequest): Promise<Ticket
       updatedAt: docSnap.data().updatedAt?.toDate() || new Date()
     } as Ticket;
     
+    // Send Discord notification to admins
+    try {
+      const adminUsers = await getAdminUsers();
+      const adminDiscordIds = adminUsers.map(admin => admin.discordId).filter((id): id is string => Boolean(id));
+      await notifyTicketCreated(result, adminDiscordIds);
+    } catch (discordError) {
+      console.warn('Failed to send Discord notification for ticket creation:', discordError);
+      // Don't throw error - Discord notification failure shouldn't break ticket creation
+    }
+    
     return result;
   } catch (error) {
-    console.error('Error creating ticket:', error);
+
     throw error;
   }
 };
@@ -147,7 +176,7 @@ export const getAllTickets = async (): Promise<Ticket[]> => {
       return filterSensitiveData(ticket, true, '');
     });
   } catch (error) {
-    console.error('Error getting all tickets:', error);
+
     throw error;
   }
 };
@@ -183,7 +212,7 @@ export const getUserTickets = async (userId: string): Promise<Ticket[]> => {
       return filterSensitiveData(ticket, false, userId);
     }).filter(ticket => ticket !== null) as Ticket[];
   } catch (error) {
-    console.error('Error getting user tickets:', error);
+
     throw error;
   }
 };
@@ -216,7 +245,7 @@ export const getTicket = async (ticketId: string, isAdmin: boolean = false, curr
     // Filter sensitive data based on user permissions
     return filterSensitiveData(ticket, isAdmin, currentUserId);
   } catch (error) {
-    console.error('Error getting ticket:', error);
+
     throw error;
   }
 };
@@ -272,7 +301,7 @@ export const addTicketResponse = async (request: CreateResponseRequest): Promise
       })) || []
     } as Ticket;
   } catch (error) {
-    console.error('Error adding ticket response:', error);
+
     throw error;
   }
 };
@@ -312,7 +341,7 @@ export const claimTicket = async (ticketId: string, adminId: string, adminName: 
       })) || []
     } as Ticket;
   } catch (error) {
-    console.error('Error claiming ticket:', error);
+
     throw error;
   }
 };
@@ -352,7 +381,7 @@ export const closeTicket = async (ticketId: string, adminId: string, adminName: 
       })) || []
     } as Ticket;
   } catch (error) {
-    console.error('Error closing ticket:', error);
+
     throw error;
   }
 };
@@ -502,7 +531,7 @@ export const deleteTicket = async (ticketId: string): Promise<void> => {
   try {
     await deleteDoc(doc(db, 'tickets', ticketId));
   } catch (error) {
-    console.error('Error deleting ticket:', error);
+
     throw error;
   }
 };

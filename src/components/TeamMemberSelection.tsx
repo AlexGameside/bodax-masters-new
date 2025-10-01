@@ -66,7 +66,7 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
 
       setMembersWithStatus(membersData);
     } catch (error) {
-      console.error('Error loading member status:', error);
+
       toast.error('Failed to load team member information');
     } finally {
       setLoading(false);
@@ -87,7 +87,7 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
       
       return inDiscordServer;
     } catch (error) {
-      console.error('Error checking Discord status:', error);
+
       return false;
     }
   };
@@ -138,7 +138,7 @@ const TeamMemberSelection: React.FC<TeamMemberSelectionProps> = ({
         toast.error('Failed to send notification');
       }
     } catch (error) {
-      console.error('Error sending notification:', error);
+
       toast.error('Failed to send notification');
     } finally {
       setVerifying(null);

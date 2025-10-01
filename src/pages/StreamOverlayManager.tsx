@@ -31,7 +31,7 @@ const StreamOverlayManager = () => {
         // Load tournament team counts
         await loadTournamentTeamCounts();
       } catch (error) {
-        console.error('Error loading data:', error);
+
         toast.error('Failed to load matches and teams');
       } finally {
         setLoading(false);
@@ -57,13 +57,13 @@ const StreamOverlayManager = () => {
             name: tournament.name
           };
         } catch (error) {
-          console.warn(`Could not get team count for tournament ${tournament.id}:`, error);
+
         }
       }
       
       setTournamentTeamCounts(counts);
     } catch (error) {
-      console.error('Error loading tournament team counts:', error);
+
     }
   };
 
@@ -78,7 +78,7 @@ const StreamOverlayManager = () => {
       toast.success(`Cleaned up ${result.removedTeams.length} invalid team references`);
       await loadTournamentTeamCounts(); // Refresh counts
     } catch (error) {
-      console.error('Error cleaning up tournament:', error);
+
       toast.error('Failed to clean up tournament');
     } finally {
       setCleaningUp(null);

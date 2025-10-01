@@ -13,13 +13,17 @@ import {
   ArrowLeft,
   X,
   Clock,
-  XCircle
+  XCircle,
+  Lock,
+  AlertTriangle,
+  Calendar
 } from 'lucide-react';
 import { 
   getUserTeams, 
   getTeamById, 
   getAllUsers, 
   getUsersForDisplay,
+  getPublicUserData,
   createTeamInvitation,
   updateTeamMemberRole,
   removeTeamMember,
@@ -41,6 +45,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
   const navigate = useNavigate();
   const [teams, setTeams] = useState<Team[]>([]);
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
+  const [userData, setUserData] = useState<{[key: string]: {username: string, riotId: string}}>({});
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [inviteUsername, setInviteUsername] = useState('');
@@ -62,10 +67,44 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
     try {
       setLoading(true);
       setError('');
+      
+      // Load teams first
+      const userTeams = await getUserTeams(currentUser?.id || '');
+      setTeams(userTeams);
+      
+      // Load admin users data (for admin functions)
       const allUsersData = await getUsersForDisplay(currentUser?.id || '', currentUser?.isAdmin || false);
       setAllUsers(allUsersData);
+      
+      // Load user data for team members
+      const userDataMap: {[key: string]: {username: string, riotId: string}} = {};
+      
+      // Get all unique user IDs from all teams
+      const allUserIds = new Set<string>();
+      userTeams.forEach(team => {
+        team.members.forEach(member => {
+          allUserIds.add(member.userId);
+        });
+      });
+      
+      // Load public user data for each user
+      for (const userId of allUserIds) {
+        try {
+          const userData = await getPublicUserData(userId);
+          if (userData) {
+            userDataMap[userId] = {
+              username: userData.username,
+              riotId: userData.riotId
+            };
+          }
+        } catch (error) {
+
+        }
+      }
+      
+      setUserData(userDataMap);
     } catch (error) {
-      console.error('Error loading initial data:', error);
+
       setError('Failed to load data. Please try again.');
       setAllUsers([]);
     } finally {
@@ -195,7 +234,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
   const getInvitedUsername = (invitation: TeamInvitation) => {
     const invitedUser = allUsers.find(user => user.id === invitation.invitedUserId);
-    return invitedUser?.username || 'Unknown User';
+    const publicUserData = userData[invitation.invitedUserId];
+    return publicUserData?.username || invitedUser?.username || 'Unknown User';
   };
 
   const handleDeleteTeam = async (teamId: string) => {
@@ -349,6 +389,45 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                     </span>
                   </div>
                 </div>
+                
+                {/* Roster Change Status */}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-pink-300 font-mono tracking-tight">ROSTER CHANGES:</span>
+                  <div className="flex items-center space-x-2">
+                    {team.rosterLocked ? (
+                      <div className="flex items-center space-x-1 text-red-400">
+                        <Lock className="w-4 h-4" />
+                        <span className="font-mono tracking-tight">LOCKED</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-1">
+                        <span className={`font-mono tracking-tight ${
+                          team.rosterChangesUsed >= 3 ? 'text-red-400' : 
+                          team.rosterChangesUsed >= 2 ? 'text-yellow-400' : 
+                          'text-green-400'
+                        }`}>
+                          {team.rosterChangesUsed}/3
+                        </span>
+                        {team.rosterChangesUsed >= 3 && (
+                          <AlertTriangle className="w-4 h-4 text-red-400" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Roster Change Deadline */}
+                {!team.rosterLocked && team.rosterChangeDeadline && new Date(team.rosterChangeDeadline).getTime() > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-pink-300 font-mono tracking-tight">DEADLINE:</span>
+                    <div className="flex items-center space-x-1">
+                      <Calendar className="w-4 h-4 text-blue-400" />
+                      <span className="text-blue-400 font-mono tracking-tight">
+                        {new Date(team.rosterChangeDeadline).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Team Members */}
@@ -357,12 +436,13 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                 <div className="space-y-2">
                   {team.members.map((member) => {
                     const user = allUsers.find(u => u.id === member.userId);
+                    const publicUserData = userData[member.userId];
                     return (
                       <div key={member.userId} className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                           {getRoleIcon(member.role)}
                           <span className="text-sm text-gray-300">
-                            {user?.username || 'Unknown User'}
+                            {publicUserData?.username || user?.username || 'Unknown User'}
                           </span>
                         </div>
                         {canManageTeam(team) && member.userId !== currentUser!.id && (
@@ -431,28 +511,46 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
               {/* Invite Button */}
               {canManageTeam(team) && team.members.length < team.maxMembers && (
                 <div className="mt-4 space-y-2">
-                  <button
-                    onClick={() => {
-                      setSelectedTeam(team);
-                      setShowInviteForm(true);
-                    }}
-                    className={`w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border ${
-                      pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
-                        ? 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white border-yellow-700'
-                        : 'bg-black/60 hover:bg-black/80 text-white border-gray-700'
-                    }`}
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    <span>
-                      {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
-                        ? `Invite Member (${pendingInvitations[team.id].length} pending)`
-                        : 'Invite Member'
-                      }
-                    </span>
-                    {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
-                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                    )}
-                  </button>
+                  {/* Check if roster changes are allowed */}
+                  {team.rosterLocked ? (
+                    <div className="w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 bg-red-900/20 text-red-400 border border-red-700">
+                      <Lock className="w-4 h-4" />
+                      <span>Roster Locked</span>
+                    </div>
+                  ) : team.rosterChangesUsed >= 3 ? (
+                    <div className="w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 bg-red-900/20 text-red-400 border border-red-700">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>No Roster Changes Left</span>
+                    </div>
+                  ) : team.rosterChangeDeadline && new Date(team.rosterChangeDeadline).getTime() > 0 && new Date() > team.rosterChangeDeadline ? (
+                    <div className="w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 bg-red-900/20 text-red-400 border border-red-700">
+                      <Calendar className="w-4 h-4" />
+                      <span>Deadline Passed</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setSelectedTeam(team);
+                        setShowInviteForm(true);
+                      }}
+                      className={`w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border ${
+                        pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
+                          ? 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white border-yellow-700'
+                          : 'bg-black/60 hover:bg-black/80 text-white border-gray-700'
+                      }`}
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      <span>
+                        {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
+                          ? `Invite Member (${pendingInvitations[team.id].length} pending)`
+                          : 'Invite Member'
+                        }
+                      </span>
+                      {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
+                        <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                      )}
+                    </button>
+                  )}
                   
                   {/* Fill Team Button - Only show if team has less than 5 members and user is admin */}
                   {currentUser?.isAdmin && team.members.length < 5 && (

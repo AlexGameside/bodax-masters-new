@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, getDoc, collection, getDocs, deleteField } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { toast } from 'react-hot-toast';
-import { handleTeamReadyUp, getMatch, getTeams, getUserTeamForMatch, selectMap, getTeamPlayers, updateTeamActivePlayers, getTeamById, updateMatchState } from '../services/firebaseService';
+import { handleTeamReadyUp, getMatch, getTeams, getUserTeamForMatch, selectMap, getTeamPlayers, updateTeamActivePlayers, getTeamById, updateMatchState, getUsersByIds } from '../services/firebaseService';
 import { SwissTournamentService } from '../services/swissTournamentService';
 import { useAuth } from '../hooks/useAuth';
 import type { Match, Team, User } from '../types/tournament';
@@ -86,7 +86,7 @@ const MatchPage = () => {
             setMatch(updatedMatch);
           }
         } catch (error) {
-          console.warn('Failed to refresh match data:', error);
+
         }
       }
     };
@@ -115,7 +115,7 @@ const MatchPage = () => {
         try {
           await SwissTournamentService.autoTransitionScheduledMatches();
         } catch (error) {
-          console.warn('Failed to auto-transition matches:', error);
+
         }
         
         const matchData = await getMatch(id);
@@ -207,7 +207,21 @@ const MatchPage = () => {
           resolvedAt: data.resolvedAt?.toDate(),
           schedulingProposals: data.schedulingProposals || [],
           currentSchedulingStatus: data.currentSchedulingStatus || 'pending',
-          scheduledTime: data.scheduledTime?.toDate() || null
+          scheduledTime: data.scheduledTime?.toDate() || null,
+          // BO3 Map Banning Fields
+          map1: data.map1,
+          map1Side: data.map1Side,
+          map2: data.map2,
+          map2Side: data.map2Side,
+          deciderMap: data.deciderMap,
+          deciderMapSide: data.deciderMapSide,
+          mapResults: data.mapResults,
+          mapSubmissions: data.mapSubmissions,
+          banSequence: data.banSequence,
+          currentMap: data.currentMap,
+          matchFormat: data.matchFormat,
+          team1Roster: data.team1Roster,
+          team2Roster: data.team2Roster
         });
       }
     }, (error) => {
@@ -220,7 +234,7 @@ const MatchPage = () => {
 
   // Auto-transition scheduled matches to ready_up when they're ready
   useEffect(() => {
-    if (match && match.tournamentType === 'swiss-round' && match.matchState === 'scheduled') {
+    if (match && (match.tournamentType === 'swiss-round') && match.matchState === 'scheduled') {
       // Check if it's time to transition to ready_up (15 minutes before scheduled time)
       const scheduledTime = match.scheduledTime instanceof Date 
         ? match.scheduledTime 
@@ -231,7 +245,7 @@ const MatchPage = () => {
         const readyUpTime = new Date(scheduledTime.getTime() - (15 * 60 * 1000));
         
         if (now >= readyUpTime) {
-          console.log('⏰ Match ready to transition to ready_up');
+
           SwissTournamentService.transitionScheduledToReadyUp(match.id);
         }
       }
@@ -249,7 +263,7 @@ const MatchPage = () => {
             setMatch(updatedMatch);
           }
         } catch (error) {
-          console.error('Failed to refresh match data:', error);
+
         }
       }
     };
@@ -323,12 +337,12 @@ const MatchPage = () => {
     manager?: string;
   }) => {
     // This will be handled by the MatchSchedulingInterface
-    console.log('Ready up from scheduling:', teamId, roster);
+
   };
 
   const handleSchedulingStartMatch = async () => {
     // This will be handled by the MatchSchedulingInterface
-    console.log('Start match from scheduling');
+
   };
 
   const handleMapBanningComplete = async () => {
@@ -413,20 +427,50 @@ const MatchPage = () => {
 
   useEffect(() => {
     const loadTeamPlayers = async () => {
-      if (team1) {
-        const players = await getTeamPlayers(team1.id);
-        setTeam1Players(players);
-      }
-      if (team2) {
-        const players = await getTeamPlayers(team2.id);
-        setTeam2Players(players);
+      try {
+        // Load Team 1 players from roster if available, otherwise fallback to all team members
+        if (team1) {
+          if (match?.team1Roster?.mainPlayers && match.team1Roster.mainPlayers.length > 0) {
+            // Use selected roster players
+            const rosterPlayers = await getUsersByIds(match.team1Roster.mainPlayers);
+            setTeam1Players(rosterPlayers);
+          } else {
+            // Fallback to all team members if no roster data
+            const players = await getTeamPlayers(team1.id);
+            setTeam1Players(players);
+          }
+        }
+        
+        // Load Team 2 players from roster if available, otherwise fallback to all team members
+        if (team2) {
+          if (match?.team2Roster?.mainPlayers && match.team2Roster.mainPlayers.length > 0) {
+            // Use selected roster players
+            const rosterPlayers = await getUsersByIds(match.team2Roster.mainPlayers);
+            setTeam2Players(rosterPlayers);
+          } else {
+            // Fallback to all team members if no roster data
+            const players = await getTeamPlayers(team2.id);
+            setTeam2Players(players);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading team players:', error);
+        // Fallback to original behavior on error
+        if (team1) {
+          const players = await getTeamPlayers(team1.id);
+          setTeam1Players(players);
+        }
+        if (team2) {
+          const players = await getTeamPlayers(team2.id);
+          setTeam2Players(players);
+        }
       }
     };
 
     if (team1 || team2) {
       loadTeamPlayers();
     }
-  }, [team1, team2]);
+  }, [team1, team2, match?.team1Roster?.mainPlayers, match?.team2Roster?.mainPlayers]);
 
   const bothTeamsReady = match?.team1Ready && match?.team2Ready;
 
@@ -535,6 +579,28 @@ const MatchPage = () => {
     }
   };
 
+  // Check if user is authorized to view this match
+  const isUserInMatch = userTeam && (userTeam.id === match.team1Id || userTeam.id === match.team2Id);
+  const isAdmin = currentUser?.isAdmin;
+  
+  if (!isUserInMatch && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-400 text-xl mb-4">Access Denied</div>
+          <div className="text-gray-400 mb-4">You are not authorized to view this match</div>
+          <div className="text-sm text-gray-500 mb-6">Only match participants and administrators can access this page</div>
+          <button
+            onClick={() => navigate('/tournaments')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+          >
+            Back to Tournaments
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-900">
       <div className="bg-gray-800 border-b border-gray-700">
@@ -564,24 +630,36 @@ const MatchPage = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Swiss System Match Scheduling */}
-        {match.tournamentType === 'swiss-round' && match.matchState === 'pending_scheduling' && (
+        {(match.tournamentType === 'swiss-round') && match.matchState === 'pending_scheduling' && (
           <div className="mb-8">
-            <MatchSchedulingInterface 
-              match={match}
-              currentTeamId={userTeam?.id || ''}
-              teams={teams}
-              teamPlayers={teamPlayers}
-              isAdmin={currentUser?.isAdmin}
-              onSchedulingUpdate={() => {
-                // Refresh match data after scheduling update without page reload
-                if (match) {
-                  // Trigger a re-fetch of the match data
-                  window.dispatchEvent(new CustomEvent('refreshMatchData'));
-                }
-              }}
-              onReadyUp={handleSchedulingReadyUp}
-              onStartMatch={handleSchedulingStartMatch}
-            />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <MatchSchedulingInterface 
+                  match={match}
+                  currentTeamId={userTeam?.id || ''}
+                  teams={teams}
+                  teamPlayers={teamPlayers}
+                  isAdmin={currentUser?.isAdmin}
+                  onSchedulingUpdate={() => {
+                    // Refresh match data after scheduling update without page reload
+                    if (match) {
+                      // Trigger a re-fetch of the match data
+                      window.dispatchEvent(new CustomEvent('refreshMatchData'));
+                    }
+                  }}
+                  onReadyUp={handleSchedulingReadyUp}
+                  onStartMatch={handleSchedulingStartMatch}
+                />
+              </div>
+              <div>
+                <MatchChat 
+                  matchId={match.id} 
+                  userTeam={userTeam} 
+                  teams={teams} 
+                  isAdmin={currentUser?.isAdmin}
+                />
+              </div>
+            </div>
           </div>
         )}
 
@@ -621,6 +699,28 @@ const MatchPage = () => {
               </h3>
               <div className="text-white text-2xl font-bold mb-2">
                 {countdownTime}
+              </div>
+              <div className="text-blue-200 text-lg font-medium mb-2">
+                {match.scheduledTime instanceof Date 
+                  ? match.scheduledTime.toLocaleString('en-US', { 
+                      timeZone: 'Europe/Berlin',
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })
+                  : new Date((match.scheduledTime as any).seconds * 1000).toLocaleString('en-US', {
+                      timeZone: 'Europe/Berlin',
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })
+                }
               </div>
               <p className="text-blue-200 text-sm">
                 Ready Up phase begins 15 minutes before the scheduled match time
@@ -912,9 +1012,11 @@ const MatchPage = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-          <div className="lg:col-span-3">
-            {match.matchState === 'map_banning' && (
+        {/* Main Grid - Show for all states except pending_scheduling */}
+        {!(match.tournamentType === 'swiss-round' && match.matchState === 'pending_scheduling') && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+            <div className="lg:col-span-3">
+              {match.matchState === 'map_banning' && (
               <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
                 <MapBanning
                   match={match}
@@ -941,7 +1043,7 @@ const MatchPage = () => {
                         toast.success('Match is now starting!');
                       }
                     } catch (error) {
-                      console.error('Failed to refresh match data:', error);
+
                     }
                   }}
                 />
@@ -1108,17 +1210,16 @@ const MatchPage = () => {
             )}
           </div>
 
-          {(bothTeamsReady || currentUser?.isAdmin) && (
-            <div className="lg:col-span-1">
-              <MatchChat 
-                matchId={match.id} 
-                userTeam={userTeam} 
-                teams={teams} 
-                isAdmin={currentUser?.isAdmin}
-              />
-            </div>
-          )}
+          <div className="lg:col-span-1">
+            <MatchChat 
+              matchId={match.id} 
+              userTeam={userTeam} 
+              teams={teams} 
+              isAdmin={currentUser?.isAdmin}
+            />
+          </div>
         </div>
+        )}
 
         {/* Match Header */}
         <div className="bg-gray-800 rounded-lg shadow-sm p-6 mb-6 border border-gray-700">
@@ -1402,7 +1503,7 @@ const MatchPage = () => {
               
               <button
                 onClick={() => {
-                  console.log('Match State:', match);
+
                   toast.success('Match data logged to console');
                 }}
                 className="px-3 py-1 bg-green-700 hover:bg-green-800 text-white rounded text-xs transition-colors"

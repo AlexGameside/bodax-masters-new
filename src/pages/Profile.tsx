@@ -19,6 +19,7 @@ import { Shield, Users, Trophy, Settings, UserPlus, LogOut, Edit3, Save, X, Tras
 import { useNavigate } from 'react-router-dom';
 import { getDiscordAuthUrl } from '../services/discordService';
 import TicketCreationModal from '../components/TicketCreationModal';
+import DiscordLinkPopup from '../components/DiscordLinkPopup';
 
 const Profile = () => {
   const { currentUser, loading, refreshUser } = useAuth();
@@ -29,7 +30,7 @@ const Profile = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [editForm, setEditForm] = useState({
     displayName: '',
-    riotName: '',
+    riotId: '',
     email: ''
   });
   // Use real-time hook for user matches
@@ -48,7 +49,7 @@ const Profile = () => {
     if (currentUser) {
       setEditForm({
         displayName: currentUser.username || '',
-        riotName: currentUser.riotId || '',
+        riotId: currentUser.riotId || '',
         email: currentUser.email || ''
       });
       loadUserData();
@@ -64,7 +65,7 @@ const Profile = () => {
       const users = await getUsersForDisplay(currentUser.id, currentUser.isAdmin);
       setAllUsers(users);
     } catch (error) {
-      console.error('Error loading user data:', error);
+
     }
   };
 
@@ -85,21 +86,42 @@ const Profile = () => {
   const handleProfileUpdate = async () => {
     if (!currentUser) return;
 
+    // Validate Riot ID format if provided
+    if (editForm.riotId && !editForm.riotId.includes('#')) {
+      setError('Riot ID must contain a # symbol (e.g., Username#1234)');
+      setTimeout(() => setError(''), 5000);
+      return;
+    }
+
     setIsUpdating(true);
+    setError(''); // Clear any previous errors
+    
     try {
+      console.log('Updating profile with:', { displayName: editForm.displayName, riotId: editForm.riotId });
+      
+      // Update the user profile
       await updateUserProfile(currentUser.id, {
         displayName: editForm.displayName,
-        riotName: editForm.riotName
+        riotId: editForm.riotId
       });
       
+      console.log('Profile update successful');
+      
       // Refresh user data to reflect the changes
-      await refreshUser();
+      try {
+        await refreshUser();
+        console.log('User refresh successful');
+      } catch (refreshError) {
+        // If refresh fails, still show success but log the error
+        console.warn('Profile updated but refresh failed:', refreshError);
+      }
       
       setIsEditing(false);
       setMessage('Profile updated successfully!');
       setTimeout(() => setMessage(''), 3000);
     } catch (error: any) {
-      setError(error.message);
+      console.error('Profile update error:', error);
+      setError(error.message || 'Failed to update profile. Please try again.');
       setTimeout(() => setError(''), 5000);
     } finally {
       setIsUpdating(false);
@@ -127,19 +149,19 @@ const Profile = () => {
     if (!currentUser) return;
     
     try {
-      console.log('Starting Discord unlink for user:', currentUser.id);
+
       await unlinkDiscordAccount(currentUser.id);
-      console.log('Discord unlink successful, refreshing user data...');
+
       
       // Refresh user data to reflect the unlink
       await refreshUser();
-      console.log('User data refreshed after Discord unlink');
+
       
       setMessage('Discord account unlinked successfully!');
       setTimeout(() => setMessage(''), 3000);
       setShowUnlinkConfirm(false);
     } catch (error) {
-      console.error('Error unlinking Discord account:', error);
+
       setError('Failed to unlink Discord account');
       setTimeout(() => setError(''), 5000);
       setShowUnlinkConfirm(false);
@@ -185,6 +207,9 @@ const Profile = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
+      {/* Discord Link Popup */}
+      <DiscordLinkPopup />
+      
       {/* Unity League Header */}
       <div className="bg-black/20 backdrop-blur-sm border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -200,7 +225,7 @@ const Profile = () => {
                   {currentUser.username || 'User'}
                 </h1>
                 <p className="text-white/80 font-mono tracking-tight">
-                  {currentUser.email}
+                  {currentUser.email ? '***@' + currentUser.email.split('@')[1] : 'No email'}
                 </p>
                 {currentUser.isAdmin && (
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-pink-900/50 text-pink-300 border border-pink-400/50 font-mono tracking-tight">
@@ -279,17 +304,27 @@ const Profile = () => {
                     <div className="flex space-x-2">
                       <button
                         onClick={handleProfileUpdate}
-                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors border border-green-800"
+                        disabled={isUpdating}
+                        className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors border border-green-800"
                       >
-                        <Save className="w-4 h-4" />
-                        <span>Save</span>
+                        {isUpdating ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            <span>Saving...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4" />
+                            <span>Save</span>
+                          </>
+                        )}
                       </button>
                       <button
                         onClick={() => {
                           setIsEditing(false);
                           setEditForm({
                             displayName: currentUser.username || '',
-                            riotName: currentUser.riotId || '',
+                            riotId: currentUser.riotId || '',
                             email: currentUser.email || ''
                           });
                         }}
@@ -320,18 +355,44 @@ const Profile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Riot Name
+                    <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                      Riot ID
+                      {(currentUser.riotIdSet || (currentUser.riotId && currentUser.riotId.trim() !== '')) && !currentUser.isAdmin && (
+                        <div className="relative group ml-2">
+                          <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center cursor-help">
+                            <span className="text-xs text-white font-bold">i</span>
+                          </div>
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                            Riot ID is locked after first set. Open a ticket if you need to change it.
+                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                          </div>
+                        </div>
+                      )}
                     </label>
                     {isEditing ? (
-                      <input
-                        type="text"
-                        value={editForm.riotName}
-                        onChange={(e) => setEditForm({ ...editForm, riotName: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-black/60 text-white"
-                      />
+                      (currentUser.riotIdSet || (currentUser.riotId && currentUser.riotId.trim() !== '')) && !currentUser.isAdmin ? (
+                        <div className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-400 flex items-center justify-between">
+                          <span>{currentUser.riotId || 'Not set'}</span>
+                          <span className="text-xs text-yellow-400">Locked</span>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          value={editForm.riotId}
+                          onChange={(e) => setEditForm({ ...editForm, riotId: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-black/60 text-white"
+                          placeholder={(currentUser.riotIdSet || (currentUser.riotId && currentUser.riotId.trim() !== '')) ? 'Contact admin to change' : 'Enter Riot ID (e.g., Username#1234)'}
+                        />
+                      )
                     ) : (
-                      <p className="text-white">{currentUser.riotId || 'Not set'}</p>
+                      <div className="flex items-center space-x-2">
+                        <p className="text-white">{currentUser.riotId || 'Not set'}</p>
+                        {(currentUser.riotIdSet || (currentUser.riotId && currentUser.riotId.trim() !== '')) && !currentUser.isAdmin && (
+                          <span className="text-xs text-yellow-400 bg-yellow-900/20 px-2 py-1 rounded">
+                            Locked
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -339,7 +400,14 @@ const Profile = () => {
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Email
                     </label>
-                    <p className="text-white">{currentUser.email}</p>
+                    <p className="text-white">{currentUser.email ? '***@' + currentUser.email.split('@')[1] : 'No email'}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Nationality
+                    </label>
+                    <p className="text-white">{currentUser.nationality || 'Not set'}</p>
                   </div>
 
                   <div>
@@ -598,7 +666,7 @@ const Profile = () => {
                 Reset Password
               </h3>
               <p className="text-gray-400 mb-6">
-                A password reset email will be sent to <strong>{currentUser.email}</strong>. 
+                A password reset email will be sent to <strong>{currentUser.email ? '***@' + currentUser.email.split('@')[1] : 'your email'}</strong>. 
                 Check your inbox and follow the instructions to reset your password.
               </p>
               <div className="flex space-x-3">

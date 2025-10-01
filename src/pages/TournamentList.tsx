@@ -38,13 +38,13 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
       } else if (date instanceof Date) {
         dateObj = date;
       } else {
-        console.warn('Unsupported date type received:', date);
+
         return 'TBD';
       }
       
       // Check if the date is valid
       if (isNaN(dateObj.getTime())) {
-        console.warn('Invalid date received:', date);
+
         return 'TBD';
       }
       
@@ -56,7 +56,7 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
         timeZone: 'Europe/Berlin'
       });
     } catch (error) {
-      console.error('Error formatting date:', error, 'Date value:', date);
+
       return 'TBD';
     }
   };
@@ -94,7 +94,7 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
       const activeMatchesData = await getTeamsInActiveMatches();
       setTeamsInActiveMatches(activeMatchesData);
     } catch (error) {
-      console.error('Error loading data:', error);
+
       setError('Failed to load data');
     } finally {
       setLoading(false);
@@ -110,7 +110,7 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
       toast.success('Tournament filled with demo teams! Tournament is now ready to start.');
       await loadData(); // Refresh the list
     } catch (error: any) {
-      console.error('Error filling tournament with demo teams:', error);
+
       setError(error.message || 'Failed to fill tournament with demo teams');
     } finally {
       setFillingDemo(null);
@@ -125,7 +125,7 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
       toast.success('Tournament started! Bracket has been generated.');
       await loadData(); // Refresh the list
     } catch (error: any) {
-      console.error('Error starting tournament:', error);
+
       setError(error.message || 'Failed to start tournament');
     }
   };
@@ -140,7 +140,7 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
       await loadData(); // Refresh the list
       setShowClearConfirm(false);
     } catch (error: any) {
-      console.error('Error clearing tournaments:', error);
+
       setError(error.message || 'Failed to clear tournaments');
     } finally {
       setClearing(false);

@@ -70,7 +70,7 @@ const MatchdayHistory: React.FC<MatchdayHistoryProps> = ({
       }
     } catch (error) {
       setError('Failed to load matchdays');
-      console.error('Error loading matchdays:', error);
+
     } finally {
       setIsLoading(false);
     }

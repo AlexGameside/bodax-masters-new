@@ -65,14 +65,18 @@ const TeamRegistration = ({ onRegister, teams }: TeamRegistrationProps) => {
       maxSubstitutes: 2,
       maxCoaches: 1,
       maxAssistantCoaches: 1,
-      maxManagers: 1
+      maxManagers: 1,
+      // Initialize roster change tracking
+      rosterChangesUsed: 0,
+      rosterLocked: false,
+      rosterChangeDeadline: new Date(0) // Set to epoch to make inactive by default
     };
 
     try {
       await onRegister(team);
       setIsSubmitted(true);
     } catch (error) {
-      console.error('Error registering team:', error);
+
       toast.error('Error registering team. Please try again.');
     } finally {
       setIsSubmitting(false);

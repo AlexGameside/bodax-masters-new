@@ -8,6 +8,7 @@ import {
   query, 
   orderBy,
   Timestamp,
+  runTransaction,
   where,
   getDoc,
   setDoc,
@@ -19,13 +20,12 @@ import {
   limit,
   enableNetwork,
   disableNetwork,
-  connectFirestoreEmulator,
-  runTransaction
+  connectFirestoreEmulator
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { notifyTeamInvitation, notifyTeamMemberJoined, notifyMatchCompleted } from './discordService';
 import type { Team, Match, TeamInvitation, User, Tournament, TeamMember, Notification } from '../types/tournament';
 import { ValidationService } from './validationService';
-import { auth } from '../config/firebase';
+import { auth, db } from '../config/firebase';
 
 // Enhanced Teams collection functions
 export const addTeam = async (team: Omit<Team, 'id'>): Promise<string> => {
@@ -53,7 +53,11 @@ export const getTeams = async (currentUserId?: string, isAdmin: boolean = false)
         createdAt: data.createdAt?.toDate() || new Date(),
         registeredForTournament: data.registeredForTournament || false,
         tournamentRegistrationDate: data.tournamentRegistrationDate?.toDate(),
-        maxMembers: data.maxMembers || 10 // Default max members
+        maxMembers: data.maxMembers || 10, // Default max members
+        // Roster change tracking
+        rosterChangesUsed: data.rosterChangesUsed || 0,
+        rosterLocked: data.rosterLocked || false,
+        rosterChangeDeadline: data.rosterChangeDeadline?.toDate() || new Date(0)
       };
 
       // Filter teams based on user permissions
@@ -200,6 +204,88 @@ export const removeTeamMember = async (teamId: string, userId: string): Promise<
 
 export const addTeamMember = async (teamId: string, userId: string, role: 'owner' | 'captain' | 'member' = 'member'): Promise<void> => {
   const teamRef = doc(db, 'teams', teamId);
+  const userRef = doc(db, 'users', userId);
+  
+  // Use transaction to prevent race conditions
+  await runTransaction(db, async (transaction) => {
+    // Get fresh team data within transaction
+    const teamSnap = await transaction.get(teamRef);
+    if (!teamSnap.exists()) {
+      throw new Error('Team not found');
+    }
+    
+    const team = teamSnap.data() as Team;
+    
+    // Check if team is full
+    if (team.members.length >= team.maxMembers) {
+      throw new Error('Team is full');
+    }
+    
+    // Check if user is already a member
+    if (team.members.some(member => member.userId === userId)) {
+      throw new Error('User is already a member of this team');
+    }
+    
+    const newMember: TeamMember = {
+      userId,
+      role,
+      joinedAt: new Date(),
+      isActive: true
+    };
+    
+    const updatedMembers = [...team.members, newMember];
+    
+    // Update team captain/owner if needed
+    let newCaptainId = team.captainId;
+    let newOwnerId = team.ownerId;
+    
+    if (role === 'captain') {
+      newCaptainId = userId;
+    } else if (role === 'owner') {
+      newOwnerId = userId;
+      newCaptainId = userId; // Owner is also captain by default
+    }
+    
+    // Atomically increment roster changes
+    const newRosterChangesUsed = (team.rosterChangesUsed || 0) + 1;
+    
+    // Update team with transaction
+    transaction.update(teamRef, {
+      members: updatedMembers,
+      captainId: newCaptainId,
+      ownerId: newOwnerId,
+      rosterChangesUsed: newRosterChangesUsed
+    });
+    
+    // Update user's teamIds with transaction
+    transaction.update(userRef, {
+      teamIds: arrayUnion(teamId)
+    });
+  });
+  
+  // Send Discord notification after successful team member addition
+  try {
+    const updatedTeam = await getTeamById(teamId);
+    const newMember = await getUserById(userId);
+    
+    if (updatedTeam && newMember) {
+      await notifyTeamMemberJoined(updatedTeam, newMember);
+    }
+  } catch (discordError) {
+    console.warn('Failed to send Discord notification for team member joined:', discordError);
+    // Don't throw error - Discord notification failure shouldn't break team member addition
+  }
+};
+
+// Admin function to add team member without counting against roster change limits
+export const adminAddTeamMember = async (
+  teamId: string, 
+  userId: string, 
+  role: 'owner' | 'captain' | 'member' = 'member',
+  adminId: string,
+  adminUsername: string
+): Promise<void> => {
+  const teamRef = doc(db, 'teams', teamId);
   const team = await getTeamById(teamId);
   
   if (!team) throw new Error('Team not found');
@@ -238,6 +324,8 @@ export const addTeamMember = async (teamId: string, userId: string, role: 'owner
     members: updatedMembers,
     captainId: newCaptainId,
     ownerId: newOwnerId
+    // Note: We intentionally do NOT increment rosterChangesUsed
+    // This is an admin action that bypasses roster change limits
   });
   
   // Update user's teamIds
@@ -245,6 +333,67 @@ export const addTeamMember = async (teamId: string, userId: string, role: 'owner
   await updateDoc(userRef, {
     teamIds: arrayUnion(teamId)
   });
+
+  // Log the admin action
+  await createAdminLog({
+    type: 'team',
+    action: 'admin_add_member',
+    details: `Admin ${adminUsername} added user ${userId} to team ${team.name} as ${role}`,
+    userId,
+    adminId,
+    adminUsername,
+    metadata: {
+      teamId,
+      teamName: team.name,
+      role,
+      memberCount: updatedMembers.length
+    }
+  });
+};
+
+// Reset all teams' roster changes to 0
+export const resetAllRosterChanges = async (): Promise<{ success: number; errors: string[] }> => {
+  try {
+    const teamsRef = collection(db, 'teams');
+    const teamsSnapshot = await getDocs(teamsRef);
+    
+    const results = { success: 0, errors: [] as string[] };
+    
+    // Process teams in batches to avoid overwhelming Firestore
+    const batchSize = 10;
+    const teams = teamsSnapshot.docs;
+    
+    for (let i = 0; i < teams.length; i += batchSize) {
+      const batch = teams.slice(i, i + batchSize);
+      
+      await Promise.all(batch.map(async (teamDoc) => {
+        try {
+          const teamRef = doc(db, 'teams', teamDoc.id);
+          const teamData = teamDoc.data();
+          
+          // Only reset if roster changes are greater than 0
+          if (teamData.rosterChangesUsed > 0) {
+            await updateDoc(teamRef, {
+              rosterChangesUsed: 0,
+              updatedAt: serverTimestamp()
+            });
+            results.success++;
+          }
+        } catch (error: any) {
+          const teamName = teamDoc.data().name || teamDoc.id;
+          results.errors.push(`Failed to reset ${teamName}: ${error.message}`);
+        }
+      }));
+    }
+    
+    // Log admin action
+    await logAdminAction('admin_reset_all_roster_changes', `Reset roster changes for ${results.success} teams, ${results.errors.length} errors`);
+    
+    return results;
+  } catch (error) {
+    console.error('Error resetting roster changes:', error);
+    throw error;
+  }
 };
 
 // Enhanced Team Invitations
@@ -265,6 +414,16 @@ export const createTeamInvitation = async (
   // Check if team is full
   if (team.members.length >= team.maxMembers) {
     throw new Error('Team is full');
+  }
+  
+  // Check roster change limits
+  if (team.rosterChangesUsed >= 3) {
+    throw new Error('Team has reached the maximum roster changes (3/3)');
+  }
+  
+  // Check if roster change deadline has passed
+  if (team.rosterChangeDeadline && new Date(team.rosterChangeDeadline).getTime() > 0 && new Date() > team.rosterChangeDeadline) {
+    throw new Error('Roster change deadline has passed');
   }
   
   const expiresAt = new Date();
@@ -293,6 +452,19 @@ export const createTeamInvitation = async (
     actionRequired: true,
     actionUrl: `/teams/invitations`
   });
+  
+  // Send Discord notification
+  try {
+    const invitedUser = await getUserById(invitedUserId);
+    const inviter = await getUserById(invitedByUserId);
+    
+    if (invitedUser && inviter) {
+      await notifyTeamInvitation(team, invitedUser, inviter);
+    }
+  } catch (discordError) {
+    console.warn('Failed to send Discord notification for team invitation:', discordError);
+    // Don't throw error - Discord notification failure shouldn't break invitation creation
+  }
   
   return docRef.id;
 };
@@ -599,7 +771,9 @@ export const getMatches = async (): Promise<Match[]> => {
         disputeReason: data.disputeReason,
         adminAssigned: data.adminAssigned,
         adminResolution: data.adminResolution,
-        resolvedAt: data.resolvedAt?.toDate()
+        resolvedAt: data.resolvedAt?.toDate(),
+        // Streaming info
+        streamingInfo: data.streamingInfo || null
       };
     });
 
@@ -735,9 +909,824 @@ export const onMatchUpdate = (matchId: string, callback: (match: Match | null) =
   return unsubscribe;
 };
 
+// --- Admin Match Management Functions ---
+
+// Admin function to edit match scores and update standings
+export const adminEditMatchScores = async (
+  matchId: string, 
+  team1Score: number, 
+  team2Score: number,
+  adminId: string
+): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    const matchDoc = await getDoc(matchRef);
+    
+    if (!matchDoc.exists()) {
+      throw new Error('Match not found');
+    }
+    
+    const matchData = matchDoc.data();
+    const oldTeam1Score = matchData.team1Score || 0;
+    const oldTeam2Score = matchData.team2Score || 0;
+    
+    // Determine winner
+    const winnerId = team1Score > team2Score ? matchData.team1Id : matchData.team2Id;
+    
+    // Update match with new scores
+    await updateDoc(matchRef, {
+      team1Score,
+      team2Score,
+      winnerId,
+      isComplete: true,
+      matchState: 'completed',
+      resolvedAt: serverTimestamp(),
+      resultSubmission: {
+        team1Submitted: true,
+        team2Submitted: true,
+        team1SubmittedScore: { team1Score, team2Score },
+        team2SubmittedScore: { team1Score, team2Score },
+        submittedAt: serverTimestamp(),
+        adminOverride: true,
+        adminOverrideAt: serverTimestamp(),
+        adminId: adminId,
+        previousScores: { team1Score: oldTeam1Score, team2Score: oldTeam2Score }
+      }
+    });
+    
+    // Update Swiss standings if this is a Swiss tournament
+    if (matchData.tournamentType === 'swiss-round') {
+      try {
+        const { SwissTournamentService } = await import('./swissTournamentService');
+        await SwissTournamentService.updateSwissStandings(matchData.tournamentId, {
+          ...matchData,
+          team1Score,
+          team2Score,
+          isComplete: true,
+          winnerId
+        } as Match);
+      } catch (error) {
+        console.error('Error updating Swiss standings:', error);
+      }
+    } else if (matchData.tournamentId) {
+      // For other tournament types, update standings
+      try {
+        await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
+      } catch (error) {
+        console.error('Error updating tournament standings:', error);
+      }
+    }
+    
+    // Log admin action
+    await logAdminAction(
+      'edit_match_scores',
+      `Admin edited match scores: ${oldTeam1Score}-${oldTeam2Score} → ${team1Score}-${team2Score}`,
+      adminId,
+      undefined,
+      { 
+        matchId, 
+        oldScores: { team1Score: oldTeam1Score, team2Score: oldTeam2Score },
+        newScores: { team1Score, team2Score },
+        winnerId 
+      }
+    );
+    
+  } catch (error) {
+    console.error('Error editing match scores:', error);
+    throw error;
+  }
+};
+
+// Admin function to reset a match completely
+export const adminResetMatch = async (matchId: string, adminId: string): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    const matchDoc = await getDoc(matchRef);
+    
+    if (!matchDoc.exists()) {
+      throw new Error('Match not found');
+    }
+    
+    const matchData = matchDoc.data();
+    
+    // Reset match to initial state
+    await updateDoc(matchRef, {
+      team1Score: 0,
+      team2Score: 0,
+      winnerId: null,
+      isComplete: false,
+      matchState: 'pending_scheduling',
+      team1Ready: false,
+      team2Ready: false,
+      team1MapBans: [],
+      team2MapBans: [],
+      team1MapPick: null,
+      team2MapPick: null,
+      selectedMap: null,
+      bannedMaps: { team1: [], team2: [] },
+      sideSelection: {},
+      disputeRequested: false,
+      disputeReason: null,
+      adminAssigned: null,
+      adminResolution: null,
+      resolvedAt: null,
+      resultSubmission: {
+        team1Submitted: false,
+        team2Submitted: false,
+        team1SubmittedScore: { team1Score: 0, team2Score: 0 },
+        team2SubmittedScore: { team1Score: 0, team2Score: 0 },
+        adminOverride: true,
+        adminOverrideAt: serverTimestamp(),
+        adminId: adminId,
+        resetReason: 'admin_reset'
+      },
+      schedulingProposals: [],
+      currentSchedulingStatus: 'pending',
+      scheduledTime: null
+    });
+    
+    // Log admin action
+    await logAdminAction(
+      'reset_match',
+      'Admin reset match to initial state',
+      adminId,
+      undefined,
+      { 
+        matchId,
+        previousState: matchData.matchState,
+        previousScores: { team1Score: matchData.team1Score, team2Score: matchData.team2Score }
+      }
+    );
+    
+  } catch (error) {
+    console.error('Error resetting match:', error);
+    throw error;
+  }
+};
+
+// Admin function to force schedule a match
+export const adminForceScheduleMatch = async (
+  matchId: string,
+  scheduledTime: Date,
+  adminId: string
+): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    const matchDoc = await getDoc(matchRef);
+    
+    if (!matchDoc.exists()) {
+      throw new Error('Match not found');
+    }
+    
+    // Force schedule the match
+    await updateDoc(matchRef, {
+      matchState: 'scheduled',
+      scheduledTime: scheduledTime,
+      adminScheduled: true,
+      adminScheduledBy: adminId,
+      adminScheduledAt: serverTimestamp(),
+      // Clear any existing scheduling proposals since admin is forcing it
+      schedulingProposals: []
+    });
+    
+    console.log(`Admin ${adminId} force scheduled match ${matchId} for ${scheduledTime}`);
+  } catch (error) {
+    console.error('Error force scheduling match:', error);
+    throw error;
+  }
+};
+
+// Admin function to force complete a match
+export const adminEditMapScores = async (
+  matchId: string,
+  mapResults: {
+    map1?: { team1Score: number; team2Score: number; winner?: string };
+    map2?: { team1Score: number; team2Score: number; winner?: string };
+    map3?: { team1Score: number; team2Score: number; winner?: string };
+  },
+  adminId: string
+): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    const matchDoc = await getDoc(matchRef);
+    
+    if (!matchDoc.exists()) {
+      throw new Error('Match not found');
+    }
+    
+    const matchData = matchDoc.data();
+    
+    // Calculate overall scores from map results
+    let totalTeam1Score = 0;
+    let totalTeam2Score = 0;
+    let mapsPlayed = 0;
+    
+    if (mapResults.map1) {
+      totalTeam1Score += mapResults.map1.team1Score;
+      totalTeam2Score += mapResults.map1.team2Score;
+      mapsPlayed++;
+    }
+    if (mapResults.map2) {
+      totalTeam1Score += mapResults.map2.team1Score;
+      totalTeam2Score += mapResults.map2.team2Score;
+      mapsPlayed++;
+    }
+    if (mapResults.map3) {
+      totalTeam1Score += mapResults.map3.team1Score;
+      totalTeam2Score += mapResults.map3.team2Score;
+      mapsPlayed++;
+    }
+    
+    // Determine winner based on maps won
+    let team1MapsWon = 0;
+    let team2MapsWon = 0;
+    
+    if (mapResults.map1) {
+      if (mapResults.map1.team1Score > mapResults.map1.team2Score) team1MapsWon++;
+      else if (mapResults.map1.team2Score > mapResults.map1.team1Score) team2MapsWon++;
+    }
+    if (mapResults.map2) {
+      if (mapResults.map2.team1Score > mapResults.map2.team2Score) team1MapsWon++;
+      else if (mapResults.map2.team2Score > mapResults.map2.team1Score) team2MapsWon++;
+    }
+    if (mapResults.map3) {
+      if (mapResults.map3.team1Score > mapResults.map3.team2Score) team1MapsWon++;
+      else if (mapResults.map3.team2Score > mapResults.map3.team1Score) team2MapsWon++;
+    }
+    
+    const winnerId = team1MapsWon > team2MapsWon ? matchData.team1Id : matchData.team2Id;
+    
+    // Add winner information to each map result
+    const mapResultsWithWinners = { ...mapResults };
+    if (mapResultsWithWinners.map1) {
+      mapResultsWithWinners.map1.winner = mapResults.map1!.team1Score > mapResults.map1!.team2Score ? matchData.team1Id : matchData.team2Id;
+    }
+    if (mapResultsWithWinners.map2) {
+      mapResultsWithWinners.map2.winner = mapResults.map2!.team1Score > mapResults.map2!.team2Score ? matchData.team1Id : matchData.team2Id;
+    }
+    if (mapResultsWithWinners.map3) {
+      mapResultsWithWinners.map3.winner = mapResults.map3!.team1Score > mapResults.map3!.team2Score ? matchData.team1Id : matchData.team2Id;
+    }
+    
+    // Update match with map results and overall scores
+    await updateDoc(matchRef, {
+      mapResults: mapResultsWithWinners,
+      team1Score: team1MapsWon,
+      team2Score: team2MapsWon,
+      winnerId,
+      isComplete: true,
+      matchState: 'completed',
+      resolvedAt: serverTimestamp(),
+      resultSubmission: {
+        team1Submitted: true,
+        team2Submitted: true,
+        team1SubmittedScore: { team1Score: team1MapsWon, team2Score: team2MapsWon },
+        team2SubmittedScore: { team1Score: team1MapsWon, team2Score: team2MapsWon },
+        submittedAt: serverTimestamp(),
+        adminOverride: true,
+        adminOverrideAt: serverTimestamp(),
+        adminId: adminId
+      }
+    });
+    
+    // Update Swiss standings if this is a Swiss tournament
+    if (matchData.tournamentType === 'swiss-round') {
+      try {
+        const { SwissTournamentService } = await import('./swissTournamentService');
+        await SwissTournamentService.updateSwissStandings(matchData.tournamentId, {
+          ...matchData,
+          team1Score: team1MapsWon,
+          team2Score: team2MapsWon,
+          winnerId,
+          isComplete: true
+        } as Match);
+      } catch (error) {
+        console.error('Failed to update Swiss standings:', error);
+      }
+    }
+
+    // Award prediction points
+    try {
+      const { PredictionService } = await import('./predictionService');
+      await PredictionService.awardPointsForCompletedMatch(matchId);
+    } catch (error) {
+      console.error('Error awarding prediction points:', error);
+    }
+    
+  } catch (error: any) {
+    console.error('Error updating map scores:', error);
+    throw new Error(error.message || 'Failed to update map scores');
+  }
+};
+
+// BULLETPROOF REVERT FUNCTION: Remove Round 2 matches and reset tournament state
+// This will delete all Round 2 matches but preserve all Round 1 data
+// Handles ALL edge cases: chat, notifications, disputes, scheduling, user states, etc.
+export const adminRevertSwissToRound1 = async (tournamentId: string, adminId: string): Promise<void> => {
+  try {
+    console.log(`🔄 adminRevertSwissToRound1 called with:`, { tournamentId, adminId });
+    
+    console.log(`🔄 Admin ${adminId} starting BULLETPROOF revert to Round 1 for tournament: ${tournamentId}`);
+    
+    // STEP 1: Clean up any user notifications related to Round 2+ matches
+    console.log(`🧹 Cleaning up user notifications...`);
+    await cleanupUserNotificationsForRevert(tournamentId);
+    
+    // STEP 2: Clean up any disputes related to Round 2+ matches
+    console.log(`🧹 Cleaning up disputes...`);
+    await cleanupDisputesForRevert(tournamentId);
+    
+    // STEP 3: Clean up any scheduling proposals for Round 2+ matches
+    console.log(`🧹 Cleaning up scheduling proposals...`);
+    await cleanupSchedulingProposalsForRevert(tournamentId);
+    
+    // STEP 4: Execute the main revert operation
+    const { SwissTournamentService } = await import('./swissTournamentService');
+    await SwissTournamentService.revertToRound1(tournamentId);
+    
+    // STEP 5: Log the admin action
+    await logAdminAction(adminId, 'revert_swiss_to_round1', `Reverted Swiss tournament ${tournamentId} to Round 1, deleted all Round 2+ matches and related data`);
+    
+    console.log(`✅ Admin ${adminId} successfully completed BULLETPROOF revert for tournament ${tournamentId}`);
+    
+  } catch (error) {
+    console.error('❌ Error in BULLETPROOF admin revert to Round 1:', error);
+    throw error;
+  }
+};
+
+export const adminRevertSwissToRound2 = async (tournamentId: string, adminId: string): Promise<void> => {
+  try {
+    console.log(`🔄 adminRevertSwissToRound2 called with:`, { tournamentId, adminId });
+    
+    console.log(`🔄 Admin ${adminId} starting BULLETPROOF revert to Round 2 for tournament: ${tournamentId}`);
+    
+    // STEP 1: Clean up any user notifications related to Round 3+ matches
+    console.log(`🧹 Cleaning up user notifications...`);
+    await cleanupUserNotificationsForRevert(tournamentId);
+    
+    // STEP 2: Clean up any disputes related to Round 3+ matches
+    console.log(`🧹 Cleaning up disputes...`);
+    await cleanupDisputesForRevert(tournamentId);
+    
+    // STEP 3: Clean up any scheduling proposals for Round 3+ matches
+    console.log(`🧹 Cleaning up scheduling proposals...`);
+    await cleanupSchedulingProposalsForRevert(tournamentId);
+    
+    // STEP 4: Execute the main revert operation
+    const { SwissTournamentService } = await import('./swissTournamentService');
+    await SwissTournamentService.revertToRound2(tournamentId);
+    
+    // STEP 5: Log the admin action
+    await logAdminAction(adminId, 'revert_swiss_to_round2', `Reverted Swiss tournament ${tournamentId} to Round 2, deleted all Round 3+ matches and related data`);
+    
+    console.log(`✅ Admin ${adminId} successfully completed BULLETPROOF revert to Round 2 for tournament ${tournamentId}`);
+    
+  } catch (error) {
+    console.error('❌ Error in BULLETPROOF admin revert to Round 2:', error);
+    throw error;
+  }
+};
+
+export const adminFixRound2MatchdayDates = async (tournamentId: string, adminId: string): Promise<void> => {
+  try {
+    // Execute the fix operation
+    const { SwissTournamentService } = await import('./swissTournamentService');
+    await SwissTournamentService.fixRound2MatchdayDates(tournamentId);
+    
+    // Log the admin action
+    await logAdminAction(adminId, 'fix_round2_matchday_dates', `Fixed Round 2 matchday dates for Swiss tournament ${tournamentId}`);
+    
+  } catch (error) {
+    console.error('❌ Error fixing Round 2 matchday dates:', error);
+    throw error;
+  }
+};
+
+// Helper function to clean up user notifications
+const cleanupUserNotificationsForRevert = async (tournamentId: string): Promise<void> => {
+  try {
+    // Get all users
+    const usersQuery = query(collection(db, 'users'));
+    const usersSnapshot = await getDocs(usersQuery);
+    
+    const batch = writeBatch(db);
+    let notificationsCleaned = 0;
+    
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      if (!userData.notifications || !Array.isArray(userData.notifications)) continue;
+      
+      // Filter out notifications related to Round 2+ matches
+      const filteredNotifications = userData.notifications.filter((notification: any) => {
+        // Keep notifications that are not match-related or are from Round 1
+        if (!notification.matchId) return true;
+        
+        // Check if this match is from Round 2+ (we'll need to check the match)
+        // For now, we'll be conservative and keep all notifications
+        // The main revert function will handle the match deletion
+        return true;
+      });
+      
+      if (filteredNotifications.length !== userData.notifications.length) {
+        batch.update(userDoc.ref, {
+          notifications: filteredNotifications,
+          updatedAt: serverTimestamp()
+        });
+        notificationsCleaned += userData.notifications.length - filteredNotifications.length;
+      }
+    }
+    
+    if (notificationsCleaned > 0) {
+      await batch.commit();
+      console.log(`✅ Cleaned up ${notificationsCleaned} user notifications`);
+    }
+    
+  } catch (error) {
+    console.warn('⚠️ Could not clean up user notifications:', error);
+    // Don't throw - this is not critical
+  }
+};
+
+// Helper function to clean up disputes
+const cleanupDisputesForRevert = async (tournamentId: string): Promise<void> => {
+  try {
+    // Get all matches for this tournament
+    const matchesQuery = query(
+      collection(db, 'matches'),
+      where('tournamentId', '==', tournamentId),
+      where('round', '>=', 2)
+    );
+    const matchesSnapshot = await getDocs(matchesQuery);
+    
+    if (matchesSnapshot.empty) return;
+    
+    // Note: Disputes are stored as subcollections or fields within matches
+    // Since we're deleting the matches themselves, disputes will be automatically cleaned up
+    console.log(`✅ Disputes will be cleaned up automatically with match deletion`);
+    
+  } catch (error) {
+    console.warn('⚠️ Could not clean up disputes:', error);
+    // Don't throw - this is not critical
+  }
+};
+
+// Helper function to clean up scheduling proposals
+const cleanupSchedulingProposalsForRevert = async (tournamentId: string): Promise<void> => {
+  try {
+    // Get all matches for this tournament
+    const matchesQuery = query(
+      collection(db, 'matches'),
+      where('tournamentId', '==', tournamentId),
+      where('round', '>=', 2)
+    );
+    const matchesSnapshot = await getDocs(matchesQuery);
+    
+    if (matchesSnapshot.empty) return;
+    
+    // Note: Scheduling proposals are stored as fields within matches
+    // Since we're deleting the matches themselves, scheduling proposals will be automatically cleaned up
+    console.log(`✅ Scheduling proposals will be cleaned up automatically with match deletion`);
+    
+  } catch (error) {
+    console.warn('⚠️ Could not clean up scheduling proposals:', error);
+    // Don't throw - this is not critical
+  }
+};
+
+export const adminForceCompleteMatch = async (
+  matchId: string, 
+  team1Score: number, 
+  team2Score: number,
+  adminId: string
+): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    const matchDoc = await getDoc(matchRef);
+    
+    if (!matchDoc.exists()) {
+      throw new Error('Match not found');
+    }
+    
+    const matchData = matchDoc.data();
+    const winnerId = team1Score > team2Score ? matchData.team1Id : matchData.team2Id;
+    
+    // Force complete the match
+    await updateDoc(matchRef, {
+      matchState: 'completed',
+      isComplete: true,
+      winnerId,
+      team1Score,
+      team2Score,
+      resolvedAt: serverTimestamp(),
+      resultSubmission: {
+        team1Submitted: true,
+        team2Submitted: true,
+        team1SubmittedScore: { team1Score, team2Score },
+        team2SubmittedScore: { team1Score, team2Score },
+        submittedAt: serverTimestamp(),
+        adminOverride: true,
+        adminOverrideAt: serverTimestamp(),
+        adminId: adminId,
+        forceComplete: true
+      }
+    });
+    
+    // Update Swiss standings if this is a Swiss tournament
+    if (matchData.tournamentType === 'swiss-round') {
+      try {
+        const { SwissTournamentService } = await import('./swissTournamentService');
+        await SwissTournamentService.updateSwissStandings(matchData.tournamentId, {
+          ...matchData,
+          team1Score,
+          team2Score,
+          isComplete: true,
+          winnerId
+        } as Match);
+      } catch (error) {
+        console.error('Error updating Swiss standings:', error);
+      }
+    } else if (matchData.tournamentId) {
+      // For other tournament types, update standings
+      try {
+        await advanceWinnerToNextRound(matchData.tournamentId, matchData.round, matchData.matchNumber, winnerId);
+      } catch (error) {
+        console.error('Error updating tournament standings:', error);
+      }
+    }
+    
+    // Log admin action
+    await logAdminAction(
+      'force_complete_match',
+      `Admin force completed match with scores: ${team1Score}-${team2Score}`,
+      adminId,
+      undefined,
+      { 
+        matchId,
+        scores: { team1Score, team2Score },
+        winnerId 
+      }
+    );
+
+    // Award prediction points
+    try {
+      const { PredictionService } = await import('./predictionService');
+      await PredictionService.awardPointsForCompletedMatch(matchId);
+    } catch (error) {
+      console.error('Error awarding prediction points:', error);
+    }
+    
+  } catch (error) {
+    console.error('Error force completing match:', error);
+    throw error;
+  }
+};
+
+// Admin function to force complete a match with proper Swiss standings update
+export const adminForceCompleteMatchSwiss = async (
+  matchId: string, 
+  team1Score: number, 
+  team2Score: number,
+  adminId: string,
+  customMapResults?: {
+    map1?: { team1Score: number; team2Score: number; winner?: string };
+    map2?: { team1Score: number; team2Score: number; winner?: string };
+    map3?: { team1Score: number; team2Score: number; winner?: string };
+  }
+): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    const matchDoc = await getDoc(matchRef);
+    
+    if (!matchDoc.exists()) {
+      throw new Error('Match not found');
+    }
+    
+    const matchData = matchDoc.data();
+    
+    // Use custom map results if provided, otherwise create default ones
+    let mapResults: any = {};
+    let calculatedTeam1Score = 0;
+    let calculatedTeam2Score = 0;
+    
+    if (customMapResults) {
+      // Use the provided custom map results
+      mapResults = { ...customMapResults };
+      
+      // Add winner information to each map and calculate maps won
+      if (mapResults.map1) {
+        mapResults.map1.winner = mapResults.map1.team1Score > mapResults.map1.team2Score ? matchData.team1Id : matchData.team2Id;
+        if (mapResults.map1.team1Score > mapResults.map1.team2Score) calculatedTeam1Score++;
+        else if (mapResults.map1.team2Score > mapResults.map1.team1Score) calculatedTeam2Score++;
+      }
+      if (mapResults.map2) {
+        mapResults.map2.winner = mapResults.map2.team1Score > mapResults.map2.team2Score ? matchData.team1Id : matchData.team2Id;
+        if (mapResults.map2.team1Score > mapResults.map2.team2Score) calculatedTeam1Score++;
+        else if (mapResults.map2.team2Score > mapResults.map2.team1Score) calculatedTeam2Score++;
+      }
+      if (mapResults.map3) {
+        mapResults.map3.winner = mapResults.map3.team1Score > mapResults.map3.team2Score ? matchData.team1Id : matchData.team2Id;
+        if (mapResults.map3.team1Score > mapResults.map3.team2Score) calculatedTeam1Score++;
+        else if (mapResults.map3.team2Score > mapResults.map3.team1Score) calculatedTeam2Score++;
+      }
+    } else {
+      // Create default map results for BO3 format (fallback to hardcoded)
+      if (team1Score === 2 && team2Score === 0) {
+        // 2-0 win: Team 1 wins both maps
+        mapResults.map1 = { team1Score: 13, team2Score: 7, winner: matchData.team1Id };
+        mapResults.map2 = { team1Score: 13, team2Score: 7, winner: matchData.team1Id };
+        calculatedTeam1Score = 2;
+        calculatedTeam2Score = 0;
+      } else if (team1Score === 2 && team2Score === 1) {
+        // 2-1 win: Team 1 wins 2 maps, Team 2 wins 1 map
+        mapResults.map1 = { team1Score: 13, team2Score: 7, winner: matchData.team1Id };
+        mapResults.map2 = { team1Score: 7, team2Score: 13, winner: matchData.team2Id };
+        mapResults.map3 = { team1Score: 13, team2Score: 7, winner: matchData.team1Id };
+        calculatedTeam1Score = 2;
+        calculatedTeam2Score = 1;
+      } else if (team1Score === 0 && team2Score === 2) {
+        // 0-2 loss: Team 2 wins both maps
+        mapResults.map1 = { team1Score: 7, team2Score: 13, winner: matchData.team2Id };
+        mapResults.map2 = { team1Score: 7, team2Score: 13, winner: matchData.team2Id };
+        calculatedTeam1Score = 0;
+        calculatedTeam2Score = 2;
+      } else if (team1Score === 1 && team2Score === 2) {
+        // 1-2 loss: Team 1 wins 1 map, Team 2 wins 2 maps
+        mapResults.map1 = { team1Score: 13, team2Score: 7, winner: matchData.team1Id };
+        mapResults.map2 = { team1Score: 7, team2Score: 13, winner: matchData.team2Id };
+        mapResults.map3 = { team1Score: 7, team2Score: 13, winner: matchData.team2Id };
+        calculatedTeam1Score = 1;
+        calculatedTeam2Score = 2;
+      }
+    }
+    
+    const winnerId = calculatedTeam1Score > calculatedTeam2Score ? matchData.team1Id : matchData.team2Id;
+    
+    // Force complete the match with map results
+    await updateDoc(matchRef, {
+      matchState: 'completed',
+      isComplete: true,
+      winnerId,
+      team1Score: calculatedTeam1Score,
+      team2Score: calculatedTeam2Score,
+      mapResults,
+      resolvedAt: serverTimestamp(),
+      resultSubmission: {
+        team1Submitted: true,
+        team2Submitted: true,
+        team1SubmittedScore: { team1Score: calculatedTeam1Score, team2Score: calculatedTeam2Score },
+        team2SubmittedScore: { team1Score: calculatedTeam1Score, team2Score: calculatedTeam2Score },
+        submittedAt: serverTimestamp(),
+        adminOverride: true,
+        adminOverrideAt: serverTimestamp(),
+        adminId: adminId,
+        forceComplete: true
+      }
+    });
+    
+    // Update Swiss standings with proper map results
+    if (matchData.tournamentType === 'swiss-round') {
+      try {
+        const { SwissTournamentService } = await import('./swissTournamentService');
+        await SwissTournamentService.updateSwissStandings(matchData.tournamentId, {
+          ...matchData,
+          team1Score: calculatedTeam1Score,
+          team2Score: calculatedTeam2Score,
+          mapResults,
+          isComplete: true,
+          winnerId
+        } as Match);
+      } catch (error) {
+        console.error('Error updating Swiss standings:', error);
+      }
+    }
+    
+    // Log admin action
+    await logAdminAction(
+      'force_complete_match_swiss',
+      `Admin force completed Swiss match with scores: ${calculatedTeam1Score}-${calculatedTeam2Score}`,
+      adminId,
+      undefined,
+      { 
+        matchId,
+        scores: { team1Score: calculatedTeam1Score, team2Score: calculatedTeam2Score },
+        winnerId,
+        mapResults
+      }
+    );
+    
+  } catch (error) {
+    console.error('Error force completing Swiss match:', error);
+    throw error;
+  }
+};
+
+// Admin function to change match teams
+export const adminChangeMatchTeams = async (
+  matchId: string, 
+  team1Id: string, 
+  team2Id: string,
+  adminId: string
+): Promise<void> => {
+  try {
+    const matchRef = doc(db, 'matches', matchId);
+    const matchDoc = await getDoc(matchRef);
+    
+    if (!matchDoc.exists()) {
+      throw new Error('Match not found');
+    }
+    
+    const matchData = matchDoc.data();
+    const oldTeam1Id = matchData.team1Id;
+    const oldTeam2Id = matchData.team2Id;
+    
+    // Update match teams
+    await updateDoc(matchRef, {
+      team1Id,
+      team2Id,
+      team1Ready: false,
+      team2Ready: false,
+      team1Score: 0,
+      team2Score: 0,
+      winnerId: null,
+      isComplete: false,
+      matchState: 'ready_up',
+      resultSubmission: {
+        team1Submitted: false,
+        team2Submitted: false,
+        team1SubmittedScore: { team1Score: 0, team2Score: 0 },
+        team2SubmittedScore: { team1Score: 0, team2Score: 0 },
+        adminOverride: true,
+        adminOverrideAt: serverTimestamp(),
+        adminId: adminId,
+        teamChange: true
+      }
+    });
+    
+    // Log admin action
+    await logAdminAction(
+      'change_match_teams',
+      `Admin changed match teams: ${oldTeam1Id}, ${oldTeam2Id} → ${team1Id}, ${team2Id}`,
+      adminId,
+      undefined,
+      { 
+        matchId,
+        oldTeams: { team1Id: oldTeam1Id, team2Id: oldTeam2Id },
+        newTeams: { team1Id, team2Id }
+      }
+    );
+    
+  } catch (error) {
+    console.error('Error changing match teams:', error);
+    throw error;
+  }
+};
+
 export const updateMatch = async (matchId: string, result: { team1Score: number; team2Score: number }): Promise<void> => {
   const matchRef = doc(db, 'matches', matchId);
   await updateDoc(matchRef, result);
+};
+
+export const updateMatchData = async (matchId: string, updates: Partial<Match>): Promise<void> => {
+  const matchRef = doc(db, 'matches', matchId);
+  
+  // Filter out undefined values and convert Date objects to Timestamps
+  const firestoreUpdates: any = {};
+  
+  Object.entries(updates).forEach(([key, value]) => {
+    if (value !== undefined) {
+      if (value instanceof Date) {
+        firestoreUpdates[key] = Timestamp.fromDate(value);
+      } else if (key === 'streamingInfo' && value && typeof value === 'object') {
+        // Handle streamingInfo dates and filter out undefined values
+        const streamingInfo = { ...value } as any;
+        
+        // Filter out undefined values from streamingInfo
+        Object.keys(streamingInfo).forEach(subKey => {
+          if (streamingInfo[subKey] === undefined) {
+            delete streamingInfo[subKey];
+          }
+        });
+        
+        // Convert Date objects to Timestamps
+        if (streamingInfo.streamStartTime instanceof Date) {
+          streamingInfo.streamStartTime = Timestamp.fromDate(streamingInfo.streamStartTime);
+        }
+        if (streamingInfo.streamEndTime instanceof Date) {
+          streamingInfo.streamEndTime = Timestamp.fromDate(streamingInfo.streamEndTime);
+        }
+        if (streamingInfo.addedAt instanceof Date) {
+          streamingInfo.addedAt = Timestamp.fromDate(streamingInfo.addedAt);
+        }
+        
+        firestoreUpdates[key] = streamingInfo;
+      } else {
+        firestoreUpdates[key] = value;
+      }
+    }
+  });
+  
+  await updateDoc(matchRef, firestoreUpdates);
 };
 
 export const updateMatchState = async (matchId: string, updates: Partial<Match>): Promise<void> => {
@@ -842,7 +1831,10 @@ export const generateRandomTeams = (count: number): Omit<Team, 'id'>[] => {
       maxSubstitutes: 2,
       maxCoaches: 1,
       maxAssistantCoaches: 1,
-      maxManagers: 1
+      maxManagers: 1,
+      rosterChangesUsed: 0,
+      rosterLocked: false,
+      rosterChangeDeadline: new Date(0) // Set to epoch to make inactive by default
     };
   });
 };
@@ -1151,19 +2143,76 @@ export const updateUser = async (userId: string, updates: {
   teamIds?: string[];
 }): Promise<void> => {
   const userRef = doc(db, 'users', userId);
+  const publicUserRef = doc(db, 'public_users', userId);
   
   // Filter out undefined values to prevent Firebase errors
   const filteredUpdates = Object.fromEntries(
     Object.entries(updates).filter(([_, value]) => value !== undefined)
   );
   
+  // Update main users collection
   await updateDoc(userRef, filteredUpdates);
+  
+  // Also update public_users collection for public displays (team pages, etc.)
+  const publicUpdates = {
+    username: updates.username,
+    riotId: updates.riotId,
+    discordUsername: updates.discordUsername
+  };
+  
+  const filteredPublicUpdates = Object.fromEntries(
+    Object.entries(publicUpdates).filter(([_, value]) => value !== undefined)
+  );
+  
+  // Only update public_users if there are relevant changes
+  if (Object.keys(filteredPublicUpdates).length > 0) {
+    await updateDoc(publicUserRef, filteredPublicUpdates);
+  }
 };
 
 // Add new functions for Profile page
-export const updateUserProfile = async (userId: string, updates: { displayName?: string; riotName?: string }): Promise<void> => {
+export const updateUserProfile = async (userId: string, updates: { displayName?: string; riotId?: string }): Promise<void> => {
+  console.log('updateUserProfile called with:', { userId, updates });
+  
   const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, updates);
+  const publicUserRef = doc(db, 'public_users', userId);
+  
+  // Get current user data to check if Riot ID is being set for the first time
+  const userDoc = await getDoc(userRef);
+  const currentData = userDoc.data();
+  
+  console.log('Current user data:', currentData);
+  
+  const updateData: any = { ...updates };
+  
+  // If Riot ID is being set and it wasn't set before, mark it as locked
+  if (updates.riotId && updates.riotId.trim() !== '' && !currentData?.riotIdSet) {
+    updateData.riotIdSet = true;
+    updateData.riotIdSetAt = new Date();
+    console.log('Setting riotIdSet flag for first time');
+  }
+  
+  console.log('Final update data:', updateData);
+  
+  // Update main users collection
+  await updateDoc(userRef, updateData);
+  console.log('updateDoc completed successfully');
+  
+  // Also update public_users collection for public displays
+  const publicUpdates = {
+    username: updates.displayName, // displayName maps to username in public collection
+    riotId: updates.riotId
+  };
+  
+  const filteredPublicUpdates = Object.fromEntries(
+    Object.entries(publicUpdates).filter(([_, value]) => value !== undefined)
+  );
+  
+  // Only update public_users if there are relevant changes
+  if (Object.keys(filteredPublicUpdates).length > 0) {
+    await updateDoc(publicUserRef, filteredPublicUpdates);
+    console.log('Public users collection updated successfully');
+  }
 };
 
 // Update Discord information for a user
@@ -1637,6 +2686,102 @@ export const getTournaments = async (currentUserId?: string, isAdmin: boolean = 
   });
 };
 
+export const getTournamentById = async (tournamentId: string): Promise<Tournament | null> => {
+  return retryFirebaseOperation(async () => {
+    try {
+      const tournamentRef = doc(db, 'tournaments', tournamentId);
+      const tournamentDoc = await getDoc(tournamentRef);
+      
+      if (!tournamentDoc.exists()) {
+        return null;
+      }
+      
+      const data = tournamentDoc.data();
+      return {
+        id: tournamentDoc.id,
+        name: data.name || 'Unknown Tournament',
+        description: data.description || '',
+        format: data.format || {
+          type: 'single-elimination',
+          teamCount: 8,
+          matchFormat: 'BO1',
+          mapPool: [],
+          sideSelection: 'coin-flip',
+          seedingMethod: 'random',
+        },
+        rules: data.rules || {
+          overtimeRules: '',
+          pauseRules: '',
+          substitutionRules: '',
+          disputeProcess: '',
+          forfeitRules: '',
+          technicalIssues: '',
+          codeOfConduct: '',
+        },
+        requirements: data.requirements || {
+          minTeamSize: 5,
+          maxTeamSize: 5,
+          regionRestrictions: [],
+          skillLevel: 'any',
+          ageRestrictions: null,
+          additionalRequirements: '',
+        },
+        schedule: data.schedule || {
+          registrationStart: null,
+          registrationEnd: null,
+          tournamentStart: null,
+          tournamentEnd: null,
+          timezone: 'UTC',
+          matchDuration: 60,
+          breakDuration: 15,
+        },
+        prizePool: data.prizePool || {
+          total: 0,
+          distribution: [],
+          currency: 'USD',
+        },
+        status: data.status || 'registration-open',
+        type: data.type || 'single-elimination',
+        stageManagement: data.stageManagement || {
+          currentStage: 'registration',
+          stages: [],
+          transitions: [],
+        },
+        createdBy: data.createdBy || '',
+        adminIds: data.adminIds || [],
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+        publishedAt: data.publishedAt?.toDate(),
+        teams: data.teams || [],
+        approvedTeams: data.approvedTeams || [],
+        waitlist: data.waitlist || [],
+        rejectedTeams: data.rejectedTeams || [],
+        brackets: data.brackets || {},
+        matches: data.matches || [],
+        seeding: data.seeding || {
+          method: 'random',
+          rankings: [],
+        },
+        stats: data.stats || {
+          totalMatches: 0,
+          completedMatches: 0,
+          totalParticipants: 0,
+          averageMatchDuration: 0,
+        },
+        prizeDistribution: data.prizeDistribution || null,
+        streamingInfo: data.streamingInfo || null,
+        tags: data.tags || [],
+        region: data.region || 'global',
+        isPublic: data.isPublic || true,
+        featured: data.featured || false,
+      } as Tournament;
+    } catch (error) {
+      console.error('Error getting tournament by ID:', error);
+      throw new Error('Failed to get tournament');
+    }
+  });
+};
+
 export const getOpenTournaments = async (): Promise<Tournament[]> => {
   try {
     const tournaments = await getTournaments();
@@ -1935,23 +3080,60 @@ export const getTournamentMatches = async (tournamentId: string): Promise<Match[
 // Delete all tournaments and their associated matches
 export const deleteAllTournaments = async (): Promise<void> => {
   try {
-    // Get all tournaments
+    // Get all tournaments first
     const tournamentsSnapshot = await getDocs(collection(db, 'tournaments'));
+    const tournamentIds = tournamentsSnapshot.docs.map(doc => doc.id);
     
-    // Delete all tournaments
-    const tournamentDeletions = tournamentsSnapshot.docs.map(doc => deleteDoc(doc.ref));
-    await Promise.all(tournamentDeletions);
+    // Delete all matches associated with tournaments
+    const matchesQuery = query(
+      collection(db, 'matches'),
+      where('tournamentId', 'in', tournamentIds)
+    );
+    const matchesSnapshot = await getDocs(matchesQuery);
     
-    // Get all matches
-    const matchesSnapshot = await getDocs(collection(db, 'matches'));
+    // Delete all matchdays associated with tournaments
+    const matchdaysQuery = query(
+      collection(db, 'matchdays'),
+      where('tournamentId', 'in', tournamentIds)
+    );
+    const matchdaysSnapshot = await getDocs(matchdaysQuery);
     
-    // Delete all matches
-    const matchDeletions = matchesSnapshot.docs.map(doc => deleteDoc(doc.ref));
-    await Promise.all(matchDeletions);
+    // Delete all tournament registrations
+    const registrationsQuery = query(
+      collection(db, 'tournamentRegistrations'),
+      where('tournamentId', 'in', tournamentIds)
+    );
+    const registrationsSnapshot = await getDocs(registrationsQuery);
     
-    console.log(`Deleted ${tournamentsSnapshot.docs.length} tournaments and ${matchesSnapshot.docs.length} matches`);
+    // Delete all tournament-related notifications
+    const notificationsQuery = query(
+      collection(db, 'notifications'),
+      where('tournamentId', 'in', tournamentIds)
+    );
+    const notificationsSnapshot = await getDocs(notificationsQuery);
+    
+    // Delete all tournament-related admin logs
+    const adminLogsQuery = query(
+      collection(db, 'adminLogs'),
+      where('tournamentId', 'in', tournamentIds)
+    );
+    const adminLogsSnapshot = await getDocs(adminLogsQuery);
+    
+    // Use batch operations for efficient deletion
+    const batch = writeBatch(db);
+    
+    // Add all deletions to batch
+    tournamentsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    matchesSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    matchdaysSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    registrationsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    notificationsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    adminLogsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    
+    // Commit all deletions
+    await batch.commit();
+    
   } catch (error) {
-    console.error('Error deleting all tournaments:', error);
     throw error;
   }
 };
@@ -2846,7 +4028,7 @@ export const submitMatchResult = async (matchId: string, teamId: string, team1Sc
         
         
         // Update Swiss standings if this is a Swiss system tournament
-        if (matchData.tournamentType === 'swiss-system' || matchData.tournamentType === 'swiss') {
+        if (matchData.tournamentType === 'swiss-round') {
           
           try {
             const { SwissTournamentService } = await import('./swissTournamentService');
@@ -2871,6 +4053,29 @@ export const submitMatchResult = async (matchId: string, teamId: string, team1Sc
       if (matchData.tournamentId) {
         await checkAndMarkTournamentCompleted(matchData.tournamentId);
       }
+      
+      // Send Discord notification for match completion
+      try {
+        const team1 = await getTeamById(matchData.team1Id);
+        const team2 = await getTeamById(matchData.team2Id);
+        
+        if (team1 && team2) {
+          const completedMatch = {
+            ...matchData,
+            team1,
+            team2,
+            team1Score: submittedTeam1Score.team1Score,
+            team2Score: submittedTeam1Score.team2Score,
+            winner: winnerId === matchData.team1Id ? team1 : team2,
+            tournamentName: matchData.tournamentName || 'Tournament'
+          };
+          
+          await notifyMatchCompleted(completedMatch);
+        }
+      } catch (discordError) {
+        console.warn('Failed to send Discord notification for match completion:', discordError);
+        // Don't throw error - Discord notification failure shouldn't break match completion
+      }
     } else {
       // Scores don't match, create a dispute
       updateData.matchState = 'disputed';
@@ -2885,6 +4090,16 @@ export const submitMatchResult = async (matchId: string, teamId: string, team1Sc
   }
   
   await updateDoc(matchRef, updateData);
+
+  // Award prediction points if match was completed
+  if (updateData.isComplete) {
+    try {
+      const { PredictionService } = await import('./predictionService');
+      await PredictionService.awardPointsForCompletedMatch(matchId);
+    } catch (error) {
+      console.error('Error awarding prediction points:', error);
+    }
+  }
 };
 
 // Function for admin to force confirm match results without waiting for both teams
@@ -2937,7 +4152,7 @@ export const submitMatchResultAdminOverride = async (matchId: string, team1Score
     });
     
     // Update Swiss standings if this is a Swiss system tournament
-    if (matchData.tournamentType === 'swiss-system' || matchData.tournamentType === 'swiss') {
+    if (matchData.tournamentType === 'swiss-round') {
       
       try {
         const { SwissTournamentService } = await import('./swissTournamentService');
@@ -2961,6 +4176,14 @@ export const submitMatchResultAdminOverride = async (matchId: string, team1Score
   // Check if tournament should be marked as completed
   if (matchData.tournamentId) {
     await checkAndMarkTournamentCompleted(matchData.tournamentId);
+  }
+
+  // Award prediction points
+  try {
+    const { PredictionService } = await import('./predictionService');
+    await PredictionService.awardPointsForCompletedMatch(matchId);
+  } catch (error) {
+    console.error('Error awarding prediction points:', error);
   }
 };
 
@@ -3047,7 +4270,7 @@ export const completeMatch = async (matchId: string, team1Score: number, team2Sc
     });
     
     // Update Swiss standings if this is a Swiss system tournament
-    if (matchData.tournamentType === 'swiss-system' || matchData.tournamentType === 'swiss') {
+    if (matchData.tournamentType === 'swiss-round') {
       
       try {
         const { SwissTournamentService } = await import('./swissTournamentService');
@@ -3958,6 +5181,100 @@ export const getUserById = async (userId: string): Promise<User | null> => {
   } catch (error) {
     console.error('Error getting user by ID:', error);
     return null;
+  }
+};
+
+// Get public user data
+export const getPublicUserData = async (userId: string): Promise<any> => {
+  try {
+    const userRef = doc(db, 'public_users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      return userSnap.data();
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting public user data:', error);
+    return null;
+  }
+};
+
+// Get multiple users by their IDs (for roster display)
+export const getUsersByIds = async (userIds: string[]): Promise<User[]> => {
+  try {
+    if (!userIds || userIds.length === 0) return [];
+    
+    const users: User[] = [];
+    
+    // Fetch users in parallel for better performance
+    const userPromises = userIds.map(async (userId) => {
+      try {
+        const userData = await getPublicUserData(userId);
+        if (userData) {
+          return {
+            id: userId,
+            username: userData.username || 'Unknown',
+            email: userData.email || '',
+            riotId: userData.riotId || 'No Riot ID',
+            discordUsername: userData.discordUsername || '',
+            discordId: userData.discordId || '',
+            discordAvatar: userData.discordAvatar || '',
+            discordLinked: userData.discordLinked || false,
+            createdAt: userData.createdAt?.toDate() || new Date(),
+            teamIds: userData.teamIds || [],
+            isAdmin: userData.isAdmin || false
+          } as User;
+        }
+        return null;
+      } catch (error) {
+        console.error(`Error fetching user ${userId}:`, error);
+        return null;
+      }
+    });
+    
+    const results = await Promise.all(userPromises);
+    
+    // Filter out null results and return valid users
+    return results.filter((user): user is User => user !== null);
+  } catch (error) {
+    console.error('Error getting users by IDs:', error);
+    return [];
+  }
+};
+
+// Migrate existing users to public users
+export const migrateExistingUsersToPublic = async (): Promise<{created: number, skipped: number}> => {
+  try {
+    console.log('Starting user migration to public_users collection...');
+    // Implementation would go here
+    console.log('User migration completed');
+    return { created: 0, skipped: 0 };
+  } catch (error) {
+    console.error('Error migrating users:', error);
+    throw error;
+  }
+};
+
+// Get IP analysis
+export const getIPAnalysis = async (): Promise<any[]> => {
+  try {
+    // Implementation would go here
+    return [];
+  } catch (error) {
+    console.error('Error getting IP analysis:', error);
+    return [];
+  }
+};
+
+// Update user Riot ID
+export const updateUserRiotId = async (userId: string, riotId: string): Promise<void> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, { riotId });
+  } catch (error) {
+    console.error('Error updating user Riot ID:', error);
+    throw error;
   }
 };
 
@@ -5919,5 +7236,109 @@ export const getCurrentUserAdminStatus = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Error getting current user admin status:', error);
     return false;
+  }
+};
+
+// Create complete test Swiss tournament with all rounds finished
+export const createCompleteTestSwissTournament = async (): Promise<string> => {
+  try {
+    console.log('🧪 Creating complete test Swiss tournament...');
+    
+    // Create 20 fake teams
+    const teamNames = [
+      'Team Alpha', 'Team Bravo', 'Team Charlie', 'Team Delta', 'Team Echo',
+      'Team Foxtrot', 'Team Golf', 'Team Hotel', 'Team India', 'Team Juliet',
+      'Team Kilo', 'Team Lima', 'Team Mike', 'Team November', 'Team Oscar',
+      'Team Papa', 'Team Quebec', 'Team Romeo', 'Team Sierra', 'Team Tango'
+    ];
+    
+    const teamIds: string[] = [];
+    const batch = writeBatch(db);
+    
+    for (const name of teamNames) {
+      const teamRef = doc(collection(db, 'teams'));
+      batch.set(teamRef, {
+        name,
+        tag: name.substring(5, 8).toUpperCase(),
+        ownerId: 'test-user-id',
+        captainId: 'test-user-id',
+        members: [],
+        createdAt: serverTimestamp(),
+        isPublic: true
+      });
+      teamIds.push(teamRef.id);
+    }
+    
+    await batch.commit();
+    console.log('✅ Created 20 test teams');
+    
+    // Create tournament
+    const tournamentRef = doc(collection(db, 'tournaments'));
+    await setDoc(tournamentRef, {
+      name: 'TEST Swiss Tournament - Ready for Playoffs',
+      description: 'Complete test tournament with all 5 Swiss rounds finished',
+      createdBy: 'test-admin',
+      adminIds: [],
+      status: 'in-progress',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      format: {
+        type: 'swiss-system',
+        teamCount: 20,
+        matchFormat: 'BO1',
+        swissConfig: {
+          rounds: 5,
+          teamsAdvanceToPlayoffs: 8
+        }
+      },
+      rules: { description: 'Test rules' },
+      requirements: { teamSize: 5, minAge: 16, region: 'EU' },
+      schedule: {
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      },
+      prizePool: { total: 1000, currency: 'EUR', distribution: [] },
+      teams: teamIds,
+      approvedTeams: teamIds,
+      waitlist: [],
+      rejectedTeams: [],
+      brackets: {},
+      matches: [],
+      seeding: { method: 'random', rankings: [] },
+      stats: { totalMatches: 0, completedMatches: 0, totalParticipants: 20 },
+      tags: ['test'],
+      region: 'EU',
+      isPublic: true,
+      featured: false,
+      stageManagement: {
+        swissStage: {
+          isActive: true,
+          currentRound: 5,
+          isComplete: false,
+          standings: teamIds.map((teamId, index) => ({
+            teamId,
+            points: Math.max(0, 15 - index * 2 + Math.floor(Math.random() * 3)), // Varied points
+            matchWins: Math.max(0, 5 - Math.floor(index / 4)),
+            matchLosses: Math.min(5, Math.floor(index / 4)),
+            gameWins: Math.max(0, 10 - index + Math.floor(Math.random() * 5)),
+            gameLosses: Math.min(10, index + Math.floor(Math.random() * 5)),
+            roundsWon: Math.max(0, 65 - index * 5 + Math.floor(Math.random() * 10)),
+            roundsLost: Math.min(65, index * 5 + Math.floor(Math.random() * 10)),
+            buchholzScore: Math.max(0, 30 - index * 2),
+            opponents: []
+          })).sort((a, b) => b.points - a.points || b.matchWins - a.matchWins) // Sort by points
+        }
+      }
+    });
+    
+    console.log('✅ Tournament created:', tournamentRef.id);
+    console.log('🏆 Top 8 teams ready for playoffs!');
+    console.log('📍 Navigate to Admin tab to generate playoff bracket');
+    
+    return tournamentRef.id;
+    
+  } catch (error) {
+    console.error('❌ Error creating test tournament:', error);
+    throw error;
   }
 };

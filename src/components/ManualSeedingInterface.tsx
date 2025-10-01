@@ -124,7 +124,7 @@ const ManualSeedingInterface: React.FC<ManualSeedingInterfaceProps> = ({
         onSeedingUpdated();
       }
     } catch (error: any) {
-      console.error('Error saving manual seeding:', error);
+
       setError(error.message || 'Failed to save seeding');
       toast.error('Failed to save seeding');
     } finally {
@@ -149,7 +149,7 @@ const ManualSeedingInterface: React.FC<ManualSeedingInterfaceProps> = ({
         onSeedingUpdated();
       }
     } catch (error: any) {
-      console.error('Error generating bracket:', error);
+
       setError(error.message || 'Failed to generate bracket');
       toast.error('Failed to generate bracket');
     } finally {

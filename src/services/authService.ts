@@ -21,24 +21,14 @@ const notifyAuthStateListeners = (user: User | null) => {
 
 export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { password: string }): Promise<void> => {
   try {
-
-    
-    // Check if username already exists
-    const usernameQuery = query(collection(db, 'users'), where('username', '==', userData.username));
+    // Check for username conflicts using public_users collection (public read access)
+    const usernameQuery = query(collection(db, 'public_users'), where('username', '==', userData.username));
     const usernameSnapshot = await getDocs(usernameQuery);
     if (!usernameSnapshot.empty) {
-      throw new Error('Username already exists');
+      throw new Error('USERNAME_EXISTS');
     }
-
-    // Check if email already exists
-    const emailQuery = query(collection(db, 'users'), where('email', '==', userData.email));
-    const emailSnapshot = await getDocs(emailQuery);
-    if (!emailSnapshot.empty) {
-      throw new Error('Email already registered');
-    }
-
     
-    // Create Firebase auth user first
+    // Create Firebase auth user (this handles email conflicts automatically)
     const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
     const userId = userCredential.user.uid;
     
@@ -49,6 +39,26 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { 
     const userDocRef = doc(db, 'users', userId);
     await setDoc(userDocRef, {
       ...userDocData,
+      createdAt: new Date(),
+      riotIdSet: !!userDocData.riotId && userDocData.riotId.trim() !== '',
+      riotIdSetAt: !!userDocData.riotId && userDocData.riotId.trim() !== '' ? new Date() : null
+    });
+    
+    // Create lookup document for login purposes
+    const lookupDocRef = doc(collection(db, 'user_lookups'));
+    await setDoc(lookupDocRef, {
+      userId: userId,
+      username: userDocData.username,
+      email: userDocData.email,
+      createdAt: new Date()
+    });
+    
+    // Create public user document (no email, for public access)
+    const publicUserDocRef = doc(db, 'public_users', userId);
+    await setDoc(publicUserDocRef, {
+      username: userDocData.username,
+      riotId: userDocData.riotId || '',
+      discordUsername: userDocData.discordUsername || '',
       createdAt: new Date()
     });
     
@@ -57,52 +67,85 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt'> & { 
     if (!verifyDoc.exists()) {
       throw new Error('Failed to create user document in Firestore');
     }
-    
-    if (!verifyDoc.exists()) {
-      throw new Error('Failed to create user document in Firestore');
-    }
   } catch (error: any) {
-    console.error('❌ DEBUG: Registration error:', error);
+    // Handle Firebase auth errors
     if (error.code === 'auth/email-already-in-use') {
-      throw new Error('Email already registered');
+      throw new Error('EMAIL_EXISTS');
+    } else if (error.code === 'auth/weak-password') {
+      throw new Error('Password is too weak. Please choose a stronger password.');
+    } else if (error.code === 'auth/invalid-email') {
+      throw new Error('Please enter a valid email address.');
+    } else if (error.code === 'auth/operation-not-allowed') {
+      throw new Error('Registration is currently disabled. Please contact support.');
+    } else if (error.code === 'auth/too-many-requests') {
+      throw new Error('Too many registration attempts. Please try again later.');
     }
+    
+    // Handle our custom errors
+    if (error.message === 'USERNAME_EXISTS') {
+      throw new Error('USERNAME_EXISTS');
+    } else if (error.message === 'EMAIL_EXISTS') {
+      throw new Error('EMAIL_EXISTS');
+    }
+    
+    // Re-throw other errors
     throw error;
   }
 };
 
 export const loginUser = async (usernameOrEmail: string, password: string): Promise<void> => {
   try {
+    // First, try to sign in directly with the input as email
+    // This works if the user entered their email
+    try {
+      await signInWithEmailAndPassword(auth, usernameOrEmail, password);
+      return; // Success! No need to do username lookup
+    } catch (emailError: any) {
+      // If email login failed, it might be a username
+      // We need to find the user by username and get their email
 
-    
-    // Try to find user by username first
-    let userQuery = query(collection(db, 'users'), where('username', '==', usernameOrEmail));
-    let userSnapshot = await getDocs(userQuery);
-    
-    // If not found by username, try email
-    if (userSnapshot.empty) {
-      userQuery = query(collection(db, 'users'), where('email', '==', usernameOrEmail));
-      userSnapshot = await getDocs(userQuery);
     }
     
-    if (userSnapshot.empty) {
+    // If we get here, the input was likely a username
+    // Try the new lookup collection first
+    try {
+      const userQuery = query(collection(db, 'user_lookups'), where('username', '==', usernameOrEmail));
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (!userSnapshot.empty) {
+        const userDoc = userSnapshot.docs[0];
+        const userData = userDoc.data();
+        
+        // Sign in with Firebase auth using the email from the lookup
+        await signInWithEmailAndPassword(auth, userData.email, password);
+        return;
+      }
+    } catch (lookupError) {
 
-      throw new Error('User not found');
     }
     
-    const userDoc = userSnapshot.docs[0];
-    const userData = userDoc.data();
+    // Fallback: Try the old method for existing users (temporary)
+    // This will work until we migrate all users to the lookup collection
+    try {
+      const userQuery = query(collection(db, 'users'), where('username', '==', usernameOrEmail));
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (userSnapshot.empty) {
+        throw new Error('Invalid username/email or password');
+      }
+      
+      const userDoc = userSnapshot.docs[0];
+      const userData = userDoc.data();
+      
+      // Sign in with Firebase auth using the email from Firestore
+      await signInWithEmailAndPassword(auth, userData.email, password);
+      
+    } catch (fallbackError) {
+      throw new Error('Invalid username/email or password');
+    }
     
-
-    
-    // Sign in with Firebase auth using the email from Firestore
-    await signInWithEmailAndPassword(auth, userData.email, password);
-    
-
-    
-    // The useAuth hook will automatically detect the user via onAuthStateChanged
-    // No need to manually update state here
   } catch (error: any) {
-    console.error('❌ DEBUG: Login error:', error);
+
     if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
       throw new Error('Invalid username/email or password');
     }

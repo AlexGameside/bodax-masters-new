@@ -32,12 +32,19 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams, isAdmin
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const chatContainer = document.getElementById('chat-messages');
+    if (chatContainer) {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Only scroll if there are messages
+    if (messages.length > 0) {
+      const timer = setTimeout(scrollToBottom, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [messages.length]);
 
   // Load team players for username resolution
   useEffect(() => {
@@ -52,7 +59,7 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams, isAdmin
         }
         setTeamPlayers(allPlayers);
       } catch (error) {
-        console.error('Error loading team players:', error);
+
       }
     };
 
@@ -81,7 +88,7 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams, isAdmin
       });
       setMessages(chatMessages);
     }, (error) => {
-      console.error('Error listening to chat:', error);
+
     });
 
     return () => unsubscribe();
@@ -112,7 +119,7 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams, isAdmin
           // Fallback to team members if player not found in teamPlayers
           const member = userTeam.members.find((m: any) => m.userId === currentUser.id);
           if (member) {
-            username = member.username || member.riotName || currentUser.username || 'Unknown';
+            username = member.username || member.riotId || currentUser.username || 'Unknown';
           }
         }
       }
@@ -122,14 +129,14 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams, isAdmin
         username: username,
         message: newMessage.trim(),
         timestamp: serverTimestamp(),
-        teamId: userTeam?.id
+        teamId: isAdmin ? 'admin' : userTeam?.id
       });
 
       setNewMessage('');
       
     } catch (error) {
       toast.error('Failed to send message');
-      console.error('Error sending message:', error);
+
     } finally {
       setIsLoading(false);
     }
@@ -142,7 +149,7 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams, isAdmin
   };
 
   const getTeamColor = (teamId?: string, isAdminMessage?: boolean) => {
-    if (isAdminMessage) return 'text-purple-400 font-bold';
+    if (isAdminMessage || teamId === 'admin') return 'text-purple-400 font-bold';
     if (!teamId) return 'text-gray-300';
     return teamId === userTeam?.id ? 'text-blue-400' : 'text-red-400';
   };
@@ -155,7 +162,7 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams, isAdmin
       </div>
       
       {/* Messages */}
-      <div className="bg-gray-900 rounded-lg p-3 h-48 overflow-y-auto mb-3">
+      <div className="bg-gray-900 rounded-lg p-3 h-48 overflow-y-auto mb-3" id="chat-messages">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 py-6">
             <MessageCircle className="w-6 h-6 mx-auto mb-2 text-gray-400" />
@@ -172,7 +179,7 @@ const MatchChat: React.FC<MatchChatProps> = ({ matchId, userTeam, teams, isAdmin
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2 mb-1">
-                    <span className={`text-xs font-medium ${getTeamColor(msg.teamId, msg.username?.startsWith('[ADMIN]'))}`}>
+                    <span className={`text-xs font-medium ${getTeamColor(msg.teamId, msg.username?.startsWith('[ADMIN]') || msg.teamId === 'admin')}`}>
                       {msg.username}
                     </span>
                     <span className="text-xs text-gray-500">

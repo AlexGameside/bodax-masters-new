@@ -18,8 +18,20 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
 
   const playoffMatches = matches.filter(m => m.tournamentType === 'playoff');
   const swissStage = tournament.stageManagement?.swissStage;
+  const playoffStage = tournament.stageManagement?.playoffStage;
   
-  if (!swissStage || !swissStage.teamsAdvancingToPlayoffs.length) {
+  // Check if playoffs are active (new system) or legacy teams advancing
+  const hasActivePlayoffs = playoffStage?.isActive || (swissStage?.teamsAdvancingToPlayoffs && swissStage.teamsAdvancingToPlayoffs.length > 0);
+  
+  console.log('🏆 PlayoffBracket Debug:');
+  console.log('  - Total matches passed:', matches.length);
+  console.log('  - Playoff matches found:', playoffMatches.length);
+  console.log('  - Playoff stage data:', playoffStage);
+  console.log('  - Swiss stage data:', swissStage);
+  console.log('  - Teams advancing (legacy):', swissStage?.teamsAdvancingToPlayoffs);
+  console.log('  - hasActivePlayoffs:', hasActivePlayoffs);
+  
+  if (!hasActivePlayoffs) {
     return (
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
         <h2 className="text-2xl font-bold text-white mb-4">Playoff Bracket</h2>
@@ -69,13 +81,13 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
       } else if (date instanceof Date) {
         dateObj = date;
       } else {
-        console.warn('Unsupported date type received:', date);
+
         return 'TBD';
       }
       
       // Check if the date is valid
       if (isNaN(dateObj.getTime())) {
-        console.warn('Invalid date received:', date);
+
         return 'TBD';
       }
       
@@ -87,12 +99,12 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
         timeZone: 'Europe/Berlin'
       }).format(dateObj);
     } catch (error) {
-      console.error('Error formatting date:', error, 'Date value:', date);
+
       return 'TBD';
     }
   };
 
-  const getMatchDisplay = (match: Match) => {
+  const getMatchDisplay = (match: Match, isFinal = false) => {
     const status = getMatchStatus(match);
     const team1Name = getTeamName(match.team1Id);
     const team2Name = getTeamName(match.team2Id);
@@ -100,57 +112,73 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
     return (
       <div 
         key={match.id}
-        className={`bg-gray-700 rounded-lg p-4 border border-gray-600 cursor-pointer hover:bg-gray-600 transition-colors ${
-          selectedMatch?.id === match.id ? 'ring-2 ring-blue-500' : ''
+        className={`${
+          isFinal 
+            ? 'bg-gradient-to-br from-yellow-900/30 to-orange-900/30 border-2 border-yellow-500/50' 
+            : 'bg-gray-800/50 border border-gray-600/50'
+        } rounded-xl p-6 cursor-pointer hover:scale-105 transition-all duration-200 min-w-[280px] ${
+          selectedMatch?.id === match.id ? 'ring-2 ring-cyan-500 shadow-lg' : ''
         }`}
         onClick={() => setSelectedMatch(match)}
       >
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-gray-400 text-sm">Match #{match.matchNumber}</div>
-          <span className={`text-xs px-2 py-1 rounded-full ${status.color} text-white`}>
+        <div className="flex items-center justify-between mb-4">
+          <div className={`text-sm font-medium ${isFinal ? 'text-yellow-400' : 'text-gray-400'}`}>
+            {isFinal ? '🏆 GRAND FINAL' : `Match #${match.matchNumber}`}
+          </div>
+          <span className={`text-xs px-3 py-1 rounded-full font-medium ${status.color} text-white`}>
             {status.text}
           </span>
         </div>
         
-        <div className="space-y-2">
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className={`font-medium ${match.winnerId === match.team1Id ? 'text-green-400' : 'text-white'}`}>
+            <div className={`font-semibold text-lg truncate max-w-[180px] ${match.winnerId === match.team1Id ? 'text-green-400' : 'text-white'}`} title={team1Name}>
               {team1Name}
             </div>
-            <div className="text-2xl font-bold text-blue-400">
+            <div className={`text-4xl font-bold ml-3 ${isFinal ? 'text-yellow-400' : 'text-blue-400'}`}>
               {match.team1Score}
             </div>
           </div>
           
+          <div className="flex items-center justify-center">
+            <div className="text-gray-500 text-sm font-medium">VS</div>
+          </div>
+          
           <div className="flex items-center justify-between">
-            <div className={`font-medium ${match.winnerId === match.team2Id ? 'text-green-400' : 'text-white'}`}>
+            <div className={`font-semibold text-lg truncate max-w-[180px] ${match.winnerId === match.team2Id ? 'text-green-400' : 'text-white'}`} title={team2Name}>
               {team2Name}
             </div>
-            <div className="text-2xl font-bold text-red-400">
+            <div className={`text-4xl font-bold ml-3 ${isFinal ? 'text-yellow-400' : 'text-red-400'}`}>
               {match.team2Score}
             </div>
           </div>
         </div>
         
         {match.scheduledTime && (
-          <div className="mt-3 pt-3 border-t border-gray-600">
+          <div className="mt-5 pt-4 border-t border-gray-600/50">
             <div className="text-gray-400 text-xs">Scheduled:</div>
-            <div className="text-white text-sm">{formatDateTime(match.scheduledTime)}</div>
+            <div className="text-white text-sm font-medium">{formatDateTime(match.scheduledTime)}</div>
           </div>
         )}
         
-        <div className="mt-3 pt-3 border-t border-gray-600">
-          <div className="text-gray-400 text-xs">Round {match.round}</div>
-          {match.bracketType && (
-            <div className="text-gray-400 text-xs capitalize">{match.bracketType}</div>
-          )}
-        </div>
+        {match.winnerId && (
+          <div className="mt-5 pt-4 border-t border-gray-600/50">
+            <div className="text-center">
+              <div className="text-green-400 font-bold text-sm flex items-center justify-center space-x-1">
+                <span>🏆</span>
+                <span className="truncate" title={getTeamName(match.winnerId)}>Winner: {getTeamName(match.winnerId)}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
 
   const getBracketStructure = () => {
-    const rounds = Math.ceil(Math.log2(swissStage.teamsAdvancingToPlayoffs.length));
+    // Use playoff stage teams or fallback to legacy teams advancing
+    const teamsCount = (playoffStage as any)?.teams?.length || swissStage?.teamsAdvancingToPlayoffs?.length || 8;
+    const rounds = Math.ceil(Math.log2(teamsCount));
     const bracketStructure: { round: number; matches: Match[] }[] = [];
     
     for (let round = 1; round <= rounds; round++) {
@@ -170,27 +198,71 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
         <h2 className="text-2xl font-bold text-white mb-2">Playoff Bracket</h2>
         <div className="text-gray-400">
           {tournament.format.knockoutStage?.type || 'Single Elimination'} • 
-          {swissStage.teamsAdvancingToPlayoffs.length} Teams from Swiss Rounds
+          {(playoffStage as any)?.teams?.length || swissStage?.teamsAdvancingToPlayoffs?.length || 8} Teams from Swiss Rounds
         </div>
       </div>
 
       {/* Bracket Display */}
       <div className="p-6">
-        <div className="flex gap-8 overflow-x-auto">
-          {bracketStructure.map((roundData) => (
-            <div key={roundData.round} className="flex-shrink-0">
-              <div className="text-center text-gray-400 font-medium mb-4">
-                Round {roundData.round}
-                {roundData.round === 1 && ' (Quarterfinals)'}
-                {roundData.round === 2 && ' (Semifinals)'}
-                {roundData.round === 3 && ' (Finals)'}
+        <div className="flex justify-center">
+          <div className="flex items-center gap-12 overflow-x-auto pb-4">
+            {/* Quarter Finals */}
+            <div className="flex-shrink-0">
+              <div className="text-center text-gray-400 font-bold mb-6 text-sm uppercase tracking-wider">
+                Quarter Finals
               </div>
-              
-              <div className="space-y-4">
-                {roundData.matches.map((match) => getMatchDisplay(match))}
+              <div className="space-y-8">
+                {playoffMatches.filter(m => m.round === 1).map((match, index) => (
+                  <div key={match.id} className="relative">
+                    {getMatchDisplay(match)}
+                    {/* Connection lines to semifinals */}
+                    <div className="absolute top-1/2 -right-6 w-12 h-px bg-gray-600 transform -translate-y-1/2"></div>
+                    {/* Vertical connector */}
+                    <div className={`absolute -right-6 w-px bg-gray-600 ${
+                      index === 0 ? 'top-1/2 h-8' : 
+                      index === 1 ? 'bottom-1/2 h-8' :
+                      index === 2 ? 'top-1/2 h-8' :
+                      'bottom-1/2 h-8'
+                    }`}></div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+
+            {/* Semifinals */}
+            <div className="flex-shrink-0">
+              <div className="text-center text-gray-400 font-bold mb-6 text-sm uppercase tracking-wider">
+                Semifinals
+              </div>
+              <div className="space-y-16">
+                {playoffMatches.filter(m => m.round === 2).map((match, index) => (
+                  <div key={match.id} className="relative">
+                    {getMatchDisplay(match)}
+                    {/* Connection line to final */}
+                    <div className="absolute top-1/2 -right-6 w-12 h-px bg-gray-600 transform -translate-y-1/2"></div>
+                    {/* Vertical connector to final */}
+                    <div className={`absolute -right-6 w-px bg-gray-600 ${
+                      index === 0 ? 'top-1/2 h-16' : 'bottom-1/2 h-16'
+                    }`}></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Grand Final */}
+            <div className="flex-shrink-0">
+              <div className="text-center text-gray-400 font-bold mb-6 text-sm uppercase tracking-wider">
+                Grand Final
+              </div>
+              <div className="space-y-6">
+                {playoffMatches.filter(m => m.round === 3).map((match) => (
+                  <div key={match.id} className="relative">
+                    {getMatchDisplay(match, true)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

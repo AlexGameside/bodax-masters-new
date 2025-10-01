@@ -60,7 +60,7 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
       const ticketData = await getTicket(ticketId, currentUser?.isAdmin || false, currentUser?.id || '');
       setTicket(ticketData);
     } catch (error) {
-      console.error('Error loading ticket:', error);
+
       toast.error('Failed to load ticket');
     } finally {
       setLoading(false);
@@ -89,7 +89,7 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
       onTicketUpdated();
       toast.success('Response sent successfully');
     } catch (error) {
-      console.error('Error sending response:', error);
+
       toast.error('Failed to send response');
     } finally {
       setSendingResponse(false);
@@ -105,7 +105,7 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
       onTicketUpdated();
       toast.success('Ticket claimed successfully');
     } catch (error) {
-      console.error('Error claiming ticket:', error);
+
       toast.error('Failed to claim ticket');
     }
   };
@@ -119,7 +119,7 @@ const TicketDetailModal: React.FC<TicketDetailModalProps> = ({
       onTicketUpdated();
       toast.success('Ticket closed successfully');
     } catch (error) {
-      console.error('Error closing ticket:', error);
+
       toast.error('Failed to close ticket');
     }
   };

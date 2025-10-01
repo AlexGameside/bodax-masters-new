@@ -15,10 +15,11 @@ import MatchPage from './pages/MatchPage';
 import StreamingOverlay from './pages/StreamingOverlay';
 import TournamentList from './pages/TournamentList';
 import TournamentCreation from './pages/TournamentCreation';
-import TournamentDetail from './pages/TournamentDetail';
+import TournamentDetail from './pages/TournamentDetailV2';
 import TournamentManagement from './pages/TournamentManagement';
 import TicketManagement from './pages/TicketManagement';
 import TicketNotificationManager from './components/TicketNotificationManager';
+import UpcomingMatches from './pages/UpcomingMatches';
 
 import BracketReveal from './pages/BracketReveal';
 import TeamPage from './pages/TeamPage';
@@ -36,6 +37,11 @@ import TournamentRules from './pages/TournamentRules';
 import DiscordCallback from './pages/DiscordCallback';
 import AdminStats from './pages/AdminStats';
 import StreamOverlayManager from './pages/StreamOverlayManager';
+import StreamerControl from './pages/StreamerControl';
+import UnifiedOverlay from './pages/UnifiedOverlay';
+import PredictionPage from './pages/PredictionPage';
+import PredictionsPage from './pages/PredictionsPage';
+import StreamerDashboard from './pages/StreamerDashboard';
 import type { User, Team, Match, TeamInvitation } from './types/tournament';
 import { 
   getTeams, 
@@ -223,8 +229,19 @@ function App() {
 
   const handleInvitePlayer = async (teamId: string, username: string) => {
     try {
-      const invitationId = await createTeamInvitation(teamId, username, currentUser!.id, '');
-      toast.success(`Invitation sent to ${username}`);
+      // First, find the user by username (case-insensitive)
+      const { getAllUsers } = await import('./services/firebaseService');
+      const allUsers = await getAllUsers();
+      const invitedUser = allUsers.find(user => 
+        user.username.toLowerCase() === username.toLowerCase()
+      );
+
+      if (!invitedUser) {
+        throw new Error('User not found');
+      }
+
+      const invitationId = await createTeamInvitation(teamId, invitedUser.id, currentUser!.id, '');
+      toast.success(`Invitation sent to ${invitedUser.username}`);
       return invitationId;
     } catch (error: any) {
       toast.error(error.message || 'Failed to send invitation');
@@ -325,8 +342,10 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Streaming Overlay Route - No Navbar/Footer */}
+        {/* Overlay Routes - No Navbar/Footer */}
         <Route path="/stream/:matchId" element={<StreamingOverlay />} />
+        <Route path="/overlay/:streamerId?" element={<UnifiedOverlay />} />
+        <Route path="/predict/:matchId" element={<PredictionPage />} />
         
         {/* All other routes with full layout */}
         <Route path="*" element={
@@ -464,10 +483,12 @@ function AppContent({
 
           {/* Tournament routes - accessible to everyone */}
           <Route path="/tournaments" element={<TournamentList currentUser={currentUser} />} />
+          <Route path="/upcoming-matches" element={<UpcomingMatches currentUser={currentUser} />} />
+          <Route path="/predictions" element={<PredictionsPage currentUser={currentUser} />} />
           <Route path="/tournaments/:id" element={<TournamentDetail currentUser={currentUser} />} />
           <Route path="/tournament/:id" element={<TournamentDetail currentUser={currentUser} />} />
           <Route path="/tournament-rules" element={<TournamentRules />} />
-          <Route path="/match/:matchId" element={<MatchPage />} />
+          <Route path="/match/:matchId" element={currentUser ? <MatchPage /> : <Navigate to="/login" />} />
           <Route path="/my-matches" element={<MyMatches />} />
           <Route path="/dashboard" element={
             <UserDashboard 
@@ -493,12 +514,14 @@ function AppContent({
           <Route path="/tickets" element={currentUser ? <TicketManagement /> : <Navigate to="/login" />} />
 
           {/* Admin routes - require admin privileges */}
-          <Route path="/admin" element={
+          <Route path="/admin" element={isAdmin === true ? <Navigate to="/admin/users" replace /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/:tab" element={
             isAdmin === true ? (
               <AdminPanel 
                 teams={teams}
                 matches={matches}
                 isAdmin={true}
+                currentUser={currentUser}
                 onAddTeam={addTeam}
                 onUpdateMatch={updateMatch}
                 onDeleteTeam={deleteTeam}
@@ -509,12 +532,35 @@ function AppContent({
               />
             ) : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>
           } />
-          <Route path="/admin/tournaments" element={isAdmin === true ? <Navigate to="/admin/tournaments/manage" /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/tournaments" element={
+            isAdmin === true ? (
+              <AdminPanel 
+                teams={teams}
+                matches={matches}
+                isAdmin={true}
+                currentUser={currentUser}
+                onAddTeam={addTeam}
+                onUpdateMatch={updateMatch}
+                onDeleteTeam={deleteTeam}
+                onDeleteAllTeams={deleteAllTeams}
+                onDeleteAllMatches={deleteAllMatches}
+                onGenerateRandomTeams={generateRandomTeamsForTesting}
+                onGenerateFinalBracket={generateFinalBracketForTesting}
+                forceTab="tournaments"
+              />
+            ) : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>
+          } />
           <Route path="/admin/tournaments/create" element={isAdmin === true ? <TournamentCreation /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           <Route path="/admin/tournaments/manage" element={isAdmin === true ? <TournamentManagement /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           <Route path="/admin/bracket-reveal/:id" element={isAdmin === true ? <BracketReveal currentUser={currentUser} /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           <Route path="/admin/stats" element={isAdmin === true ? <AdminStats /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           <Route path="/admin/stream-overlays" element={isAdmin === true ? <StreamOverlayManager /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          
+          {/* Streamer Control Dashboard */}
+          <Route path="/streamer-control/:streamerId?" element={<StreamerControl />} />
+          
+          {/* Streamer Dashboard - requires authentication */}
+          <Route path="/streamer/:streamerId" element={currentUser ? <StreamerDashboard /> : <Navigate to="/login" />} />
           
           {/* Catch all other routes and redirect to home */}
           <Route path="*" element={<Navigate to="/" />} />

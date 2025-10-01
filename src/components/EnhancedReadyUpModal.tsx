@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getUserById } from '../services/firebaseService';
+import { getPublicUserData } from '../services/firebaseService';
 import type { Match, Team, User, MatchTeamRoster } from '../types/tournament';
 
 interface EnhancedReadyUpModalProps {
@@ -87,11 +87,11 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
         // Fetch real user data for each team member
         for (const member of team.members) {
           try {
-            const user = await getUserById(member.userId);
-            if (user) {
+            const userData = await getPublicUserData(member.userId);
+            if (userData) {
               realUserData[member.userId] = {
-                username: user.username || 'Unknown',
-                riotId: user.riotId || 'Unknown'
+                username: userData.username,
+                riotId: userData.riotId
               };
             } else {
               // Fallback if user not found
@@ -101,7 +101,7 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
               };
             }
           } catch (error) {
-            console.warn(`Failed to fetch user ${member.userId}:`, error);
+
             realUserData[member.userId] = {
               username: 'Error',
               riotId: 'Error'
@@ -111,7 +111,7 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
         
         setUserData(realUserData);
       } catch (error) {
-        console.error('Failed to fetch user data:', error);
+
       }
     };
 
@@ -277,7 +277,7 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
             {team.name} vs Opponent
           </div>
           <div className="text-gray-300 text-sm">
-            Round {match.round} • {match.tournamentType === 'swiss-round' ? `Swiss Round ${match.swissRound}` : 'Playoff'}
+            Round {match.round} • {(match.tournamentType === 'swiss-round') ? `Swiss Round ${match.swissRound}` : 'Playoff'}
           </div>
         </div>
 

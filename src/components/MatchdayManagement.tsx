@@ -33,9 +33,9 @@ const MatchdayManagement: React.FC<MatchdayManagementProps> = ({
         const mockMatchdays: Matchday[] = [];
         for (let i = 1; i <= swissConfig.rounds; i++) {
           const startDate = new Date();
-          startDate.setDate(startDate.getDate() + (i - 1) * 7);
+          startDate.setDate(startDate.getDate() + (i - 1) * 7); // 7 days per matchday
           const endDate = new Date(startDate);
-          endDate.setDate(endDate.getDate() + 6);
+          endDate.setDate(endDate.getDate() + 6); // 7-day window
           
           mockMatchdays.push({
             id: `matchday-${i}`,
@@ -131,13 +131,13 @@ const MatchdayManagement: React.FC<MatchdayManagementProps> = ({
       } else if (date instanceof Date) {
         dateObj = date;
       } else {
-        console.warn('Unsupported date type received:', date);
+
         return 'TBD';
       }
       
       // Check if the date is valid
       if (isNaN(dateObj.getTime())) {
-        console.warn('Invalid date received:', date);
+
         return 'TBD';
       }
       
@@ -148,7 +148,7 @@ const MatchdayManagement: React.FC<MatchdayManagementProps> = ({
         timeZone: 'Europe/Berlin'
       }).format(dateObj);
     } catch (error) {
-      console.error('Error formatting date:', error, 'Date value:', date);
+
       return 'TBD';
     }
   };
