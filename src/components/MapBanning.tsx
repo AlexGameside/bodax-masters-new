@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { banMap, selectMap } from '../services/firebaseService';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { DEFAULT_MAP_POOL } from '../constants/mapPool';
 
 interface MapBanningProps {
   match: any;
@@ -34,39 +35,24 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
   // Use localMatch for all calculations instead of the prop
   const currentMatch = localMatch || match;
 
-  // Check if userTeam exists
-  if (!userTeam) {
-    return (
-      <div className="text-center py-8">
-        <div className="text-gray-400 mb-4">No team information available</div>
-        <div className="text-sm text-gray-500">Please ensure you are part of a team in this match</div>
-      </div>
-    );
-  }
+  const matchFormat: 'BO1' | 'BO3' =
+    currentMatch?.matchFormat === 'BO3' || currentMatch?.bracketType === 'grand_final' ? 'BO3' : 'BO1';
+  const isBO3 = matchFormat === 'BO3';
 
-  // Check if user is part of either team in this match
-  if (userTeam.id !== currentMatch.team1Id && userTeam.id !== currentMatch.team2Id) {
-    return (
-      <div className="text-center py-8">
-        <div className="text-gray-400 mb-4">Not part of this match</div>
-        <div className="text-sm text-gray-500">You are not a member of either team in this match</div>
-      </div>
-    );
-  }
+  // IMPORTANT: Do not early-return before all hooks run (Rules of Hooks).
+  const hasUserTeam = !!userTeam;
+  const isUserInMatch =
+    !!userTeam &&
+    (userTeam.id === currentMatch.team1Id || userTeam.id === currentMatch.team2Id);
 
-  // Updated map pool as specified
-  const maps = [
-    'Abyss',
-    'Bind', 
-    'Haven',
-    'Ascent',
-    'Sunset',
-    'Corrode',
-    'Lotus'
-  ];
+  // Map pool (prefer match-provided pool)
+  const maps: string[] =
+    Array.isArray(currentMatch.mapPool) && currentMatch.mapPool.length > 0
+      ? currentMatch.mapPool
+      : [...DEFAULT_MAP_POOL];
 
-  const isTeam1 = userTeam.id === currentMatch.team1Id;
-  const isTeam2 = userTeam.id === currentMatch.team2Id;
+  const isTeam1 = !!userTeam && userTeam.id === currentMatch.team1Id;
+  const isTeam2 = !!userTeam && userTeam.id === currentMatch.team2Id;
   
   // Get current banned maps
   const bannedMaps = currentMatch.bannedMaps || { team1: [], team2: [] };
@@ -108,7 +94,19 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
   // 9. Remaining map = Decider Map (automatically)
   // 10. Team A picks side for Decider Map
 
-  if (!currentMatch.map1) {
+  // Default phaseInfo so we never read an uninitialized variable
+  phaseInfo = {
+    phase: 'Unknown',
+    description: 'Waiting for team / match context',
+    isBanPhase: false,
+    isMapSelectionPhase: false,
+    isSideSelectionPhase: false,
+    isUserTeamTurn: false,
+    actionText: 'Waiting',
+    currentStep: 'Waiting'
+  };
+
+  if (isBO3 && isUserInMatch && !currentMatch.map1) {
     // Phase 1: Map 1 Selection
     if (totalBans < 2) {
       // Still banning maps for Map 1
@@ -153,7 +151,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
         currentStep: 'Unknown state'
       };
     }
-  } else if (currentMatch.map1 && !currentMatch.map1Side) {
+  } else if (isBO3 && isUserInMatch && currentMatch.map1 && !currentMatch.map1Side) {
     // Side selection for Map 1
     const isUserTeamTurn = currentMatch.team2Id === userTeam.id; // Team B picks side for Map 1
     
@@ -167,7 +165,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       actionText: 'Pick side for Map 1',
       currentStep: 'Team B picks side for Map 1'
     };
-  } else if (currentMatch.map1 && currentMatch.map1Side && !currentMatch.map2) {
+  } else if (isBO3 && isUserInMatch && currentMatch.map1 && currentMatch.map1Side && !currentMatch.map2) {
     // Map 2 selection phase - Team B picks Map 2 immediately after Map 1 side selection
     // Team B should pick Map 2 from 5 remaining maps
     const isUserTeamTurn = currentMatch.team2Id === userTeam.id;
@@ -182,7 +180,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       actionText: 'Select Map 2',
       currentStep: 'Team B picks Map 2'
     };
-  } else if (currentMatch.map2 && !currentMatch.map2Side) {
+  } else if (isBO3 && isUserInMatch && currentMatch.map2 && !currentMatch.map2Side) {
     // Side selection for Map 2
     const isUserTeamTurn = currentMatch.team1Id === userTeam.id; // Team A picks side for Map 2
     
@@ -196,7 +194,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       actionText: 'Pick side for Map 2',
       currentStep: 'Team A picks side for Map 2'
     };
-  } else if (currentMatch.map2 && currentMatch.map2Side && !currentMatch.deciderMap) {
+  } else if (isBO3 && isUserInMatch && currentMatch.map2 && currentMatch.map2Side && !currentMatch.deciderMap) {
     // Phase 3: Ban 2 more maps for Decider
     if (totalBans < 4) {
       // Still banning maps for Decider
@@ -266,7 +264,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
         currentStep: 'Unknown state'
       };
     }
-  } else if (currentMatch.deciderMap && !currentMatch.deciderMapSide) {
+  } else if (isBO3 && isUserInMatch && currentMatch.deciderMap && !currentMatch.deciderMapSide) {
     // Side selection for Decider Map
     const isUserTeamTurn = currentMatch.team1Id === userTeam.id; // Team A picks side for Decider
     
@@ -280,7 +278,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       actionText: 'Pick side for Decider',
       currentStep: 'Team A picks side for Decider Map'
     };
-  } else {
+  } else if (isBO3 && isUserInMatch) {
     // All phases complete
     phaseInfo = {
       phase: 'Complete',
@@ -293,6 +291,12 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       currentStep: 'All phases complete'
     };
   }
+
+  // BO1 flow (until finals): ban until 1 map remains, backend auto-selects `selectedMap`
+  const bansNeededBO1 = Math.max(0, maps.length - 1);
+  const remainingMapsBO1 = maps.filter(m => !allBannedMaps.includes(m));
+  const isTeam1TurnBO1 = totalBans % 2 === 0; // Team 1 starts
+  const isUserTeamTurnBO1 = (isTeam1 && isTeam1TurnBO1) || (isTeam2 && !isTeam1TurnBO1);
 
   const getTurnIndicator = () => {
     if (phaseInfo.isBanPhase) {
@@ -321,8 +325,27 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
   };
 
   const handleBanMap = async (mapName: string) => {
+    if (!isBO3) return;
     if (!phaseInfo.isBanPhase || !phaseInfo.isUserTeamTurn) return;
     
+    setBanningLoading(true);
+    try {
+      await banMap(currentMatch.id, userTeam.id, mapName);
+      toast.success(`Banned ${mapName}`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to ban map');
+    } finally {
+      setBanningLoading(false);
+    }
+  };
+
+  const handleBanMapBO1 = async (mapName: string) => {
+    if (isBO3) return;
+    if (!isUserTeamTurnBO1) return;
+    if (banningLoading) return;
+    if (allBannedMaps.includes(mapName)) return;
+    if (currentMatch.selectedMap) return; // already selected by backend
+
     setBanningLoading(true);
     try {
       await banMap(currentMatch.id, userTeam.id, mapName);
@@ -390,6 +413,8 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
 
   // Handle transition to playing state when map banning is complete
   useEffect(() => {
+    if (!isBO3) return;
+    if (!isUserInMatch) return;
     if (phaseInfo.phase === 'Complete' && currentMatch.matchState !== 'playing') {
       const transitionToPlaying = async () => {
         try {
@@ -415,22 +440,156 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       
       transitionToPlaying();
     }
-  }, [phaseInfo.phase, currentMatch.matchState, currentMatch.id, currentMatch.map1, currentMatch.map1Side, currentMatch.map2, currentMatch.map2Side, currentMatch.deciderMap, currentMatch.deciderMapSide]);
+  }, [isBO3, isUserInMatch, phaseInfo.phase, currentMatch.matchState, currentMatch.id, currentMatch.map1, currentMatch.map1Side, currentMatch.map2, currentMatch.map2Side, currentMatch.deciderMap, currentMatch.deciderMapSide]);
+
+  // Render guards AFTER hooks (Rules of Hooks)
+  if (!hasUserTeam) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-gray-400 mb-4">No team information available</div>
+        <div className="text-sm text-gray-500">Please ensure you are part of a team in this match</div>
+      </div>
+    );
+  }
+
+  if (!isUserInMatch) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-gray-400 mb-4">Not part of this match</div>
+        <div className="text-sm text-gray-500">You are not a member of either team in this match</div>
+      </div>
+    );
+  }
+
+  // BO1 UI (until finals)
+  if (!isBO3) {
+    return (
+      <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+
+        <div className="relative">
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <div>
+              <h3 className="text-3xl font-bold text-white font-bodax tracking-wide uppercase leading-none">
+                Map Banning <span className="text-red-500">BO1</span>
+              </h3>
+              <p className="mt-2 text-sm text-gray-400 font-mono uppercase tracking-widest">
+                Ban until 1 map remains · then pick starting sides
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-gray-500 font-mono uppercase tracking-widest">Turn</div>
+              <div className={`mt-1 text-sm font-mono uppercase tracking-widest ${isUserTeamTurnBO1 ? 'text-red-500' : 'text-gray-400'}`}>
+                {isUserTeamTurnBO1 ? 'Your Team' : 'Opponent'}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-6 bg-black/30 border border-gray-800 p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-gray-500 font-mono uppercase tracking-widest">Bans</div>
+              <div className="text-xs text-gray-400 font-mono uppercase tracking-widest">
+                {Math.min(totalBans, bansNeededBO1)}/{bansNeededBO1}
+              </div>
+            </div>
+            <div className="mt-3 h-1 bg-gray-900 border border-gray-800">
+              <div
+                className="h-1 bg-red-600"
+                style={{ width: `${bansNeededBO1 === 0 ? 100 : Math.min(100, (totalBans / bansNeededBO1) * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          {currentMatch.selectedMap ? (
+            <div className="mb-6 bg-green-900/10 border border-green-900 p-4">
+              <div className="text-green-300 font-mono uppercase tracking-widest text-sm">Selected Map</div>
+              <div className="mt-1 text-white font-bodax text-3xl uppercase tracking-wide">{currentMatch.selectedMap}</div>
+              <div className="mt-2 text-xs text-gray-400 font-mono uppercase tracking-widest">
+                Moving to side selection...
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {maps.map((mapName) => {
+                const isBanned = allBannedMaps.includes(mapName);
+                const isActionable = !isBanned && isUserTeamTurnBO1 && !banningLoading && totalBans < bansNeededBO1;
+
+                return (
+                  <button
+                    key={mapName}
+                    type="button"
+                    onClick={() => isActionable && handleBanMapBO1(mapName)}
+                    disabled={!isActionable}
+                    className={`text-left border p-4 transition-colors relative ${
+                      isBanned
+                        ? 'bg-red-900/20 border-red-600/50 text-gray-300 cursor-not-allowed'
+                        : isActionable
+                          ? 'bg-[#0a0a0a] border-gray-800 hover:border-red-600'
+                          : 'bg-[#0a0a0a] border-gray-800 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {isBanned && (
+                      <div className="absolute top-2 right-2 px-2 py-1 bg-red-600 border border-red-500">
+                        <span className="text-red-100 font-bold text-xs font-mono uppercase tracking-widest">BANNED</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className={`font-bodax text-2xl uppercase tracking-wide ${isBanned ? 'text-gray-400 line-through' : 'text-white'}`}>{mapName}</div>
+                      {!isBanned && (
+                        <div className="text-xs font-mono uppercase tracking-widest text-red-500">
+                          Ban
+                        </div>
+                      )}
+                    </div>
+                    <div className={`mt-2 text-xs font-mono uppercase tracking-widest ${isBanned ? 'text-red-400' : 'text-gray-500'}`}>
+                      {isBanned ? 'Unavailable' : isUserTeamTurnBO1 ? 'Click to ban' : 'Waiting'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // Don't render if all phases are complete
   if (phaseInfo.phase === 'Complete') {
     return (
-      <div className="bg-gradient-to-br from-green-500/10 via-emerald-600/10 to-green-700/10 backdrop-blur-sm rounded-2xl p-6 border border-green-400/30 shadow-2xl">
-        <div className="text-center">
-          <h3 className="text-2xl font-bold text-white mb-2">✅ Map Banning Complete!</h3>
-          <div className="text-green-200 text-lg mb-4">All maps and sides have been selected</div>
-          <div className="text-white text-sm">
-            <div>Map 1: {currentMatch.map1} ({currentMatch.map1Side})</div>
-            <div>Map 2: {currentMatch.map2} ({currentMatch.map2Side})</div>
-            <div>Decider: {currentMatch.deciderMap} ({currentMatch.deciderMapSide})</div>
+      <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative text-center">
+          <h3 className="text-3xl font-bold text-white font-bodax tracking-wide uppercase leading-none">
+            Map Banning <span className="text-red-500">Complete</span>
+          </h3>
+          <div className="mt-3 text-gray-400 font-mono uppercase tracking-widest text-sm">
+            BO3 maps and sides locked in
           </div>
-          <div className="mt-4 text-blue-200 text-sm">
-            🚀 Transitioning to Playing state...
+          <div className="mt-6 bg-black/30 border border-gray-800 p-4 text-left max-w-2xl mx-auto">
+            <div className="text-xs text-gray-500 font-mono uppercase tracking-widest">Summary</div>
+            <div className="mt-2 text-white font-mono">
+              <div>Map 1: <span className="text-red-500">{currentMatch.map1}</span> ({currentMatch.map1Side})</div>
+              <div>Map 2: <span className="text-red-500">{currentMatch.map2}</span> ({currentMatch.map2Side})</div>
+              <div>Decider: <span className="text-red-500">{currentMatch.deciderMap}</span> ({currentMatch.deciderMapSide})</div>
+            </div>
+          </div>
+          <div className="mt-5 text-gray-500 font-mono uppercase tracking-widest text-xs">
+            Transitioning to playing...
           </div>
         </div>
       </div>
@@ -438,48 +597,72 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
   }
 
   return (
-    <div className="bg-gradient-to-br from-blue-500/10 via-cyan-600/10 to-blue-700/10 backdrop-blur-sm rounded-2xl p-6 border border-blue-400/30 shadow-2xl">
+    <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+      <div
+        className="absolute inset-0 pointer-events-none opacity-20"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }}
+      />
+      <div className="relative">
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <h3 className="text-3xl font-bold text-white font-bodax tracking-wide uppercase leading-none">
+              Map Banning <span className="text-red-500">BO3</span>
+            </h3>
+            <p className="mt-2 text-sm text-gray-400 font-mono uppercase tracking-widest">{phaseInfo.currentStep}</p>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-gray-500 font-mono uppercase tracking-widest">Turn</div>
+            <div className={`mt-1 text-sm font-mono uppercase tracking-widest ${phaseInfo.isUserTeamTurn ? 'text-red-500' : 'text-gray-400'}`}>
+              {phaseInfo.isUserTeamTurn ? 'Your Team' : 'Opponent'}
+            </div>
+          </div>
+        </div>
       {/* MAP SUMMARY - Always visible at the top */}
-      <div className="mb-6 p-4 bg-gray-800/50 rounded-xl border border-gray-600/30">
-        <h4 className="text-white font-bold mb-3 text-center">🗺️ Map & Side Summary</h4>
+      <div className="mb-6 p-4 bg-black/30 border border-gray-800">
+        <h4 className="text-white font-bold mb-3 text-center font-mono uppercase tracking-widest text-sm">Map & Side Summary</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-          <div className={`p-3 rounded-lg ${currentMatch.map1 && currentMatch.map1Side ? 'bg-green-600/20 border border-green-500/30' : 'bg-gray-700/20 border border-gray-600/30'}`}>
-            <div className="text-sm text-gray-400 mb-1">Map 1</div>
-            <div className="text-white font-bold">{currentMatch.map1 || 'Not Selected'}</div>
-            <div className="text-sm text-gray-300">
+          <div className={`p-3 border ${currentMatch.map1 && currentMatch.map1Side ? 'bg-green-900/10 border-green-900' : 'bg-black/30 border-gray-800'}`}>
+            <div className="text-xs text-gray-500 mb-1 font-mono uppercase tracking-widest">Map 1</div>
+            <div className="text-white font-bodax text-2xl uppercase tracking-wide">{currentMatch.map1 || '—'}</div>
+            <div className="text-xs text-gray-400 font-mono uppercase tracking-widest mt-1">
               {currentMatch.map1 && currentMatch.map1Side ? (
                 <div>
-                  <div className="text-blue-300">Team 2: {currentMatch.map1Side}</div>
-                  <div className="text-red-300">Team 1: {currentMatch.map1Side === 'Attack' ? 'Defense' : 'Attack'}</div>
+                  <div className="text-gray-300">Team 2: {currentMatch.map1Side}</div>
+                  <div className="text-gray-300">Team 1: {currentMatch.map1Side === 'Attack' ? 'Defense' : 'Attack'}</div>
                 </div>
               ) : 'No Side'}
             </div>
           </div>
-          <div className={`p-3 rounded-lg ${currentMatch.map2 && currentMatch.map2Side ? 'bg-green-600/20 border border-green-500/30' : 'bg-gray-700/20 border border-gray-600/30'}`}>
-            <div className="text-sm text-gray-400 mb-1">Map 2</div>
-            <div className="text-white font-bold">{currentMatch.map2 || 'Not Selected'}</div>
-            <div className="text-sm text-gray-300">
+          <div className={`p-3 border ${currentMatch.map2 && currentMatch.map2Side ? 'bg-green-900/10 border-green-900' : 'bg-black/30 border-gray-800'}`}>
+            <div className="text-xs text-gray-500 mb-1 font-mono uppercase tracking-widest">Map 2</div>
+            <div className="text-white font-bodax text-2xl uppercase tracking-wide">{currentMatch.map2 || '—'}</div>
+            <div className="text-xs text-gray-400 font-mono uppercase tracking-widest mt-1">
               {currentMatch.map2 && currentMatch.map2Side ? (
                 <div>
-                  <div className="text-blue-300">Team 1: {currentMatch.map2Side}</div>
-                  <div className="text-red-300">Team 2: {currentMatch.map2Side === 'Attack' ? 'Defense' : 'Attack'}</div>
+                  <div className="text-gray-300">Team 1: {currentMatch.map2Side}</div>
+                  <div className="text-gray-300">Team 2: {currentMatch.map2Side === 'Attack' ? 'Defense' : 'Attack'}</div>
                 </div>
               ) : 'No Side'}
             </div>
           </div>
-          <div className={`p-3 rounded-lg ${currentMatch.deciderMap && currentMatch.deciderMapSide ? 'bg-green-600/20 border border-green-500/30' : 'bg-gray-700/20 border border-gray-600/30'}`}>
-            <div className="text-sm text-gray-400 mb-1">Decider</div>
-            <div className="text-white font-bold">{currentMatch.deciderMap || 'Not Selected'}</div>
-            <div className="text-sm text-gray-300">
+          <div className={`p-3 border ${currentMatch.deciderMap && currentMatch.deciderMapSide ? 'bg-green-900/10 border-green-900' : 'bg-black/30 border-gray-800'}`}>
+            <div className="text-xs text-gray-500 mb-1 font-mono uppercase tracking-widest">Decider</div>
+            <div className="text-white font-bodax text-2xl uppercase tracking-wide">{currentMatch.deciderMap || '—'}</div>
+            <div className="text-xs text-gray-400 font-mono uppercase tracking-widest mt-1">
               {currentMatch.deciderMap && currentMatch.deciderMapSide ? (
                 <div>
-                  <div className="text-blue-300">Team 1: {currentMatch.deciderMapSide}</div>
-                  <div className="text-red-300">Team 2: {currentMatch.deciderMapSide === 'Attack' ? 'Defense' : 'Attack'}</div>
+                  <div className="text-gray-300">Team 1: {currentMatch.deciderMapSide}</div>
+                  <div className="text-gray-300">Team 2: {currentMatch.deciderMapSide === 'Attack' ? 'Defense' : 'Attack'}</div>
                 </div>
               ) : 'No Side'}
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       <div className="text-center mb-6">
@@ -543,29 +726,41 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
           {phaseInfo.isBanPhase ? '🚫 Available Maps to Ban' : '✅ Available Maps to Select'}
         </h4>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {availableMaps.map((mapName) => (
-            <button
-              key={mapName}
-              onClick={() => handleMapAction(mapName)}
-              disabled={isButtonDisabled(mapName)}
-              className={`p-4 rounded-xl border-2 transition-all duration-200 ${
-                phaseInfo.isBanPhase || phaseInfo.isMapSelectionPhase
-                  ? phaseInfo.isUserTeamTurn
-                    ? phaseInfo.isBanPhase
-                      ? 'border-red-400 bg-red-600/20 hover:bg-red-600/30 text-white'
-                      : 'border-green-400 bg-green-600/20 hover:bg-green-600/30 text-white'
-                    : 'border-gray-500 bg-gray-600/20 text-gray-400 cursor-not-allowed'
-                  : 'border-gray-500 bg-gray-600/20 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <div className="text-lg font-bold">{mapName}</div>
-              <div className={`text-sm font-bold ${
-                phaseInfo.isBanPhase ? 'text-red-300' : 'text-green-300'
-              }`}>
-                {getActionButtonText(mapName)}
-              </div>
-            </button>
-          ))}
+          {availableMaps.map((mapName) => {
+            const isBanned = allBannedMaps.includes(mapName);
+            return (
+              <button
+                key={mapName}
+                onClick={() => handleMapAction(mapName)}
+                disabled={isButtonDisabled(mapName) || isBanned}
+                className={`p-4 rounded-xl border-2 transition-all duration-200 relative ${
+                  isBanned
+                    ? 'border-red-600/50 bg-red-900/20 text-gray-400 cursor-not-allowed'
+                    : phaseInfo.isBanPhase || phaseInfo.isMapSelectionPhase
+                      ? phaseInfo.isUserTeamTurn
+                        ? phaseInfo.isBanPhase
+                          ? 'border-red-400 bg-[#0a0a0a] hover:bg-red-600/20 hover:border-red-600 text-white'
+                          : 'border-green-400 bg-[#0a0a0a] hover:bg-green-600/20 hover:border-green-600 text-white'
+                        : 'border-gray-800 bg-[#0a0a0a] text-gray-400 cursor-not-allowed'
+                      : 'border-gray-800 bg-[#0a0a0a] text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {isBanned && (
+                  <div className="absolute top-2 right-2 px-2 py-1 bg-red-600 border border-red-500">
+                    <span className="text-red-100 font-bold text-xs font-mono uppercase tracking-widest">BANNED</span>
+                  </div>
+                )}
+                <div className={`text-lg font-bold font-bodax uppercase tracking-wide ${isBanned ? 'line-through' : ''}`}>{mapName}</div>
+                {!isBanned && (
+                  <div className={`text-sm font-bold font-mono uppercase tracking-widest ${
+                    phaseInfo.isBanPhase ? 'text-red-300' : 'text-green-300'
+                  }`}>
+                    {getActionButtonText(mapName)}
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -645,15 +840,17 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
 
       {/* Banned Maps Display */}
       {allBannedMaps.length > 0 && (
-        <div className="mt-6 p-4 bg-gray-800/50 rounded-xl border border-gray-600/30">
-          <h4 className="text-white font-bold mb-3">🚫 Banned Maps</h4>
+        <div className="mt-6 p-4 bg-[#0a0a0a] border border-gray-800">
+          <h4 className="text-white font-bold mb-3 font-mono uppercase tracking-widest text-sm flex items-center gap-2">
+            <span className="text-red-500">🚫</span> Banned Maps
+          </h4>
           <div className="flex flex-wrap gap-2">
             {allBannedMaps.map((mapName: string) => (
               <span
                 key={mapName}
-                className="px-3 py-1 bg-red-600/20 text-red-400 border border-red-500/30 rounded-full text-sm"
+                className="px-3 py-1.5 bg-red-900/30 text-red-400 border border-red-600/50 rounded font-mono uppercase tracking-widest text-xs font-bold"
               >
-                {mapName}
+                <span className="text-red-500">BANNED:</span> {mapName}
               </span>
             ))}
           </div>

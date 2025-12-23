@@ -1,6 +1,7 @@
 import { doc, updateDoc, getDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { Tournament, Team, Match, TournamentStage, GroupStanding, TournamentStageManagement } from '../types/tournament';
+import { DEFAULT_MAP_POOL } from '../constants/mapPool';
 
 // Generate groups for group stage tournaments
 export const generateGroups = async (tournamentId: string): Promise<void> => {
@@ -119,7 +120,7 @@ export const generateMatchDay = async (tournamentId: string, matchDay: number): 
           tournamentId,
           tournamentType: 'group-stage',
           matchState: 'scheduled',
-          mapPool: tournament.format?.mapPool || ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+          mapPool: tournament.format?.mapPool || [...DEFAULT_MAP_POOL],
           bannedMaps: { team1: [], team2: [] },
           team1Ready: false,
           team2Ready: false,

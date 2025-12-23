@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import type { Match, Team } from '../types/tournament';
 
 import { toast } from 'react-hot-toast';
-import { Gamepad2, Trophy, Target, Flag, Play, AlertTriangle, HelpCircle, Shield, RotateCcw, CheckCircle, X, MapPin } from 'lucide-react';
-import { createDispute, resolveDispute, forceSubmitResults, updateMatchState, submitMatchResult } from '../services/firebaseService';
+import { Gamepad2, Trophy, Target, Flag, Play, AlertTriangle, HelpCircle, Shield, RotateCcw, CheckCircle, X, MapPin, Zap, RefreshCw } from 'lucide-react';
+import { createDispute, resolveDispute, forceSubmitResults, updateMatchState, submitMatchResult, autoDetectAndSubmitMatchResult } from '../services/firebaseService';
 import { useAuth } from '../hooks/useAuth';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import TwoTeamResultSubmission from './TwoTeamResultSubmission';
 import MapResultSubmission from './MapResultSubmission';
+import TwoTeamResultSubmission from './TwoTeamResultSubmission';
+import PostMatchAnalytics from './PostMatchAnalytics';
 
 // Security: Sanitize user input to prevent XSS
 const sanitizeInput = (input: string): string => {
@@ -42,6 +43,7 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
   const [isCreatingDispute, setIsCreatingDispute] = useState(false);
   const [isResolvingDispute, setIsResolvingDispute] = useState(false);
   const [isReturningToPlaying, setIsReturningToPlaying] = useState(false);
+  const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [localMatch, setLocalMatch] = useState(match);
 
   const team1 = teams.find(t => t.id === match.team1Id);
@@ -72,6 +74,10 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
 
   // Use localMatch for all calculations instead of the prop
   const currentMatch = localMatch || match;
+
+  // Determine if this is a BO3 match
+  const isBO3Match = currentMatch.matchFormat === 'BO3' || currentMatch.bracketType === 'grand_final';
+  const isBO1Match = !isBO3Match;
 
   // Calculate BO3 match status
   const getBO3Status = () => {
@@ -156,6 +162,25 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
     }
   };
 
+  const handleAutoDetectMatch = async () => {
+    if (!isAdmin) return;
+    
+    setIsAutoDetecting(true);
+    try {
+      const result = await autoDetectAndSubmitMatchResult(currentMatch.id);
+      if (result.success && result.detected) {
+        toast.success(`Match detected! Score: ${result.team1Score} - ${result.team2Score}`);
+      } else {
+        toast.error(result.error || 'No match found. Make sure players have played the match and have Riot IDs set.');
+      }
+    } catch (error: any) {
+      console.error('Error auto-detecting match:', error);
+      toast.error(error.message || 'Failed to auto-detect match result');
+    } finally {
+      setIsAutoDetecting(false);
+    }
+  };
+
   const handleMapComplete = async (mapNumber: number) => {
     try {
       const mapKey = mapNumber === 1 ? 'map1' : mapNumber === 2 ? 'map2' : 'map3';
@@ -237,106 +262,42 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
     );
   }
 
-  // If BO3 match is complete, show final results with WIN/DEFEAT indicators
-  if (bo3Status.isComplete || currentMatch.matchState === 'completed') {
+  // If match is complete, show final results
+  const isMatchComplete = (isBO3Match && bo3Status.isComplete) || currentMatch.matchState === 'completed';
+  if (isMatchComplete) {
+    // For BO1, use resultSubmission scores; for BO3, use mapResults
+    const finalTeam1Score = isBO3Match ? bo3Status.team1Wins : (currentMatch.team1Score || 0);
+    const finalTeam2Score = isBO3Match ? bo3Status.team2Wins : (currentMatch.team2Score || 0);
+    const winnerId = isBO3Match ? bo3Status.winnerId : (currentMatch.winnerId || null);
+    
     return (
-      <div className="space-y-4">
-        {/* Match Complete Status */}
-        <div className="bg-gradient-to-br from-green-500/10 via-emerald-600/10 to-green-700/10 backdrop-blur-sm rounded-2xl p-6 border border-green-400/30 shadow-2xl">
-          <div className="text-center mb-6">
-            <div className="flex items-center justify-center space-x-3 mb-4">
-              <div className="bg-green-500 p-3 rounded-lg">
-                <Trophy className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-white">Match Completed!</h3>
-                <p className="text-green-200">Final results have been confirmed</p>
-              </div>
-            </div>
-          </div>
+      <div className="space-y-6">
+        {/* Post-Match Analytics - Show First */}
+        {(() => {
+          console.log('[MatchInProgress] Checking if PostMatchAnalytics should render:', {
+            matchId: currentMatch.id,
+            matchState: currentMatch.matchState,
+            isComplete: currentMatch.isComplete,
+            hasAutoDetectedResult: !!currentMatch.autoDetectedResult,
+            hasMatchDetails: !!currentMatch.autoDetectedResult?.matchDetails
+          });
+          
+          // Always show for completed matches (component will handle fetching if needed)
+          if (currentMatch.matchState === 'completed' && currentMatch.isComplete) {
+            console.log('[MatchInProgress] Rendering PostMatchAnalytics for completed match');
+            return (
+              <PostMatchAnalytics
+                match={currentMatch}
+                teams={teams}
+                currentUserTeamId={currentUserTeamId}
+              />
+            );
+          }
+          
+          console.log('[MatchInProgress] Not rendering PostMatchAnalytics (match not completed)');
+          return null;
+        })()}
 
-          {/* Final Score Display with WIN/DEFEAT */}
-          <div className="bg-gray-800/50 rounded-lg p-6 mb-6">
-            <h4 className="text-white font-bold mb-4 text-center">Final Score</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-              <div className="text-center">
-                <div className={`text-lg font-bold mb-2 ${bo3Status.winnerId === currentMatch.team1Id ? 'text-green-400' : 'text-red-400'}`}>
-                  {bo3Status.winnerId === currentMatch.team1Id ? '🏆 WINNER' : '❌ DEFEATED'}
-                </div>
-                <div className="text-gray-300">{sanitizedTeam1Name}</div>
-                <div className="text-3xl font-bold text-white">{bo3Status.team1Wins}</div>
-              </div>
-              <div className="flex items-center justify-center">
-                <div className="text-2xl font-bold text-gray-400">-</div>
-              </div>
-              <div className="text-center">
-                <div className={`text-lg font-bold mb-2 ${bo3Status.winnerId === currentMatch.team2Id ? 'text-green-400' : 'text-red-400'}`}>
-                  {bo3Status.winnerId === currentMatch.team2Id ? '🏆 WINNER' : '❌ DEFEATED'}
-                </div>
-                <div className="text-gray-300">{sanitizedTeam2Name}</div>
-                <div className="text-3xl font-bold text-white">{bo3Status.team2Wins}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Individual Map Results */}
-          <div className="border-t border-gray-700/50 pt-6">
-            <h4 className="text-white font-bold mb-4 text-center flex items-center justify-center space-x-2">
-              <MapPin className="w-5 h-5 text-yellow-400" />
-              <span>🗺️ Map Results</span>
-            </h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Map 1 */}
-              {currentMatch.mapResults?.map1 && (
-                <div className="p-4 rounded-lg border bg-green-600/10 border-green-500/30">
-                  <div className="text-center">
-                    <div className="text-sm text-gray-400 mb-2">Map 1</div>
-                    <div className="text-white font-bold text-lg mb-2">{currentMatch.map1}</div>
-                    <div className="text-2xl font-bold text-white mb-2">
-                      {currentMatch.mapResults.map1.team1Score} - {currentMatch.mapResults.map1.team2Score}
-                    </div>
-                    <div className="text-sm text-green-300">
-                      Winner: {currentMatch.mapResults.map1.winner === currentMatch.team1Id ? sanitizedTeam1Name : sanitizedTeam2Name}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Map 2 */}
-              {currentMatch.mapResults?.map2 && (
-                <div className="p-4 rounded-lg border bg-green-600/10 border-green-500/30">
-                  <div className="text-center">
-                    <div className="text-sm text-gray-400 mb-2">Map 2</div>
-                    <div className="text-white font-bold text-lg mb-2">{currentMatch.map2}</div>
-                    <div className="text-2xl font-bold text-white mb-2">
-                      {currentMatch.mapResults.map2.team1Score} - {currentMatch.mapResults.map2.team2Score}
-                    </div>
-                    <div className="text-sm text-green-300">
-                      Winner: {currentMatch.mapResults.map2.winner === currentMatch.team1Id ? sanitizedTeam1Name : sanitizedTeam2Name}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Map 3 (Decider) */}
-              {currentMatch.mapResults?.map3 && (
-                <div className="p-4 rounded-lg border bg-green-600/10 border-green-500/30">
-                  <div className="text-center">
-                    <div className="text-sm text-gray-400 mb-2">Decider</div>
-                    <div className="text-white font-bold text-lg mb-2">{currentMatch.deciderMap}</div>
-                    <div className="text-2xl font-bold text-white mb-2">
-                      {currentMatch.mapResults.map3.team1Score} - {currentMatch.mapResults.map3.team2Score}
-                    </div>
-                    <div className="text-sm text-green-300">
-                      Winner: {currentMatch.mapResults.map3.winner === currentMatch.team1Id ? sanitizedTeam1Name : sanitizedTeam2Name}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
     );
   }
@@ -434,41 +395,74 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
               <p className="text-gray-300">Submit your results when the match is complete</p>
             </div>
           </div>
-          {/* Need Help Button */}
-          <button
-            onClick={() => setShowHelpConfirmation(true)}
-            disabled={isCreatingDispute}
-            className="flex items-center space-x-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-800 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            <HelpCircle className="w-4 h-4" />
-            <span>{isCreatingDispute ? 'Creating...' : 'Need Help?'}</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            {/* Admin Auto-Detect Button */}
+            {isAdmin && currentMatch.matchState === 'playing' && (
+              <button
+                onClick={handleAutoDetectMatch}
+                disabled={isAutoDetecting}
+                className="flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+                title="Check if the game is done and auto-detect the score"
+              >
+                {isAutoDetecting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Checking...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    <span>Auto-Detect Score</span>
+                  </>
+                )}
+              </button>
+            )}
+            {/* Need Help Button */}
+            <button
+              onClick={() => setShowHelpConfirmation(true)}
+              disabled={isCreatingDispute}
+              className="flex items-center space-x-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-800 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>{isCreatingDispute ? 'Creating...' : 'Need Help?'}</span>
+            </button>
+          </div>
         </div>
 
 
 
-        {/* BO3 Progress & Results Display */}
+        {/* BO1 or BO3 Progress & Results Display */}
         <div className="mt-4 pt-4 border-t border-gray-700/50">
-          {/* BO3 Series Score */}
-          <div className="flex items-center justify-center space-x-4 mb-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-white">{bo3Status.team1Wins}</div>
-              <div className="text-sm text-gray-300">{sanitizedTeam1Name}</div>
-            </div>
-            <div className="text-2xl font-bold text-gray-400">-</div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-white">{bo3Status.team2Wins}</div>
-              <div className="text-sm text-gray-300">{sanitizedTeam2Name}</div>
-            </div>
-          </div>
+          {isBO3Match ? (
+            <>
+              {/* BO3 Series Score */}
+              <div className="flex items-center justify-center space-x-4 mb-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-white">{bo3Status.team1Wins}</div>
+                  <div className="text-sm text-gray-300">{sanitizedTeam1Name}</div>
+                </div>
+                <div className="text-2xl font-bold text-gray-400">-</div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-white">{bo3Status.team2Wins}</div>
+                  <div className="text-sm text-gray-300">{sanitizedTeam2Name}</div>
+                </div>
+              </div>
 
-          <h4 className="text-white font-bold mb-3 text-center flex items-center justify-center space-x-2">
-            <MapPin className="w-5 h-5 text-yellow-400" />
-            <span>🗺️ BO3 Maps & Results</span>
-          </h4>
+              <h4 className="text-white font-bold mb-3 text-center flex items-center justify-center space-x-2">
+                <MapPin className="w-5 h-5 text-yellow-400" />
+                <span>🗺️ BO3 Maps & Results</span>
+              </h4>
+            </>
+          ) : (
+            <h4 className="text-white font-bold mb-3 text-center flex items-center justify-center space-x-2">
+              <MapPin className="w-5 h-5 text-yellow-400" />
+              <span>🗺️ Map & Results</span>
+            </h4>
+          )}
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Map 1 */}
+          {isBO3Match ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Map 1 */}
             <div className={`p-4 rounded-lg border ${
               currentMatch.mapResults?.map1?.winner
                 ? 'bg-green-600/10 border-green-500/30' 
@@ -671,9 +665,55 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
               </div>
             </div>
           </div>
+          ) : (
+            /* BO1 Single Map Display */
+            <div className="grid grid-cols-1 gap-4 max-w-md mx-auto">
+              <div className={`p-4 rounded-lg border ${
+                currentMatch.resultSubmission?.team1Submitted && currentMatch.resultSubmission?.team2Submitted
+                  ? 'bg-green-600/10 border-green-500/30' 
+                  : currentMatch.selectedMap && currentMatch.team1Side && currentMatch.team2Side
+                  ? 'bg-blue-600/10 border-blue-500/30' 
+                  : 'bg-gray-700/20 border-gray-600/30'
+              }`}>
+                <div className="text-center">
+                  <div className="text-sm text-gray-400 mb-2">Selected Map</div>
+                  <div className="text-white font-bold text-lg mb-2">
+                    {currentMatch.selectedMap || 'Not Selected'}
+                  </div>
+                  {currentMatch.team1Side && currentMatch.team2Side && (
+                    <div className="space-y-2 mb-3">
+                      {currentUserTeamId === currentMatch.team1Id ? (
+                        <div className="space-y-1">
+                          <div className="text-xs text-gray-300">You are playing:</div>
+                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${
+                            currentMatch.team1Side === 'attack' 
+                              ? 'bg-red-500/20 text-red-300' 
+                              : 'bg-blue-500/20 text-blue-300'
+                          }`}>
+                            {currentMatch.team1Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
+                          </div>
+                        </div>
+                      ) : currentUserTeamId === currentMatch.team2Id ? (
+                        <div className="space-y-1">
+                          <div className="text-xs text-gray-300">You are playing:</div>
+                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${
+                            currentMatch.team2Side === 'attack' 
+                              ? 'bg-red-500/20 text-red-300' 
+                              : 'bg-blue-500/20 text-blue-300'
+                          }`}>
+                            {currentMatch.team2Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Submit Map Result Button */}
-          {!bo3Status.isComplete && currentUserTeamId && (
+          {isBO3Match && !bo3Status.isComplete && currentUserTeamId && (
             <div className="mt-4 text-center">
               <MapResultSubmission
                 match={currentMatch}
@@ -681,6 +721,18 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
                 currentUserTeamId={currentUserTeamId}
                 mapNumber={bo3Status.currentMapNumber}
                 onMapComplete={() => handleMapComplete(bo3Status.currentMapNumber)}
+              />
+            </div>
+          )}
+
+          {/* BO1 Result Submission */}
+          {isBO1Match && currentMatch.selectedMap && currentMatch.team1Side && currentMatch.team2Side && currentUserTeamId && (
+            <div className="mt-4">
+              <TwoTeamResultSubmission
+                match={currentMatch}
+                teams={teams}
+                currentUserTeamId={currentUserTeamId}
+                onClose={() => {}}
               />
             </div>
           )}

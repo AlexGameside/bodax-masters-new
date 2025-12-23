@@ -19,13 +19,13 @@ import { Shield, Users, Trophy, Settings, UserPlus, LogOut, Edit3, Save, X, Tras
 import { useNavigate } from 'react-router-dom';
 import { getDiscordAuthUrl } from '../services/discordService';
 import TicketCreationModal from '../components/TicketCreationModal';
-import DiscordLinkPopup from '../components/DiscordLinkPopup';
 
 const Profile = () => {
   const { currentUser, loading, refreshUser } = useAuth();
   const navigate = useNavigate();
   
-  const [activeTab, setActiveTab] = useState('profile');
+  // Tabs: profile + teams (matches tab removed from UI but kept for legacy safety)
+  const [activeTab, setActiveTab] = useState<'profile' | 'teams' | 'settings' | 'matches'>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -198,37 +198,34 @@ const Profile = () => {
     );
   }
 
-  const tabs = [
+  const tabs: { id: 'profile' | 'teams' | 'settings'; label: string; icon: any }[] = [
     { id: 'profile', label: 'Profile', icon: Users },
     { id: 'teams', label: 'Teams', icon: Users },
-    { id: 'matches', label: 'Match History', icon: Trophy },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
-      {/* Discord Link Popup */}
-      <DiscordLinkPopup />
+    <div className="min-h-screen bg-[#050505]">
       
-      {/* Unity League Header */}
-      <div className="bg-black/20 backdrop-blur-sm border-b border-white/20">
+      {/* Header */}
+      <div className="bg-[#0a0a0a] border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-pink-600 to-pink-500 rounded-full flex items-center justify-center border border-pink-400/50 shadow-lg">
-                <span className="text-white text-xl font-bold font-mono tracking-tight">
+              <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center border border-red-800 shadow-lg">
+                <span className="text-white text-xl font-bold font-bodax tracking-wide uppercase">
                   {currentUser.username?.charAt(0).toUpperCase() || 'U'}
                 </span>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white font-mono tracking-tight">
+                <h1 className="text-3xl font-bold text-white font-bodax tracking-wide uppercase leading-none">
                   {currentUser.username || 'User'}
                 </h1>
-                <p className="text-white/80 font-mono tracking-tight">
+                <p className="text-gray-400 font-mono uppercase tracking-widest text-xs">
                   {currentUser.email ? '***@' + currentUser.email.split('@')[1] : 'No email'}
                 </p>
                 {currentUser.isAdmin && (
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-pink-900/50 text-pink-300 border border-pink-400/50 font-mono tracking-tight">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-900/30 text-red-300 border border-red-700 font-mono tracking-widest">
                     <Shield className="w-3 h-3 mr-1" />
                     ADMIN
                   </span>
@@ -237,7 +234,7 @@ const Profile = () => {
             </div>
             <button
               onClick={() => navigate('/create-team')}
-              className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors font-medium font-mono tracking-tight"
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-none border border-red-800 flex items-center space-x-2 transition-colors font-bodax text-xl uppercase tracking-wider"
             >
               <UserPlus className="w-4 h-4" />
               <span>CREATE TEAM</span>
@@ -250,21 +247,21 @@ const Profile = () => {
 
         {/* Message */}
         {message && (
-          <div className="mb-6 p-4 bg-green-900/50 border border-green-400/30 text-green-200 rounded-xl backdrop-blur-sm font-mono tracking-tight">
+          <div className="mb-6 p-4 bg-green-900/20 border border-green-900 text-green-200 font-mono uppercase tracking-widest text-sm">
             {message}
           </div>
         )}
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-900/50 border border-red-400/30 text-red-200 rounded-xl backdrop-blur-sm font-mono tracking-tight">
+          <div className="mb-6 p-4 bg-red-900/20 border border-red-900 text-red-200 font-mono uppercase tracking-widest text-sm">
             {error}
           </div>
         )}
 
         {/* Tabs */}
-        <div className="bg-black/60 border border-gray-700 rounded-lg shadow-lg mb-6">
-          <div className="border-b border-gray-700">
+        <div className="bg-[#0a0a0a] border border-gray-800 shadow-lg mb-6">
+          <div className="border-b border-gray-800">
             <nav className="-mb-px flex space-x-8 px-6">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
@@ -272,10 +269,10 @@ const Profile = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors ${
+                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors uppercase tracking-wide ${
                       activeTab === tab.id
-                        ? 'border-red-500 text-red-400'
-                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
+                        ? 'border-red-600 text-white'
+                        : 'border-transparent text-gray-500 hover:text-white hover:border-gray-700'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -291,11 +288,11 @@ const Profile = () => {
             {activeTab === 'profile' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-medium text-white">Profile Information</h2>
+                  <h2 className="text-lg font-bold text-white font-bodax tracking-wide uppercase">Profile</h2>
                   {!isEditing ? (
                     <button
                       onClick={() => setIsEditing(true)}
-                      className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors border border-gray-600"
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-none border border-red-800 flex items-center space-x-2 transition-colors font-bodax uppercase tracking-wide"
                     >
                       <Edit3 className="w-4 h-4" />
                       <span>Edit</span>
@@ -305,7 +302,7 @@ const Profile = () => {
                       <button
                         onClick={handleProfileUpdate}
                         disabled={isUpdating}
-                        className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors border border-green-800"
+                        className="bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-3 py-1 rounded-none flex items-center space-x-2 transition-colors border border-red-800 font-bodax uppercase tracking-wide"
                       >
                         {isUpdating ? (
                           <>
@@ -328,7 +325,7 @@ const Profile = () => {
                             email: currentUser.email || ''
                           });
                         }}
-                        className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors border border-gray-700"
+                        className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded-none flex items-center space-x-2 transition-colors border border-gray-700 font-mono uppercase tracking-widest text-xs"
                       >
                         <X className="w-4 h-4" />
                         <span>Cancel</span>
@@ -339,7 +336,7 @@ const Profile = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                       Display Name
                     </label>
                     {isEditing ? (
@@ -355,7 +352,7 @@ const Profile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                    <label className="block text-xs font-bold text-gray-400 mb-2 flex items-center font-mono uppercase tracking-widest">
                       Riot ID
                       {(currentUser.riotIdSet || (currentUser.riotId && currentUser.riotId.trim() !== '')) && !currentUser.isAdmin && (
                         <div className="relative group ml-2">
@@ -397,21 +394,21 @@ const Profile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                       Email
                     </label>
                     <p className="text-white">{currentUser.email ? '***@' + currentUser.email.split('@')[1] : 'No email'}</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                       Nationality
                     </label>
                     <p className="text-white">{currentUser.nationality || 'Not set'}</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                       Member Since
                     </label>
                     <p className="text-white">
@@ -421,7 +418,7 @@ const Profile = () => {
 
                   {/* Discord Account Linking */}
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                       Discord Account
                     </label>
                     {currentUser.discordLinked ? (

@@ -47,6 +47,22 @@ const ManualSeedingInterface: React.FC<ManualSeedingInterfaceProps> = ({
     const registeredTeamIds = tournament.teams || [];
     const registeredTeams = teams.filter(team => registeredTeamIds.includes(team.id));
     
+    console.log('?? DEBUG ManualSeedingInterface:', {
+      tournamentId: tournament.id,
+      registeredTeamIdsCount: registeredTeamIds.length,
+      registeredTeamIds: registeredTeamIds,
+      allTeamsCount: teams.length,
+      allTeamIds: teams.map(t => t.id),
+      registeredTeamsCount: registeredTeams.length,
+      registeredTeams: registeredTeams.map(t => ({ id: t.id, name: t.name }))
+    });
+    
+    if (registeredTeams.length === 0 && registeredTeamIds.length > 0) {
+      console.warn('?? DEBUG: Teams array is empty or teams not loaded yet. Registered team IDs:', registeredTeamIds);
+      setError(`Teams not loaded yet. Found ${registeredTeamIds.length} registered teams but 0 teams in props.`);
+      return;
+    }
+    
     // If tournament already has manual seeding, use it
     if ((tournament.seeding?.method === 'manual' || tournament.format?.seedingMethod === 'manual') && tournament.seeding?.rankings) {
       const existingRankings = tournament.seeding.rankings;
@@ -196,7 +212,7 @@ const ManualSeedingInterface: React.FC<ManualSeedingInterfaceProps> = ({
         </div>
         <div className="flex items-center space-x-2">
           <span className="text-sm text-gray-400">
-            {seedingItems.length} teams
+            {seedingItems.length} teams {teams.length > 0 && `(${teams.length} total loaded)`}
           </span>
           {onClose && (
             <button

@@ -32,7 +32,8 @@ import {
   UserX,
   MessageCircle,
   Wrench,
-  Video
+  Video,
+  Maximize2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { 
@@ -93,6 +94,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { Tournament, Match, Team, User } from '../types/tournament';
 import TournamentBracket from '../components/TournamentBracket';
+import DoubleEliminationBracket from '../components/DoubleEliminationBracket';
 import GroupStageBracket from '../components/GroupStageBracket';
 import TournamentSchedule from '../components/TournamentSchedule';
 import TournamentLeaderboard from '../components/TournamentLeaderboard';
@@ -108,12 +110,14 @@ import StreamingManagement from '../components/StreamingManagement';
 import { useAuth } from '../hooks/useAuth';
 import { useRealtimeUserMatches } from '../hooks/useRealtimeData';
 import ManualSeedingInterface from '../components/ManualSeedingInterface';
+import PlayoffManualSeeding from '../components/PlayoffManualSeeding';
+import PlayoffBracketManagement from '../components/PlayoffBracketManagement';
 
 interface TournamentDetailProps {
   currentUser: User | null;
 }
 
-type TournamentView = 'overview' | 'teams' | 'bracket' | 'group-stage' | 'schedule' | 'standings' | 'swiss-standings' | 'matchday-management' | 'playoff-bracket' | 'admin';
+type TournamentView = 'overview' | 'teams' | 'bracket' | 'group-stage' | 'schedule' | 'standings' | 'swiss-standings' | 'matchday-management' | 'playoff-bracket' | 'admin' | 'veto';
 
 const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const { id } = useParams<{ id: string }>();
@@ -1246,10 +1250,16 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               >
                 Bracket Reveal
               </button>
-              {/* Manual Seeding Button: Only show if seeding is manual and registration is closed */}
-              {(tournament.seeding?.method === 'manual' || tournament.format?.seedingMethod === 'manual') && tournament.status === 'registration-closed' && (
+              {/* Manual Seeding Button: Show if seeding is manual (both open and closed registration) */}
+              {(tournament.seeding?.method === 'manual' || tournament.format?.seedingMethod === 'manual') && (
                 <button
-                  onClick={() => setShowManualSeeding(true)}
+                  onClick={async () => {
+                    // Ensure teams are loaded before opening the modal
+                    if (teams.length === 0 && tournament.teams && tournament.teams.length > 0) {
+                      await reloadTournamentData();
+                    }
+                    setShowManualSeeding(true);
+                  }}
                   className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-1 px-2 rounded text-xs border border-blue-900 transition-all duration-200"
                 >
                   Manual Seeding
@@ -1400,6 +1410,11 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   // Add Admin tab for admins only
                   if (isAdmin) {
                     baseTabs.push({ key: 'admin', label: 'Admin', icon: Shield });
+                  }
+                  
+                  // Add veto tab if tournament has matches
+                  if (matches.length > 0) {
+                    baseTabs.push({ key: 'veto', label: 'Veto', icon: Target });
                   }
                   
                   return baseTabs.map((tab) => {
@@ -1763,9 +1778,28 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
           {activeView === 'bracket' && (
             <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
-              <div className="text-red-400 font-bold text-sm mb-3">TOURNAMENT BRACKET</div>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="text-red-400 font-bold text-sm">TOURNAMENT BRACKET</div>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/tournaments/${tournament.id}/bracket`)}
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 transition-colors font-mono uppercase tracking-widest text-xs"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                  Open Full Page
+                </button>
+              </div>
               {tournament.type === 'group-stage-single-elim' ? (
                 <GroupStageBracket tournament={tournament} matches={matches} teams={teams} />
+              ) : tournament.format?.type === 'double-elimination' ? (
+                <DoubleEliminationBracket 
+                  tournament={tournament} 
+                  matches={matches} 
+                  teams={teams}
+                  isAdmin={isAdmin}
+                  currentUser={authUser}
+                  onUpdate={reloadTournamentData}
+                />
               ) : (
                 <TournamentBracket
                   tournament={tournament}
@@ -2090,15 +2124,60 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           )}
 
           {activeView === 'playoff-bracket' && tournament.format?.type === 'swiss-system' && (
-            <div className="unity-card-purple">
-              <div className="text-purple-400 font-bold text-xl mb-4">PLAYOFF BRACKET</div>
-              <PlayoffBracket 
-                tournament={tournament}
-                matches={matches}
-                teams={teams}
-                onUpdate={reloadTournamentData}
-              />
-            </div>
+            <>
+              <div className="unity-card-purple mb-6">
+                <div className="text-purple-400 font-bold text-xl mb-4">PLAYOFF BRACKET</div>
+                <PlayoffBracket 
+                  tournament={tournament}
+                  matches={matches}
+                  teams={teams}
+                  onUpdate={reloadTournamentData}
+                />
+              </div>
+
+              {/* Admin Bracket Management */}
+              {isAdmin && (
+                <>
+                  <div className="unity-card-pink mb-6">
+                    <div className="text-pink-400 font-bold text-xl mb-4">ADMIN BRACKET MANAGEMENT</div>
+                    <PlayoffBracketManagement
+                      matches={matches}
+                      teams={teams}
+                      onUpdate={reloadTournamentData}
+                      currentUser={currentUser}
+                    />
+                  </div>
+
+                  {/* Ungenerate Bracket Button */}
+                  <div className="unity-card-red">
+                    <div className="text-red-400 font-bold text-xl mb-4 flex items-center space-x-2">
+                      <AlertTriangle className="w-5 h-5" />
+                      <span>DANGER ZONE</span>
+                    </div>
+                    <p className="text-gray-300 text-sm mb-4">
+                      Delete the entire playoff bracket and all matches. This cannot be undone!
+                    </p>
+                    <button
+                      onClick={async () => {
+                        if (!confirm('⚠️ DELETE PLAYOFF BRACKET?\n\nThis will permanently delete all playoff matches and reset the bracket. This action cannot be undone!\n\nAre you sure?')) return;
+                        try {
+                          const { SwissTournamentService } = await import('../services/swissTournamentService');
+                          await SwissTournamentService.deletePlayoffBracket(tournament.id);
+                          toast.success('Playoff bracket deleted successfully!');
+                          await reloadTournamentData();
+                        } catch (error: any) {
+                          toast.error(`Failed to delete playoff bracket: ${error.message}`);
+                        }
+                      }}
+                      className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold transition-colors flex items-center justify-center space-x-2"
+                    >
+                      <XCircle className="w-5 h-5" />
+                      <span>DELETE PLAYOFF BRACKET</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
           )}
 
           {/* ADMIN TAB - Admin-Only Features */}
@@ -2131,7 +2210,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                               Swiss rounds are complete! Generate a BO3 single-elimination bracket for the top 8 teams.
                             </p>
                             <ul className="text-gray-400 text-xs space-y-1 mb-4">
-                              <li>• Quarter Finals: 4 matches (1v8, 4v5, 2v7, 3v6)</li>
+                              <li>• Quarter Finals: 4 matches (1v8, 2v7, 3v6, 4v5)</li>
                               <li>• Semi Finals: 2 matches</li>
                               <li>• Grand Final: 1 match</li>
                               <li>• All matches are Best of 3 (BO3)</li>
@@ -2218,7 +2297,13 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                         <p className="text-gray-400 text-xs">Manually adjust team seeding order for the bracket</p>
                       </div>
                       <button
-                        onClick={() => setShowManualSeeding(true)}
+                        onClick={async () => {
+                          // Ensure teams are loaded before opening the modal
+                          if (teams.length === 0 && tournament.teams && tournament.teams.length > 0) {
+                            await reloadTournamentData();
+                          }
+                          setShowManualSeeding(true);
+                        }}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors ml-4"
                       >
                         Adjust Seeding
@@ -2273,6 +2358,402 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
             </div>
               </Card>
             </>
+          )}
+
+          {/* VETO TAB - Veto Information */}
+          {activeView === 'veto' && (
+            <Card variant="glass" padding="lg">
+              <SectionHeader 
+                title="VETO INFORMATION" 
+                icon={Target}
+                subtitle="View all map bans, picks, and side selections for tournament matches"
+              />
+              <div className="mt-6 space-y-6">
+                {matches.length === 0 ? (
+                  <div className="text-gray-400 text-center py-8">
+                    No matches found for this tournament.
+                  </div>
+                ) : (
+                  matches
+                    .sort((a, b) => {
+                      // Sort by round, then by match number
+                      if (a.round !== b.round) return a.round - b.round;
+                      return a.matchNumber - b.matchNumber;
+                    })
+                    .map((match) => {
+                      const team1 = teams.find(t => t.id === match.team1Id);
+                      const team2 = teams.find(t => t.id === match.team2Id);
+                      const matchFormat = match.matchFormat || 'BO1';
+                      const hasVetoData = 
+                        (match.bannedMaps && (match.bannedMaps.team1?.length > 0 || match.bannedMaps.team2?.length > 0)) ||
+                        match.banSequence?.length > 0 ||
+                        match.selectedMap ||
+                        match.map1 ||
+                        match.map2 ||
+                        match.deciderMap;
+
+                      if (!hasVetoData && match.matchState === 'scheduled') {
+                        return null; // Skip matches that haven't started veto process
+                      }
+
+                      return (
+                        <div key={match.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 hover:border-pink-500/50 transition-all duration-200">
+                          {/* Match Header */}
+                          <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-700">
+                            <div className="flex items-center gap-4">
+                              <div className="text-white font-bold text-lg">
+                                {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
+                              </div>
+                              <Badge variant="outline" className="text-xs">
+                                Round {match.round} • Match {match.matchNumber}
+                              </Badge>
+                              {match.bracketType && (
+                                <Badge variant="outline" className="text-xs capitalize">
+                                  {match.bracketType.replace('_', ' ')}
+                                </Badge>
+                              )}
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              {matchFormat}
+                            </Badge>
+                          </div>
+
+                          {/* Veto Information */}
+                          {hasVetoData ? (
+                            <div className="space-y-4">
+                              {/* Ban Sequence */}
+                              {match.banSequence && match.banSequence.length > 0 && (
+                                <div>
+                                  <div className="text-gray-400 font-semibold text-sm mb-3 flex items-center space-x-2">
+                                    <Target className="w-4 h-4" />
+                                    <span>BAN SEQUENCE</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {match.banSequence.map((ban, index) => {
+                                      const banTeam = ban.teamId === match.team1Id ? team1 : team2;
+                                      const banNumber = ban.banNumber || (index + 1);
+                                      return (
+                                        <div
+                                          key={index}
+                                          className="bg-gray-800/50 border border-gray-700 rounded px-3 py-1.5 text-sm"
+                                        >
+                                          <span className="text-gray-400 font-semibold mr-2">
+                                            {banNumber}.
+                                          </span>
+                                          <span className="text-gray-300">
+                                            {banTeam?.name || 'Team'} banned
+                                          </span>
+                                          <span className="text-white font-bold ml-2">{ban.mapName}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* BO1 Map Selection */}
+                              {matchFormat === 'BO1' && match.selectedMap && (() => {
+                                // The team that made the last ban effectively picked the remaining map
+                                const lastBan = match.banSequence?.[match.banSequence.length - 1];
+                                const mapPickingTeam = lastBan?.teamId === match.team1Id ? team1 : 
+                                                      lastBan?.teamId === match.team2Id ? team2 : null;
+                                // Fallback: if no banSequence, check who made the last ban from bannedMaps
+                                let fallbackPickingTeam = null;
+                                if (!mapPickingTeam && match.bannedMaps) {
+                                  const team1Bans = match.bannedMaps.team1?.length || 0;
+                                  const team2Bans = match.bannedMaps.team2?.length || 0;
+                                  const totalBans = team1Bans + team2Bans;
+                                  // In BO1, teams alternate. If odd number of bans, team1 made last ban
+                                  if (totalBans > 0) {
+                                    const lastBanByTeam1 = totalBans % 2 === 1;
+                                    fallbackPickingTeam = lastBanByTeam1 ? team1 : team2;
+                                  }
+                                }
+                                const finalPickingTeam = mapPickingTeam || fallbackPickingTeam;
+                                return (
+                                  <div>
+                                    <div className="text-gray-400 font-semibold text-sm mb-2">SELECTED MAP</div>
+                                    <div className="bg-gray-800/50 border border-gray-700 rounded px-4 py-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-white font-semibold">{match.selectedMap}</span>
+                                        {finalPickingTeam && (
+                                          <span className="text-gray-400 text-xs">
+                                            (picked by {finalPickingTeam.name} - last ban)
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* BO1 Side Selection */}
+                              {matchFormat === 'BO1' && match.selectedMap && (() => {
+                                // The team that picks the side is the OPPOSITE of the team that made the last ban
+                                const lastBan = match.banSequence?.[match.banSequence.length - 1];
+                                let sidePickingTeam = lastBan?.teamId === match.team1Id ? team2 : 
+                                                     lastBan?.teamId === match.team2Id ? team1 : null;
+                                // Fallback: if no banSequence, check who made the last ban from bannedMaps
+                                if (!sidePickingTeam && match.bannedMaps) {
+                                  const team1Bans = match.bannedMaps.team1?.length || 0;
+                                  const team2Bans = match.bannedMaps.team2?.length || 0;
+                                  const totalBans = team1Bans + team2Bans;
+                                  if (totalBans > 0) {
+                                    const lastBanByTeam1 = totalBans % 2 === 1;
+                                    sidePickingTeam = lastBanByTeam1 ? team2 : team1;
+                                  }
+                                }
+                                
+                                // Determine which side each team has - check both direct properties and sideSelection object
+                                const team1Side = match.team1Side || match.sideSelection?.team1Side;
+                                const team2Side = match.team2Side || match.sideSelection?.team2Side;
+                                
+                                return (
+                                  <div>
+                                    <div className="text-gray-400 font-semibold text-sm mb-3">SIDE SELECTION</div>
+                                    {sidePickingTeam && (
+                                      <div className="text-gray-300 text-xs mb-3">
+                                        {sidePickingTeam.name} selected starting side
+                                      </div>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-4">
+                                      {team1 && (
+                                        <div className={`bg-gray-800/50 border rounded px-4 py-3 ${
+                                          sidePickingTeam?.id === team1.id 
+                                            ? 'border-gray-600' 
+                                            : 'border-gray-700'
+                                        }`}>
+                                          <div className="text-gray-400 text-xs mb-2 font-medium">{team1.name}</div>
+                                          {team1Side ? (
+                                            <>
+                                              <div className="text-white font-semibold capitalize">
+                                                {team1Side}
+                                              </div>
+                                              {sidePickingTeam && sidePickingTeam.id === team1.id && (
+                                                <div className="text-gray-400 text-xs mt-1">(selected by {team1.name})</div>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <div className="text-gray-500 text-sm">Not selected</div>
+                                          )}
+                                        </div>
+                                      )}
+                                      {team2 && (
+                                        <div className={`bg-gray-800/50 border rounded px-4 py-3 ${
+                                          sidePickingTeam?.id === team2.id 
+                                            ? 'border-gray-600' 
+                                            : 'border-gray-700'
+                                        }`}>
+                                          <div className="text-gray-400 text-xs mb-2 font-medium">{team2.name}</div>
+                                          {team2Side ? (
+                                            <>
+                                              <div className="text-white font-semibold capitalize">
+                                                {team2Side}
+                                              </div>
+                                              {sidePickingTeam && sidePickingTeam.id === team2.id && (
+                                                <div className="text-gray-400 text-xs mt-1">(selected by {team2.name})</div>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <div className="text-gray-500 text-sm">Not selected</div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* BO3 Map System */}
+                              {matchFormat === 'BO3' && (
+                                <div className="space-y-4">
+                                  {/* Map 1 */}
+                                  {match.map1 && (
+                                    <div>
+                                      <div className="text-pink-400 font-bold text-sm mb-2">MAP 1</div>
+                                      <div className="bg-green-900/30 border border-green-500/50 rounded px-4 py-2 mb-3">
+                                        <span className="text-green-300 font-bold">{match.map1}</span>
+                                      </div>
+                                      {match.map1Side && (() => {
+                                        // For BO3, the team that picked Map 1 gets to pick the side
+                                        // Map 1 is picked by Team 1 (first picker)
+                                        const sidePickingTeam = team1;
+                                        return (
+                                          <div>
+                                            {sidePickingTeam && (
+                                              <div className="text-pink-300 text-xs mb-2">
+                                                {sidePickingTeam.name} selected starting side
+                                              </div>
+                                            )}
+                                            <div className="grid grid-cols-2 gap-4">
+                                              {team1 && (
+                                                <div className="bg-blue-900/30 border border-blue-500/50 rounded px-4 py-3">
+                                                  <div className="text-blue-300 text-xs mb-1 font-semibold">{team1.name}</div>
+                                                  <div className="text-white font-bold capitalize">{match.map1Side}</div>
+                                                  {sidePickingTeam && sidePickingTeam.id === team1.id && (
+                                                    <div className="text-blue-200 text-xs mt-1">(selected)</div>
+                                                  )}
+                                                </div>
+                                              )}
+                                              {team2 && (
+                                                <div className="bg-blue-900/30 border border-blue-500/50 rounded px-4 py-3">
+                                                  <div className="text-blue-300 text-xs mb-1 font-semibold">{team2.name}</div>
+                                                  <div className="text-white font-bold capitalize">
+                                                    {match.map1Side === 'attack' ? 'defense' : 'attack'}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+
+                                  {/* Map 2 */}
+                                  {match.map2 && (
+                                    <div>
+                                      <div className="text-pink-400 font-bold text-sm mb-2">MAP 2</div>
+                                      <div className="bg-green-900/30 border border-green-500/50 rounded px-4 py-2 mb-3">
+                                        <span className="text-green-300 font-bold">{match.map2}</span>
+                                      </div>
+                                      {match.map2Side && (() => {
+                                        // For BO3, Map 2 is picked by Team 2, so they get to pick the side
+                                        const sidePickingTeam = team2;
+                                        return (
+                                          <div>
+                                            {sidePickingTeam && (
+                                              <div className="text-pink-300 text-xs mb-2">
+                                                {sidePickingTeam.name} selected starting side
+                                              </div>
+                                            )}
+                                            <div className="grid grid-cols-2 gap-4">
+                                              {team1 && (
+                                                <div className="bg-blue-900/30 border border-blue-500/50 rounded px-4 py-3">
+                                                  <div className="text-blue-300 text-xs mb-1 font-semibold">{team1.name}</div>
+                                                  <div className="text-white font-bold capitalize">
+                                                    {match.map2Side === 'attack' ? 'defense' : 'attack'}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {team2 && (
+                                                <div className="bg-blue-900/30 border border-blue-500/50 rounded px-4 py-3">
+                                                  <div className="text-blue-300 text-xs mb-1 font-semibold">{team2.name}</div>
+                                                  <div className="text-white font-bold capitalize">{match.map2Side}</div>
+                                                  {sidePickingTeam && sidePickingTeam.id === team2.id && (
+                                                    <div className="text-blue-200 text-xs mt-1">(selected)</div>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+
+                                  {/* Decider Map */}
+                                  {match.deciderMap && (
+                                    <div>
+                                      <div className="text-pink-400 font-bold text-sm mb-2">DECIDER MAP</div>
+                                      <div className="bg-yellow-900/30 border border-yellow-500/50 rounded px-4 py-2 mb-3">
+                                        <span className="text-yellow-300 font-bold">{match.deciderMap}</span>
+                                      </div>
+                                      {match.deciderMapSide && (() => {
+                                        // For BO3 decider, Team 1 picks the side (they pick first after the bans)
+                                        const sidePickingTeam = team1;
+                                        return (
+                                          <div>
+                                            {sidePickingTeam && (
+                                              <div className="text-pink-300 text-xs mb-2">
+                                                {sidePickingTeam.name} selected starting side
+                                              </div>
+                                            )}
+                                            <div className="grid grid-cols-2 gap-4">
+                                              {team1 && (
+                                                <div className="bg-blue-900/30 border border-blue-500/50 rounded px-4 py-3">
+                                                  <div className="text-blue-300 text-xs mb-1 font-semibold">{team1.name}</div>
+                                                  <div className="text-white font-bold capitalize">{match.deciderMapSide}</div>
+                                                  {sidePickingTeam && sidePickingTeam.id === team1.id && (
+                                                    <div className="text-blue-200 text-xs mt-1">(selected)</div>
+                                                  )}
+                                                </div>
+                                              )}
+                                              {team2 && (
+                                                <div className="bg-blue-900/30 border border-blue-500/50 rounded px-4 py-3">
+                                                  <div className="text-blue-300 text-xs mb-1 font-semibold">{team2.name}</div>
+                                                  <div className="text-white font-bold capitalize">
+                                                    {match.deciderMapSide === 'attack' ? 'defense' : 'attack'}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Team Bans Summary */}
+                              {match.bannedMaps && (
+                                <div>
+                                  <div className="text-gray-400 font-semibold text-sm mb-3">BANS BY TEAM</div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    {team1 && match.bannedMaps.team1 && match.bannedMaps.team1.length > 0 && (
+                                      <div>
+                                        <div className="text-gray-300 text-xs mb-2 font-semibold">{team1.name} Bans:</div>
+                                        <div className="flex flex-wrap gap-2">
+                                          {match.bannedMaps.team1.map((map, index) => {
+                                            // Find the ban in banSequence to get the global banNumber (1-6)
+                                            const banEntry = match.banSequence?.find(b => b.mapName === map && b.teamId === match.team1Id);
+                                            const banIndex = match.banSequence?.findIndex(b => b.mapName === map && b.teamId === match.team1Id);
+                                            const banNumber = banEntry?.banNumber || (banIndex !== undefined && banIndex !== -1 ? banIndex + 1 : null) || (index + 1);
+                                            return (
+                                              <Badge key={index} variant="outline" className="bg-gray-800/50 border-gray-700 text-gray-300 text-xs">
+                                                {banNumber}. {map}
+                                              </Badge>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {team2 && match.bannedMaps.team2 && match.bannedMaps.team2.length > 0 && (
+                                      <div>
+                                        <div className="text-gray-300 text-xs mb-2 font-semibold">{team2.name} Bans:</div>
+                                        <div className="flex flex-wrap gap-2">
+                                          {match.bannedMaps.team2.map((map, index) => {
+                                            // Find the ban in banSequence to get the global banNumber (1-6)
+                                            const banEntry = match.banSequence?.find(b => b.mapName === map && b.teamId === match.team2Id);
+                                            const banIndex = match.banSequence?.findIndex(b => b.mapName === map && b.teamId === match.team2Id);
+                                            const banNumber = banEntry?.banNumber || (banIndex !== undefined && banIndex !== -1 ? banIndex + 1 : null) || (index + 1);
+                                            return (
+                                              <Badge key={index} variant="outline" className="bg-gray-800/50 border-gray-700 text-gray-300 text-xs">
+                                                {banNumber}. {map}
+                                              </Badge>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-gray-400 text-sm text-center py-4">
+                              Veto process has not started yet.
+                            </div>
+                          )}
+
+                        </div>
+                      );
+                    })
+                    .filter(Boolean) // Remove null entries
+                )}
+              </div>
+            </Card>
           )}
             </div>
           </div>
@@ -2443,7 +2924,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
       )}
 
       {/* Manual Seeding Modal */}
-      {showManualSeeding && (
+      {showManualSeeding && tournament && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
           <div className="relative w-full max-w-3xl mx-auto">
             <ManualSeedingInterface

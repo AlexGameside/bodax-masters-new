@@ -28,6 +28,7 @@ import type {
   SchedulingProposal,
   Team
 } from '../types/tournament';
+import { DEFAULT_MAP_POOL } from '../constants/mapPool';
 
 // Swiss System Tournament Management
 export class SwissTournamentService {
@@ -719,7 +720,6 @@ export class SwissTournamentService {
         updatedAt: new Date()
       });
       
-      console.log(`✅ DEBUG: Updated standings for bye match - Team ${teamId} gets 2-0 win`);
       
     } catch (error) {
       console.error('❌ DEBUG: Failed to update Swiss standings for bye match:', error);
@@ -770,14 +770,6 @@ export class SwissTournamentService {
         }
         
         // Update game wins/losses (for BO3, count individual map wins)
-        console.log('🔍 DEBUG: Match data for standings update:', {
-          matchId: match.id,
-          hasMapResults: !!match.mapResults,
-          mapResults: match.mapResults,
-          team1Score: match.team1Score,
-          team2Score: match.team2Score
-        });
-        
         if (match.mapResults) {
           let team1GameWins = 0;
           let team2GameWins = 0;
@@ -813,18 +805,6 @@ export class SwissTournamentService {
           team2Standing.roundsWon = (team2Standing.roundsWon || 0) + team2RoundsWon;
           team1Standing.roundsLost = (team1Standing.roundsLost || 0) + team2RoundsWon;
           team2Standing.roundsLost = (team2Standing.roundsLost || 0) + team1RoundsWon;
-          
-          console.log('🔍 DEBUG: Rounds calculation for match:', {
-            matchId: match.id,
-            team1Id: match.team1Id,
-            team2Id: match.team2Id,
-            team1RoundsWon,
-            team2RoundsWon,
-            team1StandingRoundsWon: team1Standing.roundsWon,
-            team2StandingRoundsWon: team2Standing.roundsWon,
-            team1StandingRoundsLost: team1Standing.roundsLost,
-            team2StandingRoundsLost: team2Standing.roundsLost
-          });
         } else {
           // Fallback: if no map results, assume BO1
           if (match.team1Score > match.team2Score) {
@@ -840,18 +820,6 @@ export class SwissTournamentService {
           team2Standing.roundsWon = (team2Standing.roundsWon || 0) + match.team2Score;
           team1Standing.roundsLost = (team1Standing.roundsLost || 0) + match.team2Score;
           team2Standing.roundsLost = (team2Standing.roundsLost || 0) + match.team1Score;
-          
-          console.log('🔍 DEBUG: BO1 Rounds calculation for match:', {
-            matchId: match.id,
-            team1Id: match.team1Id,
-            team2Id: match.team2Id,
-            team1Score: match.team1Score,
-            team2Score: match.team2Score,
-            team1StandingRoundsWon: team1Standing.roundsWon,
-            team2StandingRoundsWon: team2Standing.roundsWon,
-            team1StandingRoundsLost: team1Standing.roundsLost,
-            team2StandingRoundsLost: team2Standing.roundsLost
-          });
         }
         
         // Add opponents to prevent rematches
@@ -865,18 +833,6 @@ export class SwissTournamentService {
       
       // Sort standings
       const sortedStandings = this.sortSwissStandings(swissStage.standings);
-      
-      // Debug: Show final standings
-      console.log('🔍 DEBUG: Final standings after update:', sortedStandings.map(s => ({
-        teamId: s.teamId,
-        points: s.points,
-        matchWins: s.matchWins,
-        matchLosses: s.matchLosses,
-        gameWins: s.gameWins,
-        gameLosses: s.gameLosses,
-        roundsWon: s.roundsWon,
-        roundsLost: s.roundsLost
-      })));
       
       // Update tournament with new standings
       await updateDoc(tournamentRef, {
@@ -1339,7 +1295,6 @@ export class SwissTournamentService {
         }
       }
       
-      console.log(`✅ Auto-transitioned scheduled matches to ready_up`);
       
     } catch (error) {
       console.error('Error auto-transitioning scheduled matches:', error);
@@ -1389,7 +1344,6 @@ export class SwissTournamentService {
         updatedAt: serverTimestamp(),
       });
       
-      console.log(`✅ Match ${matchId} transitioned from scheduled to ready_up`);
       
     } catch (error) {
       console.error('Error transitioning match to ready_up:', error);
@@ -1424,7 +1378,6 @@ export class SwissTournamentService {
         updatedAt: serverTimestamp(),
       });
       
-      console.log(`✅ Admin forced transition: Match ${matchId} moved to ready_up state`);
       
     } catch (error) {
       console.error('Error in admin force transition:', error);
@@ -2191,12 +2144,12 @@ export class SwissTournamentService {
       });
       
       // Generate single-elimination bracket with BO3 format
-      // Seeding: 1v8, 2v7, 3v6, 4v5 (standard bracket seeding)
+      // Seeding: 1v8, 3v6, 2v7, 4v5 (crossed bracket structure)
       const quarterFinalPairings = [
-        [top8Teams[0], top8Teams[7]], // 1 vs 8
-        [top8Teams[3], top8Teams[4]], // 4 vs 5
-        [top8Teams[1], top8Teams[6]], // 2 vs 7
-        [top8Teams[2], top8Teams[5]]  // 3 vs 6
+        [top8Teams[0], top8Teams[7]], // QF1: 1 vs 8 → SF1
+        [top8Teams[2], top8Teams[5]], // QF2: 3 vs 6 → SF1
+        [top8Teams[1], top8Teams[6]], // QF3: 2 vs 7 → SF2
+        [top8Teams[3], top8Teams[4]]  // QF4: 4 vs 5 → SF2
       ];
       
       const batch = writeBatch(db);
@@ -2221,7 +2174,7 @@ export class SwissTournamentService {
           createdAt: serverTimestamp(),
           matchState: 'pending_scheduling' as const,
           matchFormat: 'BO3' as const, // BO3 format for playoffs
-          mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+          mapPool: [...DEFAULT_MAP_POOL],
           bannedMaps: { team1: [], team2: [] },
           team1Ready: false,
           team2Ready: false,
@@ -2251,7 +2204,7 @@ export class SwissTournamentService {
           createdAt: serverTimestamp(),
           matchState: 'pending_scheduling' as const,
           matchFormat: 'BO3' as const,
-          mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+          mapPool: [...DEFAULT_MAP_POOL],
           bannedMaps: { team1: [], team2: [] },
           team1Ready: false,
           team2Ready: false,
@@ -2279,7 +2232,7 @@ export class SwissTournamentService {
         createdAt: serverTimestamp(),
         matchState: 'pending_scheduling' as const,
         matchFormat: 'BO3' as const,
-        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+        mapPool: [...DEFAULT_MAP_POOL],
         bannedMaps: { team1: [], team2: [] },
         team1Ready: false,
         team2Ready: false,
@@ -2309,6 +2262,334 @@ export class SwissTournamentService {
       
     } catch (error) {
       console.error('❌ Error generating playoff bracket:', error);
+      throw error;
+    }
+  }
+
+  // Generate playoff bracket with manual seeding (only Quarter Finals initially)
+  static async generatePlayoffBracketWithManualSeeding(tournamentId: string, seededTeamIds: string[]): Promise<void> {
+    try {
+      console.log('🏆 Starting playoff bracket generation with manual seeding for tournament:', tournamentId);
+      
+      if (seededTeamIds.length !== 8) {
+        throw new Error(`Playoff bracket requires exactly 8 teams. Got ${seededTeamIds.length}`);
+      }
+      
+      // Get tournament data
+      const tournamentRef = doc(db, 'tournaments', tournamentId);
+      const tournamentDoc = await getDoc(tournamentRef);
+      
+      if (!tournamentDoc.exists()) {
+        throw new Error('Tournament not found');
+      }
+      
+      // Activate playoff stage in tournament
+      await updateDoc(tournamentRef, {
+        'stageManagement.playoffStage': {
+          isActive: true,
+          teams: seededTeamIds,
+          startedAt: new Date(),
+          currentRound: 1,
+          totalRounds: 3
+        },
+        'stageManagement.swissStage.isComplete': true,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Generate ONLY Quarter Finals initially
+      // Seeding based on manual order: 1v8, 3v6, 2v7, 4v5 (crossed bracket structure)
+      // Note: seededTeamIds[0] = Seed 1, seededTeamIds[7] = Seed 8, etc.
+      // This ensures seeds 1 and 2 are on opposite sides and meet in finals
+      const quarterFinalPairings = [
+        [seededTeamIds[0], seededTeamIds[7]], // QF1: Seed 1 vs Seed 8 → SF1
+        [seededTeamIds[2], seededTeamIds[5]], // QF2: Seed 3 vs Seed 6 → SF1  
+        [seededTeamIds[1], seededTeamIds[6]], // QF3: Seed 2 vs Seed 7 → SF2
+        [seededTeamIds[3], seededTeamIds[4]]  // QF4: Seed 4 vs Seed 5 → SF2
+      ];
+      
+      const batch = writeBatch(db);
+      const matchIds: string[] = [];
+      
+      // Quarter Finals (Round 1) - BO3, matches go directly to "scheduled" state
+      for (let i = 0; i < quarterFinalPairings.length; i++) {
+        const [team1Id, team2Id] = quarterFinalPairings[i];
+        const matchRef = doc(collection(db, 'matches'));
+        
+        const matchData = {
+          team1Id,
+          team2Id,
+          team1Score: 0,
+          team2Score: 0,
+          winnerId: null,
+          round: 1,
+          matchNumber: i + 1,
+          isComplete: false,
+          tournamentId,
+          tournamentType: 'playoff' as const,
+          createdAt: serverTimestamp(),
+          matchState: 'scheduled' as const, // Skip scheduling, go directly to scheduled
+          matchFormat: 'BO3' as const,
+          mapPool: [...DEFAULT_MAP_POOL],
+          bannedMaps: { team1: [], team2: [] },
+          team1Ready: false,
+          team2Ready: false,
+          team1MapBans: [],
+          team2MapBans: [],
+          // Admin will set this time
+          scheduledTime: null,
+          adminScheduled: true
+        };
+        
+        batch.set(matchRef, matchData);
+        matchIds.push(matchRef.id);
+      }
+      
+      // Commit all matches
+      await batch.commit();
+      
+      console.log('📝 Created match IDs:', matchIds);
+      
+      // Update tournament with match IDs
+      await updateDoc(tournamentRef, {
+        matches: arrayUnion(...matchIds),
+        updatedAt: serverTimestamp()
+      });
+      
+      console.log('✅ Playoff bracket generated successfully with manual seeding!');
+      console.log(`   - Quarter Finals: 4 matches (BO3) - SCHEDULED state`);
+      console.log(`   - Semi Finals: Will be created when QF winners advance`);
+      console.log(`   - Grand Final: Will be created when SF winners advance`);
+      console.log(`   - Match IDs added to tournament: ${matchIds.length}`);
+      
+    } catch (error) {
+      console.error('❌ Error generating playoff bracket with manual seeding:', error);
+      throw error;
+    }
+  }
+
+  // Admin function to set match time for playoff bracket matches
+  static async setPlayoffMatchTime(matchId: string, scheduledTime: Date): Promise<void> {
+    try {
+      const matchRef = doc(db, 'matches', matchId);
+      const matchDoc = await getDoc(matchRef);
+      
+      if (!matchDoc.exists()) {
+        throw new Error('Match not found');
+      }
+      
+      const matchData = matchDoc.data();
+      
+      // Only allow setting time for playoff matches
+      if (matchData.tournamentType !== 'playoff') {
+        throw new Error('This function only works for playoff matches');
+      }
+      
+      // Update match with scheduled time
+      await updateDoc(matchRef, {
+        scheduledTime: scheduledTime,
+        matchState: 'scheduled',
+        adminScheduled: true,
+        updatedAt: serverTimestamp()
+      });
+      
+      console.log(`✅ Match ${matchId} scheduled for ${scheduledTime}`);
+    } catch (error) {
+      console.error('❌ Error setting playoff match time:', error);
+      throw error;
+    }
+  }
+
+  // Admin function to manually advance team to next round (creates next round matches dynamically)
+  static async manuallyAdvanceTeamInPlayoffs(matchId: string, winnerTeamId: string): Promise<void> {
+    try {
+      const matchRef = doc(db, 'matches', matchId);
+      const matchDoc = await getDoc(matchRef);
+      
+      if (!matchDoc.exists()) {
+        throw new Error('Match not found');
+      }
+      
+      const match = matchDoc.data();
+      
+      if (match.tournamentType !== 'playoff') {
+        throw new Error('This function only works for playoff matches');
+      }
+      
+      // Verify the winner is one of the teams in the match
+      if (match.team1Id !== winnerTeamId && match.team2Id !== winnerTeamId) {
+        throw new Error('Winner must be one of the teams in this match');
+      }
+      
+      // Mark match as complete with the winner
+      await updateDoc(matchRef, {
+        winnerId: winnerTeamId,
+        isComplete: true,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Find or create the next match this team should advance to
+      const tournamentId = match.tournamentId;
+      const currentRound = match.round;
+      const matchNumber = match.matchNumber;
+      
+      // Get all tournament matches
+      const matchesSnapshot = await getDocs(
+        query(
+          collection(db, 'matches'),
+          where('tournamentId', '==', tournamentId),
+          where('tournamentType', '==', 'playoff')
+        )
+      );
+      
+      const allMatches = matchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Find next round matches
+      let nextRoundMatches = allMatches.filter((m: any) => m.round === currentRound + 1);
+      
+      // Determine which next round match this team advances to
+      // Quarter finals (4 matches) -> Semi finals (2 matches)
+      // Matches 1 & 2 -> Semi 1, Matches 3 & 4 -> Semi 2
+      const nextMatchIndex = Math.floor((matchNumber - 1) / 2);
+      
+      // Check if we need to create the next round match
+      if (nextRoundMatches.length === 0 || !nextRoundMatches[nextMatchIndex]) {
+        console.log(`📝 Creating new match for Round ${currentRound + 1}`);
+        
+        // Determine how many matches should exist in next round
+        const currentRoundMatchCount = allMatches.filter((m: any) => m.round === currentRound).length;
+        const nextRoundMatchCount = Math.ceil(currentRoundMatchCount / 2);
+        
+        // Create missing matches for next round
+        const batch = writeBatch(db);
+        const newMatchIds: string[] = [];
+        const tournamentRef = doc(db, 'tournaments', tournamentId);
+        
+        for (let i = nextRoundMatches.length; i < nextRoundMatchCount; i++) {
+          const newMatchRef = doc(collection(db, 'matches'));
+          
+          const newMatchData = {
+            team1Id: null,
+            team2Id: null,
+            team1Score: 0,
+            team2Score: 0,
+            winnerId: null,
+            round: currentRound + 1,
+            matchNumber: i + 1,
+            isComplete: false,
+            tournamentId,
+            tournamentType: 'playoff' as const,
+            createdAt: serverTimestamp(),
+            matchState: 'not_ready' as const,
+            matchFormat: 'BO3' as const,
+            mapPool: [...DEFAULT_MAP_POOL],
+            bannedMaps: { team1: [], team2: [] },
+            team1Ready: false,
+            team2Ready: false,
+            team1MapBans: [],
+            team2MapBans: [],
+            scheduledTime: null,
+            adminScheduled: true
+          };
+          
+          batch.set(newMatchRef, newMatchData);
+          newMatchIds.push(newMatchRef.id);
+          nextRoundMatches.push({ id: newMatchRef.id, ...newMatchData } as any);
+        }
+        
+        // Update tournament with new match IDs
+        batch.update(tournamentRef, {
+          matches: arrayUnion(...newMatchIds),
+          updatedAt: serverTimestamp()
+        });
+        
+        await batch.commit();
+        console.log(`✅ Created ${newMatchIds.length} new matches for Round ${currentRound + 1}`);
+      }
+      
+      // Now add the winner to the next round match
+      const nextMatch = nextRoundMatches[nextMatchIndex];
+      
+      if (nextMatch) {
+        const nextMatchRef = doc(db, 'matches', nextMatch.id);
+        
+        // Determine if this team goes to team1 or team2 slot
+        const isFirstMatchOfPair = (matchNumber - 1) % 2 === 0;
+        const teamSlot = isFirstMatchOfPair ? 'team1Id' : 'team2Id';
+        const otherSlot = isFirstMatchOfPair ? 'team2Id' : 'team1Id';
+        
+        // Check if both teams will be set after this update
+        const bothTeamsSet = isFirstMatchOfPair ? (nextMatch as any).team2Id !== null : (nextMatch as any).team1Id !== null;
+        
+        await updateDoc(nextMatchRef, {
+          [teamSlot]: winnerTeamId,
+          updatedAt: serverTimestamp(),
+          // If both teams are now set, change state to scheduled
+          ...(bothTeamsSet ? { matchState: 'scheduled' } : {})
+        });
+        
+        console.log(`✅ Team ${winnerTeamId} advanced to Round ${currentRound + 1} Match ${nextMatchIndex + 1}`);
+        
+        if (bothTeamsSet) {
+          console.log(`🎯 Next round match is now ready for scheduling!`);
+        }
+      }
+      
+      console.log(`✅ Match ${matchId} completed, winner: ${winnerTeamId}`);
+    } catch (error) {
+      console.error('❌ Error manually advancing team:', error);
+      throw error;
+    }
+  }
+
+  // Admin function to delete/ungenerate playoff bracket
+  static async deletePlayoffBracket(tournamentId: string): Promise<void> {
+    try {
+      console.log('🗑️ Deleting playoff bracket for tournament:', tournamentId);
+      
+      // Get tournament data
+      const tournamentRef = doc(db, 'tournaments', tournamentId);
+      const tournamentDoc = await getDoc(tournamentRef);
+      
+      if (!tournamentDoc.exists()) {
+        throw new Error('Tournament not found');
+      }
+      
+      // Get all playoff matches for this tournament
+      const matchesSnapshot = await getDocs(
+        query(
+          collection(db, 'matches'),
+          where('tournamentId', '==', tournamentId),
+          where('tournamentType', '==', 'playoff')
+        )
+      );
+      
+      console.log(`📝 Found ${matchesSnapshot.docs.length} playoff matches to delete`);
+      
+      // Delete all playoff matches
+      const batch = writeBatch(db);
+      const matchIdsToRemove: string[] = [];
+      
+      matchesSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+        matchIdsToRemove.push(doc.id);
+      });
+      
+      // Update tournament to deactivate playoff stage
+      batch.update(tournamentRef, {
+        'stageManagement.playoffStage.isActive': false,
+        matches: arrayRemove(...matchIdsToRemove),
+        updatedAt: serverTimestamp()
+      });
+      
+      // Commit all deletions
+      await batch.commit();
+      
+      console.log('✅ Playoff bracket deleted successfully!');
+      console.log(`   - Deleted ${matchesSnapshot.docs.length} matches`);
+      console.log(`   - Playoff stage deactivated`);
+      
+    } catch (error) {
+      console.error('❌ Error deleting playoff bracket:', error);
       throw error;
     }
   }

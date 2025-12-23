@@ -6,6 +6,7 @@ import {
   canCreateTicket, 
   type CreateTicketRequest 
 } from '../services/ticketService';
+import { BodaxModal } from './ui';
 
 interface TicketCreationModalProps {
   isOpen: boolean;
@@ -98,84 +99,93 @@ const TicketCreationModal: React.FC<TicketCreationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-700">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white flex items-center space-x-2">
-              <Ticket className="w-5 h-5" />
-              <span>Create Support Ticket</span>
-            </h2>
-            <button
-              onClick={handleClose}
-              disabled={isSubmitting}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+    <BodaxModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Support Ticket"
+      subtitle="Create a request · disputes · technical issues"
+      maxWidthClassName="max-w-2xl"
+      footer={
+        <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isSubmitting}
+            className="px-5 py-3 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 font-bodax text-xl uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="bodax-ticket-form"
+            disabled={isSubmitting}
+            className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white border border-red-800 font-bodax text-xl uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Creating...' : 'Create Ticket'}
+          </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      }
+    >
+      <form id="bodax-ticket-form" onSubmit={handleSubmit} className="space-y-6">
           {/* Ticket Type Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-3">
+            <label className="block text-sm font-bold text-gray-400 mb-3 font-mono uppercase tracking-widest">
               Ticket Type
             </label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => setTicketType('general')}
-                className={`p-4 rounded-lg border transition-colors ${
+                className={`p-4 border transition-colors text-left ${
                   ticketType === 'general'
-                    ? 'border-blue-500 bg-blue-500/10 text-blue-400'
-                    : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
+                    ? 'border-red-600 bg-red-900/10 text-white'
+                    : 'border-gray-800 bg-black/30 text-gray-300 hover:border-gray-600'
                 }`}
               >
                 <HelpCircle className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm font-medium">General Support</div>
-                <div className="text-xs text-gray-400">General questions and issues</div>
+                <div className="text-sm font-bold font-bodax tracking-wide uppercase text-center">General</div>
+                <div className="text-xs text-gray-500 font-mono uppercase tracking-wider text-center mt-1">Questions & info</div>
               </button>
               
               <button
                 type="button"
                 onClick={() => setTicketType('dispute')}
-                className={`p-4 rounded-lg border transition-colors ${
+                className={`p-4 border transition-colors text-left ${
                   ticketType === 'dispute'
-                    ? 'border-red-500 bg-red-500/10 text-red-400'
-                    : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
+                    ? 'border-red-600 bg-red-900/10 text-white'
+                    : 'border-gray-800 bg-black/30 text-gray-300 hover:border-gray-600'
                 }`}
               >
                 <AlertTriangle className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm font-medium">Match Dispute</div>
-                <div className="text-xs text-gray-400">Match-related issues</div>
+                <div className="text-sm font-bold font-bodax tracking-wide uppercase text-center">Dispute</div>
+                <div className="text-xs text-gray-500 font-mono uppercase tracking-wider text-center mt-1">Match issues</div>
               </button>
               
               <button
                 type="button"
                 onClick={() => setTicketType('support')}
-                className={`p-4 rounded-lg border transition-colors ${
+                className={`p-4 border transition-colors text-left ${
                   ticketType === 'support'
-                    ? 'border-green-500 bg-green-500/10 text-green-400'
-                    : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
+                    ? 'border-red-600 bg-red-900/10 text-white'
+                    : 'border-gray-800 bg-black/30 text-gray-300 hover:border-gray-600'
                 }`}
               >
                 <MessageCircle className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm font-medium">Technical Support</div>
-                <div className="text-xs text-gray-400">Technical problems</div>
+                <div className="text-sm font-bold font-bodax tracking-wide uppercase text-center">Technical</div>
+                <div className="text-xs text-gray-500 font-mono uppercase tracking-wider text-center mt-1">Bugs & problems</div>
               </button>
             </div>
           </div>
 
           {/* Priority Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
               Priority Level
             </label>
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as any)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+              className="w-full bg-black/40 border border-gray-800 px-3 py-3 text-white focus:border-red-600 focus:outline-none font-mono uppercase tracking-wider text-sm"
             >
               <option value="low">Low - General inquiry</option>
               <option value="medium">Medium - Standard issue</option>
@@ -186,14 +196,14 @@ const TicketCreationModal: React.FC<TicketCreationModalProps> = ({
 
           {/* Subject */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
               Subject *
             </label>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+              className="w-full bg-black/40 border border-gray-800 px-3 py-3 text-white focus:border-red-600 focus:outline-none"
               placeholder="Brief description of your issue"
               required
             />
@@ -201,14 +211,14 @@ const TicketCreationModal: React.FC<TicketCreationModalProps> = ({
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
               Description *
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={6}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 focus:outline-none resize-none"
+              className="w-full bg-black/40 border border-gray-800 px-3 py-3 text-white focus:border-red-600 focus:outline-none resize-none"
               placeholder="Please provide detailed information about your issue..."
               required
             />
@@ -216,38 +226,17 @@ const TicketCreationModal: React.FC<TicketCreationModalProps> = ({
 
           {/* Match Info Display */}
           {matchInfo && (
-            <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-gray-300 mb-2">Related Match</h3>
-              <div className="text-sm text-gray-400">
+            <div className="bg-black/30 border border-gray-800 p-4">
+              <h3 className="text-sm font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">Related Match</h3>
+              <div className="text-sm text-gray-400 font-mono">
                 <div>{matchInfo.team1} vs {matchInfo.team2}</div>
                 {matchInfo.map && <div>Map: {matchInfo.map}</div>}
                 {matchInfo.phase && <div>Phase: {matchInfo.phase}</div>}
               </div>
             </div>
           )}
-
-          {/* Submit Button */}
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="btn-primary inline-flex items-center space-x-2"
-            >
-              <Send className="w-4 h-4" />
-              <span>{isSubmitting ? 'Creating...' : 'Create Ticket'}</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </BodaxModal>
   );
 };
 

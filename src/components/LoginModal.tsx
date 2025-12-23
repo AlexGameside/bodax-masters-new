@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Mail, Lock, UserPlus, TestTube, User, ArrowLeft, Flag } from 'lucide-react';
+import { Mail, Lock, UserPlus, TestTube, User, ArrowLeft, Flag } from 'lucide-react';
 import { loginUser, registerUser, resetPassword } from '../services/authService';
+import { BodaxModal } from './ui';
 
 const NATIONALITIES = [
   'Germany', 'Austria', 'Switzerland', 'France', 'Spain', 'Italy', 'Netherlands', 'Belgium',
@@ -21,8 +22,6 @@ interface LoginModalProps {
 }
 
 const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
-  if (!isOpen) return null;
-
   const [isLogin, setIsLogin] = useState(true);
   const [isResetMode, setIsResetMode] = useState(false);
   const [username, setUsername] = useState('');
@@ -40,6 +39,8 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
     const testLogin = localStorage.getItem('testLogin');
     setTestLoginAvailable(!!testLogin);
   }, [isOpen]);
+
+  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,56 +195,36 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-2xl shadow-2xl border border-gray-700 max-w-md w-full">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-t-2xl p-6 border-b border-gray-700">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-2xl font-bold text-white">
-                {isResetMode ? 'Passwort zurücksetzen' : isLogin ? 'Willkommen zurück' : 'Unity League beitreten'}
-              </h2>
-              <p className="text-gray-400 mt-1">
-                {isResetMode 
-                  ? 'Gib deine E-Mail-Adresse ein, um dein Passwort zurückzusetzen'
-                  : isLogin ? 'Melde dich in deinem Konto an' : 'Erstelle dein Konto'
-                }
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-800 rounded-lg"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
+    <BodaxModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isResetMode ? 'Reset Password' : isLogin ? 'Login' : 'Create Account'}
+      subtitle={isResetMode ? 'email recovery' : isLogin ? 'sign in to Bodax' : 'create your Bodax account'}
+      maxWidthClassName="max-w-md"
+    >
+      {isResetMode && (
+        <button
+          onClick={goBackToLogin}
+          className="flex items-center space-x-2 text-gray-400 hover:text-red-500 transition-colors mb-4 font-mono uppercase tracking-widest text-xs"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back</span>
+        </button>
+      )}
 
-        {/* Form */}
-        <div className="p-6">
-          {isResetMode && (
-            <button
-              onClick={goBackToLogin}
-              className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors mb-4"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Zurück zum Login</span>
-            </button>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
             {isResetMode ? (
               // Password reset form - only email field
               <div>
-                <label className="block text-gray-300 font-medium mb-2">E-Mail Adresse</label>
+                <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">Email</label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="Deine E-Mail eingeben"
+                    className="w-full pl-10 pr-4 py-3 bg-black/40 border border-gray-800 text-white placeholder-gray-600 focus:border-red-600 focus:outline-none transition-colors"
+                    placeholder="you@example.com"
                     required
                   />
                 </div>
@@ -251,9 +232,9 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
             ) : isLogin ? (
               // Login form - username OR email field
               <div>
-                <label className="block text-gray-300 font-medium mb-2">Benutzername oder E-Mail</label>
+                <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">Username or Email</label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
                   <input
                     type="text"
                     value={username || email}
@@ -268,8 +249,8 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
                         setEmail('');
                       }
                     }}
-                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="Benutzername oder E-Mail eingeben"
+                    className="w-full pl-10 pr-4 py-3 bg-black/40 border border-gray-800 text-white placeholder-gray-600 focus:border-red-600 focus:outline-none transition-colors"
+                    placeholder="username or email"
                     required
                   />
                 </div>
@@ -278,30 +259,30 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
               // Registration form - separate username and email fields
               <>
                 <div>
-                  <label className="block text-gray-300 font-medium mb-2">Benutzername</label>
+                  <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">Username</label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                      placeholder="Deinen Benutzernamen eingeben"
+                      className="w-full pl-10 pr-4 py-3 bg-black/40 border border-gray-800 text-white placeholder-gray-600 focus:border-red-600 focus:outline-none transition-colors"
+                      placeholder="username"
                       required
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-gray-300 font-medium mb-2">E-Mail Adresse</label>
+                  <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">Email</label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                      placeholder="Deine E-Mail eingeben"
+                      className="w-full pl-10 pr-4 py-3 bg-black/40 border border-gray-800 text-white placeholder-gray-600 focus:border-red-600 focus:outline-none transition-colors"
+                      placeholder="you@example.com"
                       required
                     />
                   </div>
@@ -311,15 +292,15 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
 
             {!isResetMode && (
               <div>
-                <label className="block text-gray-300 font-medium mb-2">Passwort</label>
+                <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">Password</label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="Dein Passwort eingeben"
+                    className="w-full pl-10 pr-4 py-3 bg-black/40 border border-gray-800 text-white placeholder-gray-600 focus:border-red-600 focus:outline-none transition-colors"
+                    placeholder="password"
                     required
                   />
                 </div>
@@ -329,28 +310,28 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
             {!isLogin && !isResetMode && (
               <>
                 <div>
-                  <label className="block text-gray-300 font-medium mb-2">Riot ID</label>
+                  <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">Riot ID</label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
                     <input
                       type="text"
                       value={riotId}
                       onChange={(e) => setRiotId(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                      placeholder="Dein Riot ID eingeben (z.B. Username#1234)"
+                      className="w-full pl-10 pr-4 py-3 bg-black/40 border border-gray-800 text-white placeholder-gray-600 focus:border-red-600 focus:outline-none transition-colors"
+                      placeholder="PlayerName#TAG"
                       required
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-gray-300 font-medium mb-2">Nationality</label>
+                  <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">Nationality</label>
                   <div className="relative">
-                    <Flag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <Flag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
                     <select
                       value={nationality}
                       onChange={(e) => setNationality(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none cursor-pointer"
+                      className="w-full pl-10 pr-10 py-3 bg-black/40 border border-gray-800 text-white focus:border-red-600 focus:outline-none transition-colors appearance-none cursor-pointer"
                       required
                     >
                       <option value="">Choose your nationality...</option>
@@ -371,13 +352,13 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
             )}
 
             {error && (
-              <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg">
+              <div className="bg-red-900/10 border border-red-900 text-red-300 px-4 py-3">
                 {error}
               </div>
             )}
 
             {message && (
-              <div className="bg-green-900/50 border border-green-700 text-green-300 px-4 py-3 rounded-lg">
+              <div className="bg-green-900/10 border border-green-900 text-green-300 px-4 py-3">
                 {message}
               </div>
             )}
@@ -385,17 +366,17 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white py-3 rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="w-full bg-red-600 hover:bg-red-700 text-white border border-red-800 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bodax text-2xl uppercase tracking-wider"
             >
               {loading ? (
                 <div className="flex items-center justify-center space-x-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   <span>
-                    {isResetMode ? 'E-Mail senden...' : isLogin ? 'Anmelden...' : 'Konto erstellen...'}
+                    {isResetMode ? 'Sending...' : isLogin ? 'Logging in...' : 'Creating...'}
                   </span>
                 </div>
               ) : (
-                isResetMode ? 'Passwort zurücksetzen' : isLogin ? 'Anmelden' : 'Konto erstellen'
+                isResetMode ? 'Send reset email' : isLogin ? 'Login' : 'Create account'
               )}
             </button>
           </form>
@@ -405,9 +386,9 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
             <div className="mt-4 text-center">
               <button
                 onClick={goToResetMode}
-                className="text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                className="text-gray-400 hover:text-red-500 font-mono uppercase tracking-widest text-xs transition-colors"
               >
-                Passwort vergessen?
+                Forgot password?
               </button>
             </div>
           )}
@@ -417,11 +398,11 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
             <div className="mt-6 text-center">
               <button
                 onClick={toggleMode}
-                className="text-primary-400 hover:text-primary-300 font-medium flex items-center justify-center space-x-2 mx-auto transition-colors"
+                className="text-gray-300 hover:text-red-500 font-mono uppercase tracking-widest text-xs flex items-center justify-center space-x-2 mx-auto transition-colors"
               >
                 <UserPlus className="w-4 h-4" />
                 <span>
-                  {isLogin ? "Noch kein Konto? Registrieren" : 'Bereits ein Konto? Anmelden'}
+                  {isLogin ? 'Create account' : 'Back to login'}
                 </span>
               </button>
             </div>
@@ -433,16 +414,14 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
               <button
                 onClick={handleTestLogin}
                 disabled={loading}
-                className="text-gray-400 hover:text-gray-300 font-medium flex items-center justify-center space-x-2 mx-auto transition-colors disabled:opacity-50"
+                className="text-gray-400 hover:text-white font-mono uppercase tracking-widest text-xs flex items-center justify-center space-x-2 mx-auto transition-colors disabled:opacity-50"
               >
                 <TestTube className="w-4 h-4" />
-                <span>Test Login verwenden</span>
+                <span>Use test login</span>
               </button>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </BodaxModal>
   );
 };
 

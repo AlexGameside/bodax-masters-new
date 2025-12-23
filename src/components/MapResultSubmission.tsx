@@ -262,33 +262,42 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
     // If both teams have submitted and scores don't match, show dispute interface
   if (bothTeamsSubmitted && !scoresMatch) {
     return (
-      <div className="bg-gradient-to-br from-red-500/10 via-orange-600/10 to-red-700/10 backdrop-blur-sm rounded-lg p-4 border border-red-400/30 shadow-lg">
+      <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative border-l-4 border-red-600 pl-4">
         <div className="text-center mb-4">
-          <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-          <h3 className="text-lg font-bold text-white mb-1">Map {mapNumber} Score Discrepancy</h3>
-          <p className="text-red-200 text-sm">Both teams have submitted different scores for {mapName}</p>
+          <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+          <h3 className="text-2xl font-bold text-white font-bodax uppercase tracking-wide mb-1">Map {mapNumber} Score Discrepancy</h3>
+          <p className="text-red-400 text-sm font-mono uppercase tracking-widest">Both teams have submitted different scores for {mapName}</p>
         </div>
 
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-           <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-600/30">
-             <h4 className="text-white font-bold mb-1 text-sm">{sanitizedTeam1Name} Submitted:</h4>
-             <div className="text-xl font-bold text-white">
-               <span className="text-blue-300">{sanitizedTeam1Name}</span>
+           <div className="p-4 bg-[#0a0a0a] border border-gray-800">
+             <h4 className="text-white font-bold mb-2 text-sm font-mono uppercase tracking-widest">{sanitizedTeam1Name} Submitted:</h4>
+             <div className="text-lg font-bold text-gray-400 font-mono uppercase tracking-widest text-xs mb-2">
+               <span className="text-gray-300">{sanitizedTeam1Name}</span>
                <span className="mx-2">-</span>
-               <span className="text-blue-300">{sanitizedTeam2Name}</span>
+               <span className="text-gray-300">{sanitizedTeam2Name}</span>
              </div>
-             <div className="text-2xl font-bold text-white mt-1">
+             <div className="text-3xl font-bold text-white font-bodax uppercase tracking-wide">
                {match.mapSubmissions?.[mapKey]?.team1SubmittedScore?.team1Score} - {match.mapSubmissions?.[mapKey]?.team1SubmittedScore?.team2Score}
              </div>
            </div>
-           <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-600/30">
-             <h4 className="text-white font-bold mb-1 text-sm">{sanitizedTeam2Name} Submitted:</h4>
-             <div className="text-xl font-bold text-white">
-               <span className="text-blue-300">{sanitizedTeam1Name}</span>
+           <div className="p-4 bg-[#0a0a0a] border border-gray-800">
+             <h4 className="text-white font-bold mb-2 text-sm font-mono uppercase tracking-widest">{sanitizedTeam2Name} Submitted:</h4>
+             <div className="text-lg font-bold text-gray-400 font-mono uppercase tracking-widest text-xs mb-2">
+               <span className="text-gray-300">{sanitizedTeam1Name}</span>
                <span className="mx-2">-</span>
-               <span className="text-blue-300">{sanitizedTeam2Name}</span>
+               <span className="text-gray-300">{sanitizedTeam2Name}</span>
              </div>
-             <div className="text-2xl font-bold text-white mt-1">
+             <div className="text-3xl font-bold text-white font-bodax uppercase tracking-wide">
                {match.mapSubmissions?.[mapKey]?.team2SubmittedScore?.team1Score} - {match.mapSubmissions?.[mapKey]?.team2SubmittedScore?.team2Score}
              </div>
            </div>
@@ -303,7 +312,7 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
             <button
               onClick={handleAgree}
               disabled={isSubmitting}
-              className="flex items-center justify-center px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors text-sm"
+              className="flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors text-sm"
             >
               <CheckCircle className="w-4 h-4 mr-1" />
               Agree with {isTeam1 ? sanitizedTeam2Name : sanitizedTeam1Name}'s Score
@@ -312,12 +321,13 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
             <button
               onClick={handleDispute}
               disabled={isDisputing}
-              className="flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors text-sm"
+              className="flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors text-sm"
             >
               <AlertTriangle className="w-4 h-4 mr-1" />
               Create Dispute
             </button>
           </div>
+        </div>
         </div>
       </div>
     );
@@ -326,21 +336,30 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
   // If this team has already submitted, show waiting message
   if (hasSubmitted) {
     return (
-      <div className="bg-gradient-to-br from-blue-500/10 via-cyan-600/10 to-blue-700/10 backdrop-blur-sm rounded-lg p-4 border border-blue-400/30 shadow-lg">
+      <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative border-l-4 border-blue-600 pl-4">
         <div className="text-center mb-4">
-          <CheckCircle className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-          <h3 className="text-lg font-bold text-white mb-1">Map {mapNumber} Result Submitted!</h3>
-          <p className="text-blue-200 text-sm">Waiting for the other team to submit their result for {mapName}</p>
+          <CheckCircle className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+          <h3 className="text-2xl font-bold text-white font-bodax uppercase tracking-wide mb-1">Map {mapNumber} Result Submitted!</h3>
+          <p className="text-blue-400 text-sm font-mono uppercase tracking-widest">Waiting for the other team to submit their result for {mapName}</p>
         </div>
 
-                 <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-600/30 mb-4">
-           <h4 className="text-white font-bold mb-1 text-sm">Your Submitted Score:</h4>
-           <div className="text-xl font-bold text-white">
-             <span className="text-blue-300">{sanitizedTeam1Name}</span>
+                 <div className="p-4 bg-[#0a0a0a] border border-gray-800 mb-4">
+           <h4 className="text-white font-bold mb-2 text-sm font-mono uppercase tracking-widest">Your Submitted Score:</h4>
+           <div className="text-lg font-bold text-gray-400 font-mono uppercase tracking-widest text-xs mb-2">
+             <span className="text-gray-300">{sanitizedTeam1Name}</span>
              <span className="mx-2">-</span>
-             <span className="text-blue-300">{sanitizedTeam2Name}</span>
+             <span className="text-gray-300">{sanitizedTeam2Name}</span>
            </div>
-           <div className="text-2xl font-bold text-white mt-1">
+           <div className="text-3xl font-bold text-white font-bodax uppercase tracking-wide">
              {match.mapSubmissions?.[mapKey]?.team1SubmittedScore?.team1Score || match.mapSubmissions?.[mapKey]?.team2SubmittedScore?.team1Score} - {match.mapSubmissions?.[mapKey]?.team1SubmittedScore?.team2Score || match.mapSubmissions?.[mapKey]?.team2SubmittedScore?.team2Score}
            </div>
          </div>
@@ -351,6 +370,7 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
             Waiting for {isTeam1 ? sanitizedTeam2Name : sanitizedTeam1Name} to submit...
           </div>
         </div>
+        </div>
       </div>
     );
   }
@@ -358,21 +378,30 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
   // If other team has submitted, show their score and allow agreement or new submission
   if (otherTeamSubmission) {
     return (
-      <div className="bg-gradient-to-br from-yellow-500/10 via-orange-600/10 to-yellow-700/10 backdrop-blur-sm rounded-lg p-4 border border-yellow-400/30 shadow-lg">
+      <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative border-l-4 border-yellow-600 pl-4">
         <div className="text-center mb-4">
-          <AlertTriangle className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
-          <h3 className="text-lg font-bold text-white mb-1">Other Team Has Submitted</h3>
-          <p className="text-yellow-200 text-sm">Review their score for {mapName} and either agree or submit your own</p>
+          <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
+          <h3 className="text-2xl font-bold text-white font-bodax uppercase tracking-wide mb-1">Other Team Has Submitted</h3>
+          <p className="text-yellow-400 text-sm font-mono uppercase tracking-widest">Review their score for {mapName} and either agree or submit your own</p>
         </div>
 
-                 <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-600/30 mb-4">
-           <h4 className="text-white font-bold mb-1 text-sm">{isTeam1 ? sanitizedTeam2Name : sanitizedTeam1Name} Submitted:</h4>
-           <div className="text-xl font-bold text-white">
-             <span className="text-blue-300">{sanitizedTeam1Name}</span>
+                 <div className="p-4 bg-[#0a0a0a] border border-gray-800 mb-4">
+           <h4 className="text-white font-bold mb-2 text-sm font-mono uppercase tracking-widest">{isTeam1 ? sanitizedTeam2Name : sanitizedTeam1Name} Submitted:</h4>
+           <div className="text-lg font-bold text-gray-400 font-mono uppercase tracking-widest text-xs mb-2">
+             <span className="text-gray-300">{sanitizedTeam1Name}</span>
              <span className="mx-2">-</span>
-             <span className="text-blue-300">{sanitizedTeam2Name}</span>
+             <span className="text-gray-300">{sanitizedTeam2Name}</span>
            </div>
-           <div className="text-2xl font-bold text-white mt-1">
+           <div className="text-3xl font-bold text-white font-bodax uppercase tracking-wide">
              {otherTeamSubmission.team1Score} - {otherTeamSubmission.team2Score}
            </div>
          </div>
@@ -385,7 +414,7 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
               <button
                 onClick={handleAgree}
                 disabled={isSubmitting}
-                className="flex items-center justify-center px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors text-sm"
+                className="flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors text-sm"
               >
                 <CheckCircle className="w-4 h-4 mr-1" />
                 Agree
@@ -397,7 +426,7 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
                   setTeam2Score(otherTeamSubmission.team2Score.toString());
                 }}
                 disabled={isSubmitting}
-                className="flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors text-sm"
+                className="flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors text-sm"
               >
                 Submit Different Score
               </button>
@@ -408,22 +437,22 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
             <h4 className="text-white font-bold mb-2 text-sm">Or submit your own score:</h4>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="block text-white font-medium mb-1 text-sm">{sanitizedTeam1Name}</label>
+                <label className="block text-white font-medium mb-1 text-sm font-mono uppercase tracking-widest">{sanitizedTeam1Name}</label>
                 <input
                   type="text"
                   value={team1Score}
                   onChange={(e) => handleScoreChange('team1', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-800 text-white text-center text-lg font-bold font-bodax uppercase tracking-wide focus:ring-2 focus:ring-red-500 focus:border-red-600"
                   placeholder="0"
                 />
               </div>
               <div>
-                <label className="block text-white font-medium mb-1 text-sm">{sanitizedTeam2Name}</label>
+                <label className="block text-white font-medium mb-1 text-sm font-mono uppercase tracking-widest">{sanitizedTeam2Name}</label>
                 <input
                   type="text"
                   value={team2Score}
                   onChange={(e) => handleScoreChange('team2', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-800 text-white text-center text-lg font-bold font-bodax uppercase tracking-wide focus:ring-2 focus:ring-red-500 focus:border-red-600"
                   placeholder="0"
                 />
               </div>
@@ -438,50 +467,60 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
             </button>
           </div>
         </div>
+        </div>
       </div>
     );
   }
 
   // Default submission form
   return (
-    <div className="bg-gradient-to-br from-green-500/10 via-emerald-600/10 to-green-700/10 backdrop-blur-sm rounded-lg p-4 border border-green-400/30 shadow-lg">
+    <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+      <div
+        className="absolute inset-0 pointer-events-none opacity-20"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }}
+      />
+      <div className="relative border-l-4 border-green-600 pl-4">
       <div className="text-center mb-4">
-        <h3 className="text-lg font-bold text-white mb-1">Submit Map {mapNumber} Result</h3>
-        <p className="text-green-200 text-sm">Enter the final score for {mapName}</p>
+        <h3 className="text-2xl font-bold text-white font-bodax uppercase tracking-wide mb-1">Submit Map {mapNumber} Result</h3>
+        <p className="text-green-400 text-sm font-mono uppercase tracking-widest">Enter the final score for {mapName}</p>
       </div>
 
              <div className="grid grid-cols-2 gap-3 mb-4">
          <div>
-           <label className="block text-white font-medium mb-1 text-sm">{sanitizedTeam1Name}</label>
+           <label className="block text-white font-medium mb-1 text-sm font-mono uppercase tracking-widest">{sanitizedTeam1Name}</label>
            <input
              type="text"
              value={team1Score}
              onChange={(e) => handleScoreChange('team1', e.target.value)}
-             className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+             className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-800 text-white text-center text-lg font-bold font-bodax uppercase tracking-wide focus:ring-2 focus:ring-red-500 focus:border-red-600"
              placeholder="0"
            />
          </div>
          <div>
-           <label className="block text-white font-medium mb-1 text-sm">{sanitizedTeam2Name}</label>
+           <label className="block text-white font-medium mb-1 text-sm font-mono uppercase tracking-widest">{sanitizedTeam2Name}</label>
            <input
              type="text"
              value={team2Score}
              onChange={(e) => handleScoreChange('team2', e.target.value)}
-             className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+             className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-800 text-white text-center text-lg font-bold font-bodax uppercase tracking-wide focus:ring-2 focus:ring-red-500 focus:border-red-600"
              placeholder="0"
            />
          </div>
        </div>
 
        <div className="text-center mb-4">
-         <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600/30">
-           <div className="text-sm text-gray-400 mb-1">Current Score:</div>
-           <div className="text-xl font-bold text-white">
-             <span className="text-blue-300">{sanitizedTeam1Name}</span>
+         <div className="bg-[#0a0a0a] border border-gray-800 p-4">
+           <div className="text-xs text-gray-500 mb-1 font-mono uppercase tracking-widest">Current Score:</div>
+           <div className="text-lg font-bold text-gray-400 font-mono uppercase tracking-widest mb-2">
+             <span className="text-gray-300">{sanitizedTeam1Name}</span>
              <span className="mx-2">-</span>
-             <span className="text-blue-300">{sanitizedTeam2Name}</span>
+             <span className="text-gray-300">{sanitizedTeam2Name}</span>
            </div>
-           <div className="text-2xl font-bold text-white mt-1">
+           <div className="text-3xl font-bold text-white font-bodax uppercase tracking-wide">
              {team1Score || '0'} - {team2Score || '0'}
            </div>
          </div>
@@ -491,15 +530,16 @@ const MapResultSubmission: React.FC<MapResultSubmissionProps> = ({
         <button
           onClick={handleSubmit}
           disabled={isSubmitting || !team1Score || !team2Score}
-          className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors text-sm"
+          className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors text-sm"
         >
           {isSubmitting ? 'Submitting...' : 'Submit Map Result'}
         </button>
       </div>
 
-      <div className="mt-3 text-center text-xs text-gray-400">
+      <div className="mt-3 text-center text-xs text-gray-500 font-mono uppercase tracking-widest">
         <p>Both teams must submit and agree on the results</p>
         <p>If scores don't match, a dispute will be created for admin review</p>
+      </div>
       </div>
     </div>
   );

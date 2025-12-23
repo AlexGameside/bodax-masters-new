@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Calendar, ChevronRight, Award, Zap, Clock, CheckCircle, RefreshCw } from 'lucide-react';
-import { getTournamentMatches, getTeamById, getTeams } from '../services/firebaseService';
-import type { Match, Team, Tournament } from '../types/tournament';
+import { Trophy, Users, Calendar, ChevronRight, Award, Zap, Clock, CheckCircle, RefreshCw, RotateCcw, ArrowRightLeft } from 'lucide-react';
+import { getTournamentMatches, getTeamById, getTeams, adminResetMatchToPreVeto, adminMoveTeamBetweenMatches } from '../services/firebaseService';
+import type { Match, Team, Tournament, User } from '../types/tournament';
 import { toast } from 'react-hot-toast';
 
 interface TournamentBracketProps {
@@ -31,6 +31,10 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [activeTab, setActiveTab] = useState<'winners' | 'losers' | 'grand-finals'>('winners');
+  const [moveTeamMode, setMoveTeamMode] = useState<{ matchId: string; teamId: string; teamSlot: 'team1Id' | 'team2Id' } | null>(null);
+  const [targetMatchId, setTargetMatchId] = useState<string>('');
+  const [targetSlot, setTargetSlot] = useState<'team1Id' | 'team2Id'>('team1Id');
+  const [resettingMatch, setResettingMatch] = useState<string | null>(null);
 
   // Auto-refresh every 5 seconds to catch updates
   useEffect(() => {
@@ -754,6 +758,151 @@ const TournamentBracket: React.FC<TournamentBracketProps> = ({ tournament, match
                         Complete Match
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Admin Reset to Pre-Veto and Move Team Controls */}
+                {isAdmin && currentUser && (selectedMatch.team1Id || selectedMatch.team2Id) && (
+                  <div className="bg-orange-900/20 border border-orange-500 rounded-lg p-4 space-y-3">
+                    <div className="text-orange-400 font-bold text-sm mb-3">ADMIN: MATCH MANAGEMENT</div>
+                    
+                    {/* Reset to Pre-Veto */}
+                    {selectedMatch.matchState !== 'ready_up' && (
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm('Are you sure you want to reset this match to pre-veto state? This will clear all map bans, side selections, and scores, but keep the teams.')) {
+                            return;
+                          }
+                          setResettingMatch(selectedMatch.id);
+                          try {
+                            await adminResetMatchToPreVeto(selectedMatch.id, currentUser.id);
+                            toast.success('Match reset to pre-veto state successfully!');
+                            setSelectedMatch(null);
+                            if (onRefresh) onRefresh();
+                          } catch (error: any) {
+                            toast.error(error.message || 'Failed to reset match');
+                          } finally {
+                            setResettingMatch(null);
+                          }
+                        }}
+                        disabled={resettingMatch === selectedMatch.id}
+                        className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-orange-700 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        <span>{resettingMatch === selectedMatch.id ? 'Resetting...' : 'Reset to Pre-Veto'}</span>
+                      </button>
+                    )}
+
+                    {/* Move Team Controls */}
+                    {!selectedMatch.isComplete && (selectedMatch.team1Id || selectedMatch.team2Id) && (
+                      <div className="space-y-2">
+                        {moveTeamMode?.matchId === selectedMatch.id ? (
+                          <div className="p-3 bg-gray-800 rounded-lg space-y-3">
+                            <div className="text-sm text-gray-300">
+                              Moving: <span className="font-semibold">{getTeamById(moveTeamMode.teamId)?.name}</span>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-300 mb-2">
+                                Target Match
+                              </label>
+                              <select
+                                value={targetMatchId}
+                                onChange={(e) => setTargetMatchId(e.target.value)}
+                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                              >
+                                <option value="">Select target match...</option>
+                                {matches
+                                  .filter(m => m.id !== selectedMatch.id && !m.isComplete && m.tournamentId === tournament.id)
+                                  .map(m => (
+                                    <option key={m.id} value={m.id}>
+                                      Match {m.matchNumber} - Round {m.round} ({getTeamById(m.team1Id)?.name || 'TBD'} vs {getTeamById(m.team2Id)?.name || 'TBD'})
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-300 mb-2">
+                                Target Slot
+                              </label>
+                              <select
+                                value={targetSlot}
+                                onChange={(e) => setTargetSlot(e.target.value as 'team1Id' | 'team2Id')}
+                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                              >
+                                <option value="team1Id">Team 1 Slot</option>
+                                <option value="team2Id">Team 2 Slot</option>
+                              </select>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={async () => {
+                                  if (!targetMatchId) {
+                                    toast.error('Please select a target match');
+                                    return;
+                                  }
+                                  if (!window.confirm(`Are you sure you want to move ${getTeamById(moveTeamMode.teamId)?.name} to the target match? This will reset both matches.`)) {
+                                    return;
+                                  }
+                                  try {
+                                    await adminMoveTeamBetweenMatches(
+                                      moveTeamMode.matchId,
+                                      targetMatchId,
+                                      moveTeamMode.teamId,
+                                      targetSlot,
+                                      currentUser.id
+                                    );
+                                    toast.success('Team moved successfully!');
+                                    setMoveTeamMode(null);
+                                    setTargetMatchId('');
+                                    setTargetSlot('team1Id');
+                                    setSelectedMatch(null);
+                                    if (onRefresh) onRefresh();
+                                  } catch (error: any) {
+                                    toast.error(error.message || 'Failed to move team');
+                                  }
+                                }}
+                                disabled={!targetMatchId}
+                                className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-700 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
+                              >
+                                <ArrowRightLeft className="w-4 h-4" />
+                                <span>Move Team</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setMoveTeamMode(null);
+                                  setTargetMatchId('');
+                                  setTargetSlot('team1Id');
+                                }}
+                                className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors text-sm"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex space-x-2">
+                            {selectedMatch.team1Id && (
+                              <button
+                                onClick={() => setMoveTeamMode({ matchId: selectedMatch.id, teamId: selectedMatch.team1Id!, teamSlot: 'team1Id' })}
+                                className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm"
+                              >
+                                <ArrowRightLeft className="w-3 h-3" />
+                                <span className="truncate">Move {getTeamById(selectedMatch.team1Id)?.name?.substring(0, 15)}</span>
+                              </button>
+                            )}
+                            {selectedMatch.team2Id && (
+                              <button
+                                onClick={() => setMoveTeamMode({ matchId: selectedMatch.id, teamId: selectedMatch.team2Id!, teamSlot: 'team2Id' })}
+                                className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm"
+                              >
+                                <ArrowRightLeft className="w-3 h-3" />
+                                <span className="truncate">Move {getTeamById(selectedMatch.team2Id)?.name?.substring(0, 15)}</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 

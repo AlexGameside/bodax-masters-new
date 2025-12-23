@@ -353,6 +353,7 @@ export interface TournamentFormat {
   type: TournamentType;
   teamCount: number;
   matchFormat: MatchFormat;
+  finalsMatchFormat?: MatchFormat;
   mapPool: string[];
   sideSelection: SideSelectionMethod;
   seedingMethod: SeedingMethod;

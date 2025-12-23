@@ -1,289 +1,153 @@
 import { Link } from 'react-router-dom';
-import { 
-  Trophy, 
-  Users, 
-  Zap, 
-  Crown, 
-  ArrowRight,
-  CheckCircle,
-  Gamepad2,
-  Sparkles,
-  Target,
-  Award,
-  MessageSquare
-} from 'lucide-react';
-import DiscordLinkPopup from '../components/DiscordLinkPopup';
+import { Trophy, Users } from 'lucide-react';
 
 const LandingPage = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white font-sans relative overflow-hidden">
-      {/* Discord Link Popup */}
-      <DiscordLinkPopup />
-      {/* Simplified background pattern */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-3" 
-           style={{
-             backgroundImage: `
-               radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-               radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%)
-             `
-           }} />
+    <div className="min-h-screen bg-[#050505] text-white font-sans relative overflow-hidden">
       
-      {/* Reduced floating elements */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute top-20 right-20 w-1 h-1 bg-purple-400 rounded-full"></div>
-        <div className="absolute bottom-40 right-40 w-1 h-1 bg-pink-400 rounded-full"></div>
-      </div>
-
       {/* Hero Section */}
-      <section className="relative py-32 overflow-hidden">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-20">
-          <div className="text-center max-w-5xl mx-auto">
-            {/* Badge */}
-            <div className="inline-flex items-center space-x-2 mb-8 px-4 py-2 bg-white/10 rounded-full border border-white/20">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-              <span className="text-sm font-medium text-purple-300">Unity League</span>
-            </div>
-            
-            {/* Main heading */}
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-8 leading-tight text-white tracking-tight">
-              Unity League
-            </h1>
-            
-            {/* Subtitle */}
-            <p className="text-xl sm:text-2xl text-gray-300 mb-12 font-light max-w-3xl mx-auto">
-              Erlebe das ultimative Competitive Gaming mit unserem innovativen Turniersystem
+      <section className="relative py-28 sm:py-44 flex flex-col items-center justify-center text-center px-4 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,0,76,0.08),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(0,178,255,0.08),transparent_35%)] pointer-events-none" />
+        <div className="max-w-6xl mx-auto z-10">
+          <p className="text-sm uppercase tracking-[0.35em] text-red-500 font-mono mb-6">Bodax Masters Platform</p>
+          <div className="text-5xl sm:text-7xl lg:text-8xl font-bold font-bodax tracking-wider text-white mb-4">
+            Host. Compete. Win.
+          </div>
+          <p className="text-lg sm:text-2xl font-mono text-gray-300 max-w-3xl mx-auto mb-12">
+            We run Bodax-led events and give organizers the same tools to launch, manage, and broadcast tournaments. Single elim, double elim, BO1 to BO3 finals — all in one sharp, Bodax-styled experience.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center">
+            <Link 
+              to="/tournaments" 
+              className="bg-red-600 hover:bg-red-700 text-white py-4 px-10 font-bodax text-xl uppercase tracking-wider transition-all duration-300 border border-red-800 hover:border-red-500"
+            >
+              View Tournaments
+            </Link>
+            <Link 
+              to="/register" 
+              className="bg-transparent hover:bg-white/5 text-white py-4 px-10 font-bodax text-xl uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500"
+            >
+              Create Account
+            </Link>
+            <Link
+              to="/tournaments/create"
+              className="bg-[#0a0a0a] hover:bg-black text-red-400 hover:text-white py-4 px-10 font-bodax text-xl uppercase tracking-wider transition-all duration-300 border border-red-900 hover:border-red-600"
+            >
+              Host A Tournament
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Platform Value */}
+      <section className="py-16 border-t border-gray-900 bg-[#080808]">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 mb-12">
+            <h3 className="text-4xl font-bodax tracking-widest text-white uppercase">
+              <span className="text-red-600">/</span> Built For Competition
+            </h3>
+            <p className="text-gray-400 font-mono max-w-2xl">
+              Bodax Masters is a tournament control room: bracket engines, ready-checks, map veto, scheduling, and dispute handling — all skinned in the Bodax look.
             </p>
-            
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-              <Link to="/register" className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-4 px-8 rounded-xl shadow-xl transition-colors duration-150 text-lg inline-flex items-center justify-center space-x-2">
-                <span>Jetzt starten</span>
-                <ArrowRight className="w-5 h-5" />
-              </Link>
-              <Link to="/tournaments" className="bg-white/10 hover:bg-white/20 text-white font-semibold py-4 px-8 rounded-xl border border-white/20 transition-colors duration-150 text-lg">
-                Turniere anzeigen
-              </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="bg-[#0a0a0a] border border-gray-800 hover:border-red-800 transition-colors p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gray-900 flex items-center justify-center border border-red-900">
+                  <Trophy className="w-6 h-6 text-red-500" />
+                </div>
+                <span className="font-bodax text-2xl tracking-wide">Tournament Core</span>
+              </div>
+              <ul className="space-y-2 text-gray-400 font-mono text-sm leading-relaxed">
+                <li>Single & Double Elim with BO1 → BO3 finals</li>
+                <li>Live bracket updates and match hubs</li>
+                <li>Automated map veto + side selection</li>
+              </ul>
+            </div>
+
+            <div className="bg-[#0a0a0a] border border-gray-800 hover:border-red-800 transition-colors p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gray-900 flex items-center justify-center border border-red-900">
+                  <Users className="w-6 h-6 text-red-500" />
+                </div>
+                <span className="font-bodax text-2xl tracking-wide">Teams & Players</span>
+              </div>
+              <ul className="space-y-2 text-gray-400 font-mono text-sm leading-relaxed">
+                <li>Ready-up flows, roster checks, subs</li>
+                <li>Match chat, scheduling, and admin tickets</li>
+                <li>Clear status for captains and staff</li>
+              </ul>
+            </div>
+
+            <div className="bg-[#0a0a0a] border border-gray-800 hover:border-red-800 transition-colors p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gray-900 flex items-center justify-center border border-red-900">
+                  <div className="font-bodax text-xl text-red-500">/</div>
+                </div>
+                <span className="font-bodax text-2xl tracking-wide">For Organizers</span>
+              </div>
+              <ul className="space-y-2 text-gray-400 font-mono text-sm leading-relaxed">
+                <li>Custom branding with Bodax styling</li>
+                <li>Admin controls for reschedules & rulings</li>
+                <li>Launch events in minutes with presets</li>
+              </ul>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Section Divider */}
-      <div className="relative z-10">
-        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent"></div>
-        <div className="h-16 bg-gradient-to-b from-purple-900/50 to-transparent"></div>
-      </div>
-
-      {/* Tournament Schedule Section */}
-      <section className="py-24 relative z-10 bg-gradient-to-b from-transparent via-purple-900/20 to-transparent">
+      {/* How it Works */}
+      <section className="py-18 border-t border-gray-900 bg-[#050505]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-              Turnier Zeitplan
-            </h2>
-            <div className="w-24 h-1 bg-gradient-to-r from-purple-500 to-pink-500 mx-auto mb-6"></div>
-            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-              Der Weg zum Unity League Champion
+          <div className="text-center mb-14">
+            <h3 className="text-4xl font-bodax tracking-wider text-white uppercase mb-4">Run Events, Bodax Style</h3>
+            <p className="text-gray-400 font-mono max-w-3xl mx-auto">
+              A streamlined flow for both players and staff — no fluff, just the essentials to get teams playing fast.
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            {/* Group Stage */}
-            <div className="group bg-gradient-to-br from-purple-600/20 to-pink-600/20 border border-purple-500/30 rounded-2xl p-8 hover:bg-purple-600/30 transition-colors duration-150 shadow-xl">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl flex items-center justify-center mb-6 transition-transform duration-150 group-hover:scale-105">
-                <Users className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-4">Gruppenphase</h3>
-              <div className="text-gray-300 mb-4">
-                <p className="text-sm font-medium">Start: Montag, 08.09</p>
-                <p className="text-sm font-medium">Ende: 12.10</p>
-              </div>
-              <p className="text-gray-400 leading-relaxed">
-                Die erste Phase des Turniers mit Swiss-System Matchmaking
-              </p>
+            <div className="bg-[#0a0a0a] border border-gray-800 p-8">
+              <div className="text-red-500 font-bodax text-3xl mb-4">01</div>
+              <h4 className="text-2xl font-bodax uppercase tracking-wide mb-3">Create or Join</h4>
+              <p className="text-gray-400 font-mono text-sm">Spin up a bracket or join an open event. Configure formats, match lengths, and admin roles.</p>
             </div>
-
-            {/* Playoffs */}
-            <div className="group bg-gradient-to-br from-cyan-600/20 to-blue-600/20 border border-cyan-500/30 rounded-2xl p-8 hover:bg-cyan-600/30 transition-colors duration-150 shadow-xl">
-              <div className="w-16 h-16 bg-gradient-to-br from-cyan-600 to-blue-600 rounded-2xl flex items-center justify-center mb-6 transition-transform duration-150 group-hover:scale-105">
-                <Trophy className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-4">Playoffs</h3>
-              <div className="text-gray-300 mb-4">
-                <p className="text-sm font-medium">Start: 22.10</p>
-                <p className="text-sm font-medium">Ende: 25.10</p>
-              </div>
-              <p className="text-gray-400 leading-relaxed">
-                Die besten Teams kämpfen um den Einzug ins Finale
-              </p>
+            <div className="bg-[#0a0a0a] border border-gray-800 p-8">
+              <div className="text-red-500 font-bodax text-3xl mb-4">02</div>
+              <h4 className="text-2xl font-bodax uppercase tracking-wide mb-3">Lock Teams In</h4>
+              <p className="text-gray-400 font-mono text-sm">Ready checks, roster confirmations, and map bans keep everyone synced before each match.</p>
             </div>
-
-            {/* Offline Final */}
-            <div className="group bg-gradient-to-br from-pink-600/20 to-red-600/20 border border-pink-500/30 rounded-2xl p-8 hover:bg-pink-600/30 transition-colors duration-150 shadow-xl">
-              <div className="w-16 h-16 bg-gradient-to-br from-pink-600 to-red-600 rounded-2xl flex items-center justify-center mb-6 transition-transform duration-150 group-hover:scale-105">
-                <Crown className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-4">Offline Finale</h3>
-              <div className="text-gray-300 mb-4">
-                <p className="text-sm font-medium">Datum: 15.11</p>
-                <p className="text-sm font-medium">Ort: Linz</p>
-              </div>
-              <p className="text-gray-400 leading-relaxed">
-                Das große Finale live vor Ort - der Weg zum Unity League Champion
-              </p>
+            <div className="bg-[#0a0a0a] border border-gray-800 p-8">
+              <div className="text-red-500 font-bodax text-3xl mb-4">03</div>
+              <h4 className="text-2xl font-bodax uppercase tracking-wide mb-3">Play & Advance</h4>
+              <p className="text-gray-400 font-mono text-sm">Real-time bracket updates, BO1 to BO3 finals, dispute handling, and result submission.</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Section Divider */}
-      <div className="relative z-10">
-        <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
-        <div className="h-16 bg-gradient-to-b from-cyan-900/30 to-transparent"></div>
-      </div>
-
-      {/* Features Section */}
-      <section className="py-24 relative z-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-              Warum Unity League?
-            </h2>
-            <div className="w-24 h-1 bg-gradient-to-r from-cyan-500 to-blue-500 mx-auto mb-6"></div>
-            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-              Erlebe Competitive Gaming wie nie zuvor mit unseren einzigartigen Features
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            {/* Swiss System */}
-            <div className="group bg-white/5 border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-colors duration-150 hover:border-purple-500/30 shadow-lg">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl flex items-center justify-center mb-6 transition-transform duration-150 group-hover:scale-105">
-                <Users className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-4">Swiss Turniersystem</h3>
-              <p className="text-gray-400 leading-relaxed">
-                Faires Matchmaking mit mehreren Chancen, durch das Turnier aufzusteigen
-              </p>
-            </div>
-
-            {/* Team Scheduling */}
-            <div className="group bg-white/5 border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-colors duration-150 hover:border-cyan-500/30 shadow-lg">
-              <div className="w-16 h-16 bg-gradient-to-br from-cyan-600 to-blue-600 rounded-2xl flex items-center justify-center mb-6 transition-transform duration-150 group-hover:scale-105">
-                <Zap className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-4">Flexibles Team Scheduling</h3>
-              <p className="text-gray-400 leading-relaxed">
-                Plane Matches zu Zeiten, die für dein Team funktionieren
-              </p>
-            </div>
-
-            {/* Competitive Experience */}
-            <div className="group bg-white/5 border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-colors duration-150 hover:border-pink-500/30 shadow-lg">
-              <div className="w-16 h-16 bg-gradient-to-br from-pink-600 to-red-600 rounded-2xl flex items-center justify-center mb-6 transition-transform duration-150 group-hover:scale-105">
-                <Target className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-4">Professionelle Erfahrung</h3>
-              <p className="text-gray-400 leading-relaxed">
-                Konkurriere in einer strukturierten Umgebung für ernsthafte Spieler und Teams
-              </p>
-            </div>
+      {/* Final CTA */}
+      <section className="py-20 border-t border-gray-900 bg-[#080808]">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h3 className="text-4xl font-bodax tracking-wider text-white uppercase mb-4">Ready to host or play?</h3>
+          <p className="text-gray-400 font-mono max-w-3xl mx-auto mb-10">
+            Bodax Masters is open for organizers, teams, and players. Bring your bracket, your community, and we’ll handle the tournament flow.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center">
+            <Link to="/tournaments" className="bg-red-600 hover:bg-red-700 text-white py-4 px-10 font-bodax text-xl uppercase tracking-wider transition-all duration-300">
+              Explore Events
+            </Link>
+            <Link to="/tournaments/create" className="bg-transparent hover:bg-white/5 text-white py-4 px-10 font-bodax text-xl uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500">
+              Start Hosting
+            </Link>
           </div>
         </div>
       </section>
-
-      {/* Section Divider */}
-      <div className="relative z-10">
-        <div className="h-px bg-gradient-to-r from-transparent via-pink-500/50 to-transparent"></div>
-        <div className="h-16 bg-gradient-to-b from-pink-900/30 to-transparent"></div>
-      </div>
-
-      {/* How It Works Section */}
-      <section className="py-24 bg-gradient-to-b from-transparent via-pink-900/20 to-transparent relative z-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-              Wie es funktioniert
-            </h2>
-            <div className="w-24 h-1 bg-gradient-to-r from-pink-500 to-red-500 mx-auto mb-6"></div>
-            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-              Einfache Schritte, um mit Unity League zu starten
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform duration-150 group-hover:scale-105 shadow-lg">
-                <span className="text-2xl font-bold text-white">1</span>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-4">Team registrieren</h3>
-              <p className="text-gray-400">
-                Erstelle dein Team-Profil und tritt der Liga bei
-              </p>
-            </div>
-            
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-br from-cyan-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform duration-150 group-hover:scale-105 shadow-lg">
-                <span className="text-2xl font-bold text-white">2</span>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-4">Matches spielen</h3>
-              <p className="text-gray-400">
-                Konkurriere in geplanten Matches und steige auf der Leiter auf
-              </p>
-            </div>
-            
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-br from-pink-600 to-red-600 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform duration-150 group-hover:scale-105 shadow-lg">
-                <span className="text-2xl font-bold text-white">3</span>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-4">Gewinnen & Aufsteigen</h3>
-              <p className="text-gray-400">
-                Gewinne und komme nach Linz in die Offline-Finals
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Section Divider */}
-      <div className="relative z-10">
-        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent"></div>
-        <div className="h-16 bg-gradient-to-b from-purple-900/50 to-transparent"></div>
-      </div>
-
-      {/* Final CTA Section */}
-      <section className="py-24 relative z-10">
-        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-          <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-white/10 rounded-3xl p-12 shadow-2xl">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-              Bereit zu konkurrieren?
-            </h2>
-            <div className="w-24 h-1 bg-gradient-to-r from-purple-500 to-pink-500 mx-auto mb-6"></div>
-            <p className="text-lg sm:text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-              Tritt Unity League heute bei und erlebe Competitive Gaming in seiner besten Form
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/register" className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-4 px-8 rounded-xl shadow-xl transition-colors duration-150 text-lg inline-flex items-center justify-center space-x-2">
-                <span>Jetzt beitreten</span>
-                <ArrowRight className="w-5 h-5" />
-              </Link>
-            </div>
-            <div className="mt-6">
-              <a 
-                href="https://discord.gg/ewAk7wBgHT" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="inline-flex items-center text-cyan-400 hover:text-cyan-300 transition-colors duration-150 text-sm"
-              >
-                <MessageSquare className="w-4 h-4 mr-2" />
-                Tritt unserer Discord Community bei
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
+      
     </div>
   );
 };
 
-export default LandingPage; 
+export default LandingPage;

@@ -14,7 +14,9 @@ import SideSelection from '../components/SideSelection';
 import MatchInProgress from '../components/MatchInProgress';
 import MatchChat from '../components/MatchChat';
 import TicketCreationModal from '../components/TicketCreationModal';
+import PostMatchAnalytics from '../components/PostMatchAnalytics';
 import { ArrowLeft, Trophy, Clock, CheckCircle, User as UserIcon, BarChart3, Target, AlertTriangle, MessageSquare } from 'lucide-react';
+import { DEFAULT_MAP_POOL } from '../constants/mapPool';
 
 const MatchPage = () => {
   const params = useParams<{ matchId: string }>();
@@ -182,7 +184,7 @@ const MatchPage = () => {
           bracketType: data.bracketType,
           createdAt: data.createdAt?.toDate() || new Date(),
           matchState: data.matchState || 'ready_up',
-          mapPool: data.mapPool || ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+          mapPool: data.mapPool || [...DEFAULT_MAP_POOL],
           bannedMaps: data.bannedMaps || { team1: [], team2: [] },
           selectedMap: data.selectedMap,
           team1Ready: data.team1Ready || false,
@@ -495,6 +497,8 @@ const MatchPage = () => {
     );
   }
 
+  const isBO3Match = match.matchFormat === 'BO3' || match.bracketType === 'grand_final';
+
 
 
   const handleResetMatch = async () => {
@@ -602,33 +606,47 @@ const MatchPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <div className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+    <div className="min-h-screen bg-[#050505] relative">
+      {/* Background Grid Pattern */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-20" 
+           style={{
+             backgroundImage: 'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+             backgroundSize: '40px 40px'
+           }} />
+
+      <div className="bg-[#0a0a0a] border-b border-gray-800 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-6">
               <button
                 onClick={() => navigate(-1)}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-500 hover:text-red-500 transition-colors"
               >
-                <ArrowLeft className="w-6 h-6" />
+                <ArrowLeft className="w-8 h-8" />
               </button>
               <div>
-                <h1 className="text-xl font-semibold text-white">Match #{match.matchNumber}</h1>
-                <p className="text-sm text-gray-400">
-                  Round {match.round} • {match.tournamentType === 'qualifier' ? 'Qualifier' : 'Final Event'}
+                <div className="flex items-center gap-3">
+                  <h1 className="text-3xl md:text-4xl font-bold text-white font-bodax tracking-wide uppercase leading-none">
+                    Match #{match.matchNumber}
+                  </h1>
+                  <span className="px-2 py-0.5 bg-gray-900 border border-gray-700 text-gray-400 text-xs font-mono uppercase tracking-widest">
+                    {match.tournamentType === 'qualifier' ? 'Qualifier' : 'Finals'}
+                  </span>
+                </div>
+                <p className="text-red-500 font-mono text-sm tracking-widest uppercase mt-1">
+                  Round {match.round}
                 </p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Trophy className="w-5 h-5 text-yellow-400" />
-              <span className="text-sm text-gray-300">Tournament Match</span>
+            <div className="flex items-center space-x-3 bg-gray-900/50 border border-gray-800 px-4 py-2">
+              <Trophy className="w-5 h-5 text-red-500" />
+              <span className="text-sm text-gray-300 font-mono uppercase tracking-wider">Tournament Match</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Swiss System Match Scheduling */}
         {(match.tournamentType === 'swiss-round') && match.matchState === 'pending_scheduling' && (
           <div className="mb-8">
@@ -651,41 +669,52 @@ const MatchPage = () => {
                   onStartMatch={handleSchedulingStartMatch}
                 />
               </div>
-              <div>
-                <MatchChat 
-                  matchId={match.id} 
-                  userTeam={userTeam} 
-                  teams={teams} 
-                  isAdmin={currentUser?.isAdmin}
-                />
-              </div>
+              {/* Hide chat when match is completed (PostMatchAnalytics is shown) */}
+              {!(match.matchState === 'completed' && match.isComplete) && (
+                <div>
+                  <MatchChat 
+                    matchId={match.id} 
+                    userTeam={userTeam} 
+                    teams={teams} 
+                    isAdmin={currentUser?.isAdmin}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* Match Progress */}
-        <div className="bg-gray-800 rounded-lg shadow-sm p-6 mb-6 border border-gray-700">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white flex items-center">
-              <BarChart3 className="w-5 h-5 mr-2 text-blue-400" />
+        <div className="bg-[#0a0a0a] border border-gray-800 p-6 mb-8 relative group overflow-hidden">
+          {/* Corner accents */}
+          <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-red-600"></div>
+          <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-red-600"></div>
+          <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-red-600"></div>
+          <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-red-600"></div>
+
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-white font-bodax tracking-wide uppercase flex items-center">
+              <BarChart3 className="w-6 h-6 mr-3 text-red-500" />
               Match Progress
             </h2>
-            <span className="text-sm text-gray-300">{progress.label}</span>
+            <span className="text-sm text-red-400 font-mono tracking-widest uppercase">{progress.label}</span>
           </div>
-          <div className="w-full bg-gray-700 rounded-full h-3">
+          
+          <div className="w-full bg-gray-900 h-2 mb-2 overflow-hidden">
             <div 
-              className="bg-blue-500 h-3 rounded-full transition-all duration-500"
+              className="bg-red-600 h-full transition-all duration-500 ease-out"
               style={{ width: `${(progress.step / progress.total) * 100}%` }}
             ></div>
           </div>
-          <div className="flex justify-between text-xs text-gray-400 mt-2">
+          
+          <div className="flex justify-between text-[10px] text-gray-600 font-mono uppercase tracking-widest mt-3">
             <span>Scheduling</span>
             <span>Scheduled</span>
             <span>Ready Up</span>
-            <span>Map Banning</span>
-            <span>Side Selection</span>
+            <span>Map Ban</span>
+            <span>Side Select</span>
             <span>Playing</span>
-            <span>Completed</span>
+            <span>Complete</span>
           </div>
         </div>
 
@@ -738,41 +767,51 @@ const MatchPage = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-white mb-2">{team1?.name || 'Team 1'}</h3>
-              <div className="flex items-center justify-center mb-3">
-                {match.team1Ready ? (
-                  <CheckCircle className="w-5 h-5 text-green-400 mr-2" />
-                ) : (
-                  <Clock className="w-5 h-5 text-gray-500 mr-2" />
-                )}
-                <span className={`text-sm ${match.team1Ready ? 'text-green-400' : 'text-gray-400'}`}>
-                  {match.team1Ready ? 'Ready' : 'Not Ready'}
-                </span>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          {/* Team 1 Card */}
+          <div className="bg-[#0a0a0a] border border-gray-800 p-8 flex flex-col items-center relative hover:border-red-900/50 transition-colors group">
+            <div className="text-center w-full">
+              <h3 className="text-3xl font-bold text-white mb-2 font-bodax tracking-wide uppercase">{team1?.name || 'Team 1'}</h3>
+              <div className="h-px w-16 bg-gray-800 mx-auto mb-6 group-hover:bg-red-900 transition-colors"></div>
+              
+              <div className="flex items-center justify-center mb-6">
+                <div className={`flex items-center space-x-2 px-4 py-2 border ${
+                  match.team1Ready 
+                    ? 'border-green-900 bg-green-900/10 text-green-500' 
+                    : 'border-gray-800 bg-gray-900/50 text-gray-500'
+                }`}>
+                  {match.team1Ready ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <Clock className="w-4 h-4" />
+                  )}
+                  <span className="font-mono text-xs uppercase tracking-widest font-bold">
+                    {match.team1Ready ? 'READY' : 'NOT READY'}
+                  </span>
+                </div>
               </div>
+
               {currentUser?.isAdmin && team1 && team1Players.length > 0 && (
                 <button
-                  className="mt-2 mb-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded text-xs"
+                  className="mb-4 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-700 font-mono text-xs uppercase tracking-wider transition-colors w-full"
                   onClick={() => {
                     setShowReadyUpModal(true);
                     setAdminReadyUpTeam(team1);
                   }}
                 >
-                  Admin: Force Ready Up & Select Players
+                  Admin: Force Ready Up
                 </button>
               )}
               
               {bothTeamsReady && team1Players.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center justify-center">
-                    <UserIcon className="w-4 h-4 mr-1" />
-                    Riot Names
+                <div className="mt-6 w-full text-left">
+                  <h4 className="text-xs font-bold text-red-500 mb-3 font-mono uppercase tracking-widest flex items-center border-b border-gray-900 pb-2">
+                    <UserIcon className="w-3 h-3 mr-2" />
+                    Active Roster
                   </h4>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {team1Players.map((player, index) => (
-                      <div key={index} className="text-sm text-gray-300 bg-gray-700 px-3 py-1 rounded">
+                      <div key={index} className="text-sm text-gray-400 font-mono bg-gray-900/30 px-3 py-2 border-l-2 border-gray-800 hover:border-red-900 hover:text-white transition-colors">
                         {player.riotId || player.username}
                       </div>
                     ))}
@@ -782,34 +821,19 @@ const MatchPage = () => {
             </div>
           </div>
 
-          <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
+          {/* Center Status */}
+          <div className="bg-[#0a0a0a] border border-gray-800 p-6 flex flex-col justify-center relative">
             <div className="text-center">
-              <h3 className="text-lg font-semibold text-white mb-2">Match Status</h3>
-              <div className="mb-4">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                  match.matchState === 'pending_scheduling' ? 'bg-yellow-900 text-yellow-200' :
-                  match.matchState === 'scheduled' ? 'bg-blue-900 text-blue-200' :
-                  match.matchState === 'ready_up' ? 'bg-yellow-900 text-yellow-200' :
-                  match.matchState === 'map_banning' ? 'bg-blue-900 text-blue-200' :
-                  match.matchState === 'side_selection_map1' ? 'bg-purple-900 text-purple-200' :
-                  match.matchState === 'side_selection_map2' ? 'bg-purple-900 text-purple-200' :
-                  match.matchState === 'side_selection_decider' ? 'bg-purple-900 text-purple-200' :
-                  match.matchState === 'playing' ? 'bg-green-900 text-green-200' :
-                  match.matchState === 'waiting_results' ? 'bg-yellow-900 text-yellow-200' :
-                  match.matchState === 'disputed' ? 'bg-red-900 text-red-200' :
-                  'bg-gray-700 text-gray-200'
+              <h3 className="text-xl font-bold text-white mb-4 font-bodax tracking-wide uppercase border-b border-gray-800 pb-4">Match Status</h3>
+              
+              <div className="mb-6">
+                <span className={`inline-block px-4 py-2 text-sm font-bold font-mono uppercase tracking-widest border ${
+                  match.matchState === 'playing' ? 'text-green-500 border-green-900 bg-green-900/10' :
+                  match.matchState === 'completed' ? 'text-gray-400 border-gray-700 bg-gray-800' :
+                  match.matchState === 'disputed' ? 'text-red-500 border-red-900 bg-red-900/10' :
+                  'text-yellow-500 border-yellow-900 bg-yellow-900/10'
                 }`}>
-                  {match.matchState === 'pending_scheduling' ? 'Scheduling Required' :
-                   match.matchState === 'scheduled' ? 'Match Scheduled' :
-                   match.matchState === 'ready_up' ? 'Ready Up Phase' :
-                   match.matchState === 'map_banning' ? 'Map Banning' :
-                   match.matchState === 'side_selection_map1' ? 'Map 1 Side Selection' :
-                   match.matchState === 'side_selection_map2' ? 'Map 2 Side Selection' :
-                   match.matchState === 'side_selection_decider' ? 'Decider Side Selection' :
-                   match.matchState === 'playing' ? 'Match in Progress' :
-                   match.matchState === 'waiting_results' ? 'Results Submission' :
-                   match.matchState === 'disputed' ? 'Disputed - Needs Admin' :
-                   'Completed'}
+                  {match.matchState.replace(/_/g, ' ')}
                 </span>
               </div>
               
@@ -888,40 +912,50 @@ const MatchPage = () => {
             </div>
           </div>
 
-          <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-white mb-2">{team2?.name || 'Team 2'}</h3>
-              <div className="flex items-center justify-center mb-3">
-                {match.team2Ready ? (
-                  <CheckCircle className="w-5 h-5 text-green-400 mr-2" />
-                ) : (
-                  <Clock className="w-5 h-5 text-gray-500 mr-2" />
-                )}
-                <span className={`text-sm ${match.team2Ready ? 'text-green-400' : 'text-gray-400'}`}>
-                  {match.team2Ready ? 'Ready' : 'Not Ready'}
-                </span>
+          {/* Team 2 Card */}
+          <div className="bg-[#0a0a0a] border border-gray-800 p-8 flex flex-col items-center relative hover:border-red-900/50 transition-colors group">
+            <div className="text-center w-full">
+              <h3 className="text-3xl font-bold text-white mb-2 font-bodax tracking-wide uppercase">{team2?.name || 'Team 2'}</h3>
+              <div className="h-px w-16 bg-gray-800 mx-auto mb-6 group-hover:bg-red-900 transition-colors"></div>
+              
+              <div className="flex items-center justify-center mb-6">
+                <div className={`flex items-center space-x-2 px-4 py-2 border ${
+                  match.team2Ready 
+                    ? 'border-green-900 bg-green-900/10 text-green-500' 
+                    : 'border-gray-800 bg-gray-900/50 text-gray-500'
+                }`}>
+                  {match.team2Ready ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <Clock className="w-4 h-4" />
+                  )}
+                  <span className="font-mono text-xs uppercase tracking-widest font-bold">
+                    {match.team2Ready ? 'READY' : 'NOT READY'}
+                  </span>
+                </div>
               </div>
+
               {currentUser?.isAdmin && team2 && team2Players.length > 0 && (
                 <button
-                  className="mt-2 mb-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded text-xs"
+                  className="mb-4 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-700 font-mono text-xs uppercase tracking-wider transition-colors w-full"
                   onClick={() => {
                     setShowReadyUpModal(true);
                     setAdminReadyUpTeam(team2);
                   }}
                 >
-                  Admin: Force Ready Up & Select Players
+                  Admin: Force Ready Up
                 </button>
               )}
               
               {bothTeamsReady && team2Players.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center justify-center">
-                    <UserIcon className="w-4 h-4 mr-1" />
-                    Riot Names
+                <div className="mt-6 w-full text-left">
+                  <h4 className="text-xs font-bold text-red-500 mb-3 font-mono uppercase tracking-widest flex items-center border-b border-gray-900 pb-2">
+                    <UserIcon className="w-3 h-3 mr-2" />
+                    Active Roster
                   </h4>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {team2Players.map((player, index) => (
-                      <div key={index} className="text-sm text-gray-300 bg-gray-700 px-3 py-1 rounded">
+                      <div key={index} className="text-sm text-gray-400 font-mono bg-gray-900/30 px-3 py-2 border-l-2 border-gray-800 hover:border-red-900 hover:text-white transition-colors">
                         {player.riotId || player.username}
                       </div>
                     ))}
@@ -1014,8 +1048,8 @@ const MatchPage = () => {
 
         {/* Main Grid - Show for all states except pending_scheduling */}
         {!(match.tournamentType === 'swiss-round' && match.matchState === 'pending_scheduling') && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-            <div className="lg:col-span-3">
+          <div className={`grid grid-cols-1 gap-6 mb-6 ${match.matchState === 'completed' && match.isComplete ? 'lg:grid-cols-1' : 'lg:grid-cols-4'}`}>
+            <div className={match.matchState === 'completed' && match.isComplete ? 'lg:col-span-1' : 'lg:col-span-3'}>
               {match.matchState === 'map_banning' && (
               <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
                 <MapBanning
@@ -1064,160 +1098,45 @@ const MatchPage = () => {
 
 
 
-            {(match.matchState === 'completed' || match.matchState === 'forfeited') && (
-              <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
-                {/* Match Completed Status */}
-                <div className="text-center mb-6">
-                  <div className="flex items-center justify-center space-x-3 mb-4">
-                    <div className="bg-green-500 p-3 rounded-lg">
-                      <Trophy className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-white">
-                        {match.matchState === 'completed' ? 'Match Completed' : 'Match Forfeited'}
-                      </h3>
-                      <p className="text-gray-300">
-                        {match.matchState === 'completed' ? 'Results have been submitted and confirmed' : 'Match ended due to forfeit'}
-                      </p>
-                    </div>
-                  </div>
+            {/* Post-Match Analytics - Show First */}
+            {(() => {
+              console.log('[MatchPage] Checking if PostMatchAnalytics should render:', {
+                matchId: match.id,
+                matchState: match.matchState,
+                isComplete: match.isComplete,
+                hasAutoDetectedResult: !!match.autoDetectedResult,
+                hasMatchDetails: !!match.autoDetectedResult?.matchDetails
+              });
+              
+              // Always show for completed matches (component will handle fetching if needed)
+              if (match.matchState === 'completed' && match.isComplete) {
+                console.log('[MatchPage] Rendering PostMatchAnalytics for completed match');
+                return (
+                  <PostMatchAnalytics
+                    match={match}
+                    teams={teams}
+                    currentUserTeamId={userTeam?.id}
+                  />
+                );
+              }
+              
+              console.log('[MatchPage] Not rendering PostMatchAnalytics (match not completed)');
+              return null;
+            })()}
 
-                  {/* Final Score Display */}
-                  {match.isComplete && (
-                    <div className="bg-gray-700/40 rounded-lg p-4 mb-6">
-                      <h4 className="text-white font-bold mb-3">Final Score</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                        <div className="text-lg">
-                          <div className="text-gray-300">{team1?.name}</div>
-                          <div className="text-2xl font-bold text-white">{match.team1Score}</div>
-                        </div>
-                        <div className="flex items-center justify-center">
-                          <div className="text-2xl font-bold text-gray-400">-</div>
-                        </div>
-                        <div className="text-lg">
-                          <div className="text-gray-300">{team2?.name}</div>
-                          <div className="text-2xl font-bold text-white">{match.team2Score}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* BO3 Maps & Sides Display for Completed Match */}
-                <div className="border-t border-gray-700/50 pt-6">
-                  <h4 className="text-white font-bold mb-4 text-center flex items-center justify-center space-x-2">
-                    <Trophy className="w-5 h-5 text-yellow-400" />
-                    <span>🗺️ BO3 Maps & Sides</span>
-                  </h4>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Map 1 */}
-                    <div className={`p-4 rounded-lg border ${
-                      match.map1 && match.map1Side 
-                        ? 'bg-green-600/10 border-green-500/30' 
-                        : 'bg-gray-700/20 border-gray-600/30'
-                    }`}>
-                      <div className="text-center">
-                        <div className="text-sm text-gray-400 mb-2">Map 1</div>
-                        <div className="text-white font-bold text-lg mb-2">
-                          {match.map1 || 'Not Selected'}
-                        </div>
-                        {match.map1Side && (
-                          <div className="space-y-2">
-                            <div className="text-xs text-gray-300 mb-1">Team B picked side:</div>
-                            <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                              match.map1Side === 'attack' 
-                                ? 'bg-red-500/20 text-red-300' 
-                                : 'bg-blue-500/20 text-blue-300'
-                            }`}>
-                              {match.map1Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Map 2 */}
-                    <div className={`p-4 rounded-lg border ${
-                      match.map2 && match.map2Side 
-                        ? 'bg-green-600/10 border-green-500/30' 
-                        : 'bg-gray-700/20 border-gray-600/30'
-                    }`}>
-                      <div className="text-center">
-                        <div className="text-sm text-gray-400 mb-2">Map 2</div>
-                        <div className="text-white font-bold text-lg mb-2">
-                          {match.map2 || 'Not Selected'}
-                        </div>
-                        {match.map2Side && (
-                          <div className="space-y-2">
-                            <div className="text-xs text-gray-300 mb-1">Team A picked side:</div>
-                            <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                              match.map2Side === 'attack' 
-                                ? 'bg-red-500/20 text-red-300' 
-                                : 'bg-blue-500/20 text-blue-300'
-                            }`}>
-                              {match.map2Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Decider Map */}
-                    <div className={`p-4 rounded-lg border ${
-                      match.deciderMap && match.deciderMapSide 
-                        ? 'bg-green-600/10 border-green-500/30' 
-                        : 'bg-gray-700/20 border-gray-600/30'
-                    }`}>
-                      <div className="text-center">
-                        <div className="text-sm text-gray-400 mb-2">Decider</div>
-                        <div className="text-white font-bold text-lg mb-2">
-                          {match.deciderMap || 'Not Selected'}
-                        </div>
-                        {match.deciderMapSide && (
-                          <div className="space-y-2">
-                            <div className="text-xs text-gray-300 mb-1">Team A picked side:</div>
-                            <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                              match.deciderMapSide === 'attack' 
-                                ? 'bg-red-500/20 text-red-300' 
-                                : 'bg-blue-500/20 text-blue-300'
-                            }`}>
-                              {match.deciderMapSide === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Team Names Legend */}
-                  {(match.map1Side || match.map2Side || match.deciderMapSide) && (
-                    <div className="mt-4 pt-3 border-t border-gray-700/50">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                        <div className="bg-gray-700/40 p-3 rounded-lg text-center">
-                          <div className="font-semibold text-white mb-1">Team A</div>
-                          <div className="text-gray-300">{team1?.name}</div>
-                        </div>
-                        <div className="bg-gray-700/40 p-3 rounded-lg text-center">
-                          <div className="font-semibold text-white mb-1">Team B</div>
-                          <div className="text-gray-300">{team2?.name}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
-          <div className="lg:col-span-1">
-            <MatchChat 
-              matchId={match.id} 
-              userTeam={userTeam} 
-              teams={teams} 
-              isAdmin={currentUser?.isAdmin}
-            />
-          </div>
+          {/* Hide chat when match is completed (PostMatchAnalytics is shown) */}
+          {!(match.matchState === 'completed' && match.isComplete) && (
+            <div className="lg:col-span-1">
+              <MatchChat 
+                matchId={match.id} 
+                userTeam={userTeam} 
+                teams={teams} 
+                isAdmin={currentUser?.isAdmin}
+              />
+            </div>
+          )}
         </div>
         )}
 

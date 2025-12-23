@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { signupTeamForTournament, getPublicUserData } from '../services/firebaseService';
 import type { User, Team, Tournament, TournamentTeamMember } from '../types/tournament';
+import { BodaxModal } from './ui';
 
 interface EnhancedTeamRegistrationProps {
   tournament: Tournament;
@@ -244,63 +245,80 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
-      <div className="bg-gradient-to-br from-pink-500/10 via-magenta-600/10 to-purple-700/10 backdrop-blur-sm rounded-2xl p-8 max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-pink-400/30 shadow-2xl">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold text-white mb-2">Tournament Team Registration</h2>
-            <div className="text-pink-200 text-lg">Unity League 2025</div>
-          </div>
+    <BodaxModal
+      isOpen={true}
+      onClose={onCancel}
+      title="Tournament Registration"
+      subtitle={`${tournament.name}`}
+      maxWidthClassName="max-w-5xl"
+      footer={
+        <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
           <button
+            type="button"
             onClick={onCancel}
-            className="text-pink-400 hover:text-white text-3xl font-bold transition-colors"
+            disabled={isSubmitting}
+            className="px-6 py-3 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 font-bodax text-xl uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            ×
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!isRegistrationValid() || isSubmitting}
+            className={`px-6 py-3 font-bodax text-xl uppercase tracking-wider transition-colors border ${
+              !isRegistrationValid() || isSubmitting
+                ? 'bg-gray-900 text-gray-600 border-gray-800 cursor-not-allowed'
+                : 'bg-red-600 hover:bg-red-700 text-white border-red-800'
+            }`}
+          >
+            {isSubmitting ? 'Registering...' : 'Register Team'}
           </button>
         </div>
+      }
+    >
       
         {/* Team Info */}
-        <div className="bg-black/60 border border-cyan-400/30 rounded-xl p-6 mb-8 shadow-lg backdrop-blur-sm">
-          <h3 className="text-2xl font-bold text-white mb-3">{team.name}</h3>
-          <div className="text-cyan-300 text-lg">
-            Tournament: {tournament.name}
+        <div className="bg-black/30 border border-gray-800 p-6 mb-8">
+          <h3 className="text-3xl font-bold text-white mb-2 font-bodax tracking-wide uppercase">{team.name}</h3>
+          <div className="text-gray-400 font-mono uppercase tracking-widest text-sm">
+            Tournament: <span className="text-red-500">{tournament.name}</span>
           </div>
         </div>
 
         {/* Requirements Summary */}
-        <div className="bg-black/60 border border-pink-400/30 rounded-xl p-6 mb-8 shadow-lg backdrop-blur-sm">
-          <h4 className="text-pink-400 font-bold text-xl mb-4">Team Requirements</h4>
+        <div className="bg-black/30 border border-gray-800 p-6 mb-8">
+          <h4 className="text-red-500 font-bold text-xl mb-4 font-mono uppercase tracking-widest">Team Requirements</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
             <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <div className="w-12 h-12 bg-gray-900 border border-gray-800 flex items-center justify-center mx-auto mb-3">
                 <span className="text-white font-bold">{requirements.maxMainPlayers}</span>
               </div>
-              <div className="text-cyan-400 font-bold">Main Players</div>
-              <div className="text-pink-200">{requirements.minMainPlayers}-{requirements.maxMainPlayers}</div>
+              <div className="text-gray-200 font-bold font-bodax uppercase tracking-wide">Main Players</div>
+              <div className="text-gray-500 font-mono uppercase tracking-wider text-xs">{requirements.minMainPlayers}-{requirements.maxMainPlayers}</div>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-magenta-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <div className="w-12 h-12 bg-gray-900 border border-gray-800 flex items-center justify-center mx-auto mb-3">
                 <span className="text-white font-bold">{requirements.maxSubstitutes}</span>
               </div>
-              <div className="text-pink-400 font-bold">Substitutes</div>
-              <div className="text-pink-200">{requirements.minSubstitutes}-{requirements.maxSubstitutes}</div>
+              <div className="text-gray-200 font-bold font-bodax uppercase tracking-wide">Substitutes</div>
+              <div className="text-gray-500 font-mono uppercase tracking-wider text-xs">{requirements.minSubstitutes}-{requirements.maxSubstitutes}</div>
             </div>
             {requirements.allowCoaches && (
               <div className="text-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 bg-gray-900 border border-gray-800 flex items-center justify-center mx-auto mb-3">
                   <span className="text-white font-bold">1</span>
                 </div>
-                <div className="text-green-400 font-bold">Coach</div>
-                <div className="text-pink-200">Optional</div>
+                <div className="text-gray-200 font-bold font-bodax uppercase tracking-wide">Coach</div>
+                <div className="text-gray-500 font-mono uppercase tracking-wider text-xs">Optional</div>
               </div>
             )}
             {requirements.allowManagers && (
               <div className="text-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 bg-gray-900 border border-gray-800 flex items-center justify-center mx-auto mb-3">
                   <span className="text-white font-bold">1</span>
                 </div>
-                <div className="text-orange-400 font-bold">Manager</div>
-                <div className="text-pink-200">Optional</div>
+                <div className="text-gray-200 font-bold font-bodax uppercase tracking-wide">Manager</div>
+                <div className="text-gray-500 font-mono uppercase tracking-wider text-xs">Optional</div>
               </div>
             )}
           </div>
@@ -309,23 +327,23 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
         {/* Member Selection */}
         <div className="space-y-8">
           {/* Main Players */}
-          <div className="bg-black/60 border border-cyan-400/30 rounded-xl p-6 shadow-lg backdrop-blur-sm">
-            <h4 className="text-cyan-400 font-bold text-xl mb-4">
+          <div className="bg-black/30 border border-gray-800 p-6">
+            <h4 className="text-white font-bold text-xl mb-4 font-bodax uppercase tracking-wide">
               Main Players ({selectedMembers.mainPlayers.length}/{requirements.maxMainPlayers})
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
               {selectedMembers.mainPlayers.map(userId => (
-                <div key={userId} className="flex items-center justify-between bg-gray-800 border border-cyan-400/30 rounded-lg p-3">
+                <div key={userId} className="flex items-center justify-between bg-black/40 border border-gray-800 p-3">
                   <div className="flex items-center gap-3">
                     <span className={`w-4 h-4 rounded-full ${getRoleColor('member')}`}></span>
                     <div>
                       <div className="text-white font-medium">{userData[userId]?.username || userId}</div>
-                      <div className="text-cyan-400 text-sm font-medium">{userData[userId]?.riotId || 'No Riot ID'}</div>
+                      <div className="text-gray-400 text-sm font-mono">{userData[userId]?.riotId || 'No Riot ID'}</div>
                     </div>
                   </div>
                   <button
                     onClick={() => removeMember(userId, 'main_player')}
-                    className="text-red-400 hover:text-red-300 text-sm bg-red-900/20 px-2 py-1 rounded border border-red-500/30"
+                    className="text-red-500 hover:text-red-400 text-xs font-mono uppercase tracking-wider"
                   >
                     Remove
                   </button>
@@ -335,7 +353,7 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
             
             {selectedMembers.mainPlayers.length < requirements.maxMainPlayers && (
               <div>
-                <div className="text-cyan-300 text-sm mb-3 font-medium">Available Members:</div>
+                <div className="text-gray-500 text-sm mb-3 font-mono uppercase tracking-widest">Available Members</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {availableMembers
                     .filter(member => !selectedMembers.mainPlayers.includes(member.userId) && 
@@ -347,14 +365,14 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
                       <button
                         key={member.userId}
                         onClick={() => handleMemberSelection(member.userId, 'main_player')}
-                        className="text-left bg-gray-800 hover:bg-gray-700 border border-cyan-400/30 hover:border-cyan-400/60 rounded-lg p-4 transition-all duration-200"
+                        className="text-left bg-black/30 hover:bg-black/50 border border-gray-800 hover:border-gray-600 p-4 transition-all duration-200"
                       >
                         <div className="flex items-center gap-3">
                           <span className={`w-4 h-4 rounded-full ${getRoleColor(member.role)}`}></span>
                           <div className="text-left">
                             <div className="text-white font-medium">{userData[member.userId]?.username || member.userId}</div>
-                            <div className="text-cyan-400 text-sm font-medium">{userData[member.userId]?.riotId || 'No Riot ID'}</div>
-                            <div className="text-pink-300 text-xs capitalize">{member.role}</div>
+                            <div className="text-gray-400 text-sm font-mono">{userData[member.userId]?.riotId || 'No Riot ID'}</div>
+                            <div className="text-gray-500 text-xs font-mono uppercase tracking-wider">{member.role}</div>
                           </div>
                         </div>
                       </button>
@@ -573,39 +591,17 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
 
         {/* Error and Success Messages */}
         {error && (
-          <div className="bg-red-900/20 border border-red-700 rounded-xl p-4 mt-8">
-            <div className="text-red-400 font-medium">{error}</div>
+          <div className="bg-red-900/10 border border-red-900 p-4 mt-8">
+            <div className="text-red-400 font-mono uppercase tracking-widest">{error}</div>
           </div>
         )}
 
         {success && (
-          <div className="bg-green-900/20 border border-green-700 rounded-xl p-4 mt-8">
-            <div className="text-green-400 font-medium">{success}</div>
+          <div className="bg-green-900/10 border border-green-900 p-4 mt-8">
+            <div className="text-green-400 font-mono uppercase tracking-widest">{success}</div>
           </div>
         )}
-
-        {/* Action Buttons */}
-        <div className="flex gap-4 mt-8">
-          <button
-            onClick={onCancel}
-            className="px-8 py-4 bg-black/60 hover:bg-black/80 text-white rounded-xl font-bold transition-all duration-200 border border-pink-400/30 hover:border-pink-400/60"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!isRegistrationValid() || isSubmitting}
-            className={`px-8 py-4 rounded-xl font-bold transition-all duration-200 ${
-              !isRegistrationValid() || isSubmitting
-                ? 'bg-gray-600 cursor-not-allowed'
-                : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-black'
-            }`}
-          >
-            {isSubmitting ? 'Registering...' : 'Register Team'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </BodaxModal>
   );
 };
 

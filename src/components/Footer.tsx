@@ -1,151 +1,146 @@
 import { Link } from 'react-router-dom';
-import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, ExternalLink, Heart, MessageSquare } from 'lucide-react';
+import { Twitter, Mail, MessageSquare } from 'lucide-react';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-black/80 border-t border-pink-400/30">
-      <div className="container-modern py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {/* Quick Links */}
+    <footer className="bg-[#050505] border-t border-red-900/40 text-gray-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+          <div className="space-y-4">
+            <div className="text-3xl font-bodax tracking-wider text-white">
+              <span className="text-red-600">/</span> BODAX
+            </div>
+            <p className="text-sm font-mono text-gray-400">
+              Tournament platform for Bodax events and organizers who want the same sharp control room.
+            </p>
+          </div>
+
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Quick Links</h3>
-            <ul className="space-y-2">
+            <h3 className="text-lg font-bodax tracking-wide text-white uppercase mb-4">Platform</h3>
+            <ul className="space-y-2 text-sm font-mono">
               <li>
-                <Link to="/" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
+                <Link to="/" className="hover:text-red-500 transition-colors duration-150">
                   Home
                 </Link>
               </li>
               <li>
-                <Link to="/tournaments" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
+                <Link to="/tournaments" className="hover:text-red-500 transition-colors duration-150">
                   Tournaments
                 </Link>
               </li>
               <li>
-                <Link to="/register" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
-                  Register
+                <Link to="/tournaments/create" className="hover:text-red-500 transition-colors duration-150">
+                  Host a Tournament
                 </Link>
               </li>
               <li>
-                <Link to="/login" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
+                <Link to="/my-matches" className="hover:text-red-500 transition-colors duration-150">
+                  My Matches
+                </Link>
+              </li>
+              <li className="flex items-center gap-2">
+                <Link to="/login" className="hover:text-red-500 transition-colors duration-150">
                   Login
+                </Link>
+                <span className="text-gray-600">/</span>
+                <Link to="/register" className="hover:text-red-500 transition-colors duration-150">
+                  Register
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Support */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Support</h3>
-            <ul className="space-y-2">
+            <h3 className="text-lg font-bodax tracking-wide text-white uppercase mb-4">Support</h3>
+            <ul className="space-y-2 text-sm font-mono">
               <li>
-                <Link to="/contact" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200 flex items-center">
-                  <Mail className="w-4 h-4 mr-2" />
-                  Contact Us
+                <Link to="/contact" className="hover:text-red-500 transition-colors duration-150 flex items-center gap-2">
+                  <Mail className="w-4 h-4" />
+                  Contact
                 </Link>
               </li>
               <li>
-                <a 
-                  href="https://discord.gg/ewAk7wBgHT" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-pink-200 hover:text-cyan-400 transition-colors duration-200 flex items-center"
+                <a
+                  href="https://discord.gg/ewAk7wBgHT"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-red-500 transition-colors duration-150 flex items-center gap-2"
                 >
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  Discord Community
+                  <MessageSquare className="w-4 h-4" />
+                  Discord
                 </a>
               </li>
             </ul>
           </div>
 
-          {/* Legal */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Legal</h3>
-            <ul className="space-y-2">
+            <h3 className="text-lg font-bodax tracking-wide text-white uppercase mb-4">Legal</h3>
+            <ul className="space-y-2 text-sm font-mono">
               <li>
-                <Link to="/privacy-policy" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
+                <Link to="/privacy-policy" className="hover:text-red-500 transition-colors duration-150">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link to="/terms-of-service" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
+                <Link to="/terms-of-service" className="hover:text-red-500 transition-colors duration-150">
                   Terms of Service
                 </Link>
               </li>
               <li>
-                <Link to="/cookie-policy" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
+                <Link to="/cookie-policy" className="hover:text-red-500 transition-colors duration-150">
                   Cookie Policy
                 </Link>
               </li>
               <li>
-                <Link to="/gdpr" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
+                <Link to="/gdpr" className="hover:text-red-500 transition-colors duration-150">
                   GDPR
                 </Link>
               </li>
               <li>
-                <Link to="/impressum" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
+                <Link to="/impressum" className="hover:text-red-500 transition-colors duration-150">
                   Impressum
                 </Link>
               </li>
             </ul>
           </div>
-
-          {/* Social Media */}
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Follow Us</h3>
-            <div className="flex space-x-4">
-              <a 
-                href="https://discord.gg/ewAk7wBgHT" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-pink-200 hover:text-cyan-400 transition-colors duration-200"
-                title="Join our Discord Community"
-              >
-                <MessageSquare className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
-                <Facebook className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
-                <Twitter className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
-                <Instagram className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-pink-200 hover:text-cyan-400 transition-colors duration-200">
-                <Youtube className="w-5 h-5" />
-              </a>
-            </div>
-            <p className="text-pink-200 text-sm mt-4">
-              Join our Discord community for updates, tournaments, and more!
-            </p>
-          </div>
         </div>
 
-        {/* Bottom Section */}
-        <div className="border-t border-pink-400/30 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center">
-          <div className="flex items-center space-x-2 mb-4 md:mb-0">
-            <span className="text-white font-semibold">Unity League</span>
-          </div>
-          
-          <div className="text-pink-200 text-sm">
-            © {currentYear} Unity League. All rights reserved.
-          </div>
-          
-          <div className="flex items-center space-x-2 text-sm text-pink-200">
-            <span>made by</span>
-            <a 
-              href="https://bodax.dev" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="hover:text-cyan-400 transition-colors duration-200 flex items-center"
+        <div className="border-t border-red-900/30 mt-10 pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm font-mono text-gray-400">
+          <div>© {currentYear} Bodax Masters. All rights reserved.</div>
+          <div className="flex items-center gap-4">
+            <a
+              href="https://x.com/GamingBodax"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-red-500 transition-colors duration-150 flex items-center gap-2"
             >
-              <ExternalLink className="w-4 h-4 mr-1" />
-              bodax.dev
+              <Twitter className="w-4 h-4" />
+              X
             </a>
-            <span>with</span>
-            <Heart className="w-4 h-4 text-cyan-400" />
+            <a
+              href="https://discord.gg/ewAk7wBgHT"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-red-500 transition-colors duration-150 flex items-center gap-2"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Discord
+            </a>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link to="/privacy-policy" className="hover:text-red-500 transition-colors duration-150">
+              Privacy
+            </Link>
+            <span className="text-gray-700">|</span>
+            <Link to="/terms-of-service" className="hover:text-red-500 transition-colors duration-150">
+              Terms
+            </Link>
+            <span className="text-gray-700">|</span>
+            <Link to="/impressum" className="hover:text-red-500 transition-colors duration-150">
+              Impressum
+            </Link>
           </div>
         </div>
       </div>

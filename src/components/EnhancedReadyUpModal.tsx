@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getPublicUserData } from '../services/firebaseService';
 import type { Match, Team, User, MatchTeamRoster } from '../types/tournament';
+import { BodaxModal } from './ui';
 
 interface EnhancedReadyUpModalProps {
   match: Match;
@@ -258,59 +259,76 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-8">
-      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 max-w-3xl w-full mx-4 max-h-[85vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-white">Ready Up - Match #{match.matchNumber}</h2>
+    <BodaxModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Ready Up`}
+      subtitle={`Match #${match.matchNumber} · Round ${match.round}`}
+      maxWidthClassName="max-w-4xl"
+      footer={
+        <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
           <button
+            type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-xl"
+            className="px-5 py-3 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 font-bodax text-xl uppercase tracking-wider transition-colors"
           >
-            ×
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleReadyUp}
+            disabled={!isRosterValid() || isSubmitting}
+            className={`px-5 py-3 font-bodax text-xl uppercase tracking-wider transition-colors border ${
+              !isRosterValid() || isSubmitting
+                ? 'bg-gray-900 text-gray-600 border-gray-800 cursor-not-allowed'
+                : 'bg-red-600 hover:bg-red-700 text-white border-red-800'
+            }`}
+          >
+            {isSubmitting ? 'Readying Up...' : 'Ready Up'}
           </button>
         </div>
-
-        {/* Match Info */}
-        <div className="bg-gray-700 rounded-lg p-3 mb-4">
+      }
+    >
+      {/* Match Info */}
+      <div className="bg-black/30 border border-gray-800 p-4 mb-6">
           <div className="text-white font-medium mb-1">
             {team.name} vs Opponent
           </div>
           <div className="text-gray-300 text-sm">
             Round {match.round} • {(match.tournamentType === 'swiss-round') ? `Swiss Round ${match.swissRound}` : 'Playoff'}
           </div>
-        </div>
+      </div>
 
         {/* Time Remaining */}
         {timeRemaining > 0 && (
-          <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-3 mb-4">
-            <div className="text-yellow-400 font-medium text-center">
+          <div className="bg-yellow-900/10 border border-yellow-900 p-4 mb-6">
+            <div className="text-yellow-400 font-medium text-center font-mono uppercase tracking-widest">
               ⏰ Match starts in: {formatTime(timeRemaining)}
             </div>
-            <div className="text-yellow-300 text-sm text-center mt-1">
+            <div className="text-yellow-300 text-sm text-center mt-1 font-mono">
               Please select your active roster before the match begins
             </div>
           </div>
         )}
 
         {/* Requirements */}
-        <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-3 mb-4">
-          <h4 className="text-blue-400 font-medium mb-2">Roster Requirements:</h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+        <div className="bg-black/30 border border-gray-800 p-4 mb-6">
+          <h4 className="text-red-500 font-mono font-bold mb-3 uppercase tracking-widest text-sm">Roster Requirements</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <div className="text-blue-300">Main Players:</div>
+              <div className="text-gray-500 font-mono uppercase tracking-wider text-xs">Main Players</div>
               <div className="text-white font-medium">5 Required</div>
             </div>
             <div>
-              <div className="text-blue-300">Substitutes:</div>
+              <div className="text-gray-500 font-mono uppercase tracking-wider text-xs">Substitutes</div>
               <div className="text-white font-medium">0-2 Optional</div>
             </div>
             <div>
-              <div className="text-blue-300">Coach:</div>
+              <div className="text-gray-500 font-mono uppercase tracking-wider text-xs">Coach</div>
               <div className="text-white font-medium">Optional</div>
             </div>
             <div>
-              <div className="text-blue-300">Manager:</div>
+              <div className="text-gray-500 font-mono uppercase tracking-wider text-xs">Manager</div>
               <div className="text-white font-medium">Optional</div>
             </div>
           </div>
@@ -320,19 +338,19 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
         <div className="space-y-4">
           {/* Main Players */}
           <div>
-            <h4 className="text-base font-semibold text-white mb-2">
+            <h4 className="text-base font-semibold text-white mb-3 font-bodax tracking-wide uppercase">
               Main Players ({selectedRoster.mainPlayers.length}/5) *
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
               {selectedRoster.mainPlayers.map(userId => (
-                <div key={userId} className="flex items-center justify-between bg-green-900/20 border border-green-700 rounded-lg p-2">
+                <div key={userId} className="flex items-center justify-between bg-green-900/10 border border-green-900 p-3">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${getRoleColor('member')}`}></span>
                     <span className="text-white text-sm font-medium">{getMemberName(userId)}</span>
                   </div>
                   <button
                     onClick={() => removePlayer(userId, 'main_player')}
-                    className="text-red-400 hover:text-red-300 text-xs"
+                    className="text-red-500 hover:text-red-400 text-xs font-mono uppercase tracking-wider"
                   >
                     Remove
                   </button>
@@ -354,7 +372,7 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
                       <button
                         key={member.userId}
                         onClick={() => handlePlayerSelection(member.userId, 'main_player')}
-                        className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-2 transition-colors"
+                        className="text-left bg-gray-900/60 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 p-3 transition-colors"
                       >
                         <div className="flex items-center gap-2">
                           <span className={`w-2 h-2 rounded-full ${getRoleColor(member.role)}`}></span>
@@ -373,19 +391,19 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
 
           {/* Substitutes */}
           <div>
-            <h4 className="text-base font-semibold text-white mb-2">
+            <h4 className="text-base font-semibold text-white mb-3 font-bodax tracking-wide uppercase">
               Substitutes ({selectedRoster.substitutes.length}/2)
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
               {selectedRoster.substitutes.map(userId => (
-                <div key={userId} className="flex items-center justify-between bg-blue-900/20 border border-blue-700 rounded-lg p-2">
+                <div key={userId} className="flex items-center justify-between bg-gray-900/40 border border-gray-800 p-3">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${getRoleColor('member')}`}></span>
                     <span className="text-white text-sm">{getMemberName(userId)}</span>
                   </div>
                   <button
                     onClick={() => removePlayer(userId, 'substitute')}
-                    className="text-red-400 hover:text-red-300 text-xs"
+                    className="text-red-500 hover:text-red-400 text-xs font-mono uppercase tracking-wider"
                   >
                     Remove
                   </button>
@@ -407,7 +425,7 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
                       <button
                         key={member.userId}
                         onClick={() => handlePlayerSelection(member.userId, 'substitute')}
-                        className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-2 transition-colors"
+                        className="text-left bg-gray-900/60 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 p-3 transition-colors"
                       >
                         <div className="flex items-center gap-2">
                           <span className={`w-2 h-2 rounded-full ${getRoleColor(member.role)}`}></span>
@@ -426,18 +444,18 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
 
           {/* Coach Selection */}
           <div>
-            <h4 className="text-base font-semibold text-white mb-2">
+            <h4 className="text-base font-semibold text-white mb-3 font-bodax tracking-wide uppercase">
               Coach (Optional)
             </h4>
             {selectedRoster.coach ? (
-              <div className="flex items-center justify-between bg-green-900/20 border border-green-700 rounded-lg p-2">
+              <div className="flex items-center justify-between bg-gray-900/40 border border-gray-800 p-3">
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${getRoleColor('coach')}`}></span>
                   <span className="text-white text-sm">{getMemberName(selectedRoster.coach)}</span>
                 </div>
                 <button
                   onClick={() => removePlayer(selectedRoster.coach!, 'coach')}
-                  className="text-red-400 hover:text-red-300 text-xs"
+                  className="text-red-500 hover:text-red-400 text-xs font-mono uppercase tracking-wider"
                 >
                   Remove
                 </button>
@@ -453,7 +471,7 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
                     <button
                       key={member.userId}
                       onClick={() => handlePlayerSelection(member.userId, 'coach')}
-                      className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-2 transition-colors"
+                      className="text-left bg-gray-900/60 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 p-3 transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${getRoleColor(member.role)}`}></span>
@@ -471,18 +489,18 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
 
           {/* Manager Selection */}
           <div>
-            <h4 className="text-base font-semibold text-white mb-2">
+            <h4 className="text-base font-semibold text-white mb-3 font-bodax tracking-wide uppercase">
               Manager (Optional)
             </h4>
             {selectedRoster.manager ? (
-              <div className="flex items-center justify-between bg-orange-900/20 border border-orange-700 rounded-lg p-2">
+              <div className="flex items-center justify-between bg-gray-900/40 border border-gray-800 p-3">
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${getRoleColor('manager')}`}></span>
                   <span className="text-white text-sm">{getMemberName(selectedRoster.manager)}</span>
                 </div>
                 <button
                   onClick={() => removePlayer(selectedRoster.manager!, 'manager')}
-                  className="text-red-400 hover:text-red-300 text-xs"
+                  className="text-red-500 hover:text-red-400 text-xs font-mono uppercase tracking-wider"
                 >
                   Remove
                 </button>
@@ -498,7 +516,7 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
                     <button
                       key={member.userId}
                       onClick={() => handlePlayerSelection(member.userId, 'manager')}
-                      className="text-left bg-gray-700 hover:bg-gray-600 rounded-lg p-2 transition-colors"
+                      className="text-left bg-gray-900/60 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 p-3 transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${getRoleColor(member.role)}`}></span>
@@ -517,33 +535,11 @@ const EnhancedReadyUpModal: React.FC<EnhancedReadyUpModalProps> = ({
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-3 mt-4">
-            <div className="text-red-400 text-sm">{error}</div>
+          <div className="bg-red-900/10 border border-red-900 p-4 mt-6">
+            <div className="text-red-400 text-sm font-mono uppercase tracking-widest">{error}</div>
           </div>
         )}
-
-        {/* Action Buttons */}
-        <div className="flex gap-3 mt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleReadyUp}
-            disabled={!isRosterValid() || isSubmitting}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
-              !isRosterValid() || isSubmitting
-                ? 'bg-gray-600 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-500'
-            } text-white`}
-          >
-            {isSubmitting ? 'Readying Up...' : 'Ready Up'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </BodaxModal>
   );
 };
 

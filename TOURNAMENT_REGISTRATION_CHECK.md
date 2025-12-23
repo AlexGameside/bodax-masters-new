@@ -116,3 +116,14 @@ All functions are configured to check the specific tournament: **VRVlwqpXPLxmeSc
 
 The implementation is ready to use and will provide comprehensive information about team registration status for the specified tournament.
 
+
+
+
+
+
+
+
+
+
+
+

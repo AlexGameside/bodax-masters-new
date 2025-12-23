@@ -992,81 +992,6 @@ const AdminPanel = ({
     }
   };
 
-  const handleStartRosterChanges = async (teamId: string) => {
-    try {
-      const teamRef = doc(db, 'teams', teamId);
-      await updateDoc(teamRef, {
-        rosterChangesUsed: 0,
-        rosterLocked: false,
-        rosterChangeDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
-      });
-      toast.success('Roster changes tracking started for this team');
-    } catch (error) {
-
-      toast.error('Error starting roster changes. Please try again.');
-    }
-  };
-
-  const handleLockRoster = async (teamId: string) => {
-    try {
-      const teamRef = doc(db, 'teams', teamId);
-      await updateDoc(teamRef, {
-        rosterLocked: true,
-        rosterLockDate: new Date(),
-        rosterChangeDeadline: new Date(0) // Set to epoch to effectively remove deadline
-      });
-      toast.success('Roster locked for this team');
-    } catch (error) {
-
-      toast.error('Error locking roster. Please try again.');
-    }
-  };
-
-  const handleStartAllTeams = async () => {
-    if (!window.confirm('Are you sure you want to START roster changes for ALL teams? This will reset all roster change counters and set new deadlines.')) {
-      return;
-    }
-
-    try {
-      const promises = safeTeams.map(team => {
-        const teamRef = doc(db, 'teams', team.id);
-        return updateDoc(teamRef, {
-          rosterChangesUsed: 0,
-          rosterLocked: false,
-          rosterChangeDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
-        });
-      });
-
-      await Promise.all(promises);
-      toast.success(`Roster changes started for ${safeTeams.length} teams`);
-    } catch (error) {
-
-      toast.error('Error starting roster changes for all teams. Please try again.');
-    }
-  };
-
-  const handleLockAllTeams = async () => {
-    if (!window.confirm('Are you sure you want to LOCK roster for ALL teams? This will permanently lock all rosters and remove deadlines.')) {
-      return;
-    }
-
-    try {
-      const promises = safeTeams.map(team => {
-        const teamRef = doc(db, 'teams', team.id);
-        return updateDoc(teamRef, {
-          rosterLocked: true,
-          rosterLockDate: new Date(),
-          rosterChangeDeadline: new Date(0) // Set to epoch to effectively remove deadline
-        });
-      });
-
-      await Promise.all(promises);
-      toast.success(`Roster locked for ${safeTeams.length} teams`);
-    } catch (error) {
-
-      toast.error('Error locking roster for all teams. Please try again.');
-    }
-  };
 
   const handleDeleteAllTeams = async () => {
     if (!window.confirm('Are you sure you want to delete ALL teams? This action cannot be undone.')) {
@@ -1536,20 +1461,6 @@ const AdminPanel = ({
                   <RefreshCw className="w-4 h-4" />
                   <span>Reset All Roster Changes</span>
                 </button>
-                <button
-                  onClick={handleStartAllTeams}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center space-x-2"
-                >
-                  <Play className="w-4 h-4" />
-                  <span>START ALL TEAMS</span>
-                </button>
-                <button
-                  onClick={handleLockAllTeams}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center space-x-2"
-                >
-                  <Lock className="w-4 h-4" />
-                  <span>LOCK ALL TEAMS</span>
-                </button>
                 {safeTeams.length > 0 && (
                   <button
                     onClick={handleDeleteAllTeams}
@@ -1604,29 +1515,7 @@ const AdminPanel = ({
                           </div>
                         </td>
                         <td className="p-3">
-                          <div className="flex flex-col space-y-1">
-                            {team.rosterLocked ? (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-900/50 text-red-300 border border-red-700">
-                                <Lock className="w-3 h-3 mr-1" />
-                                Locked
-                              </span>
-                            ) : team.rosterChangesUsed >= 3 ? (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-900/50 text-orange-300 border border-orange-700">
-                                <AlertTriangle className="w-3 h-3 mr-1" />
-                                Max Changes Used
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-300 border border-green-700">
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                {team.rosterChangesUsed || 0}/3 Changes
-                              </span>
-                            )}
-                            {team.rosterChangeDeadline && !team.rosterLocked && new Date(team.rosterChangeDeadline).getTime() > 0 && (
-                              <span className="text-xs text-gray-400">
-                                Deadline: {team.rosterChangeDeadline.toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
+                          <span className="text-gray-400 text-sm">-</span>
                         </td>
                         <td className="p-3">
                           {team.registeredForTournament ? (
@@ -1643,22 +1532,6 @@ const AdminPanel = ({
                         </td>
                         <td className="p-3">
                           <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => handleStartRosterChanges(team.id)}
-                              className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex items-center space-x-1"
-                              title="Start tracking roster changes"
-                            >
-                              <Play className="w-4 h-4" />
-                              <span>START</span>
-                            </button>
-                            <button
-                              onClick={() => handleLockRoster(team.id)}
-                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm flex items-center space-x-1"
-                              title="Lock roster and remove deadline"
-                            >
-                              <Lock className="w-4 h-4" />
-                              <span>LOCK</span>
-                            </button>
                             <button
                               onClick={() => handleDeleteTeam(team.id)}
                               className="btn-danger btn-sm"

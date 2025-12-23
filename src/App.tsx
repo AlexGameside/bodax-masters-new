@@ -13,6 +13,8 @@ import CreateTeam from './pages/CreateTeam';
 import AdminPanel from './pages/AdminPanel';
 import MatchPage from './pages/MatchPage';
 import StreamingOverlay from './pages/StreamingOverlay';
+import PlayoffStreamingOverlay from './pages/PlayoffStreamingOverlay';
+import PlayoffOverlayTest from './pages/PlayoffOverlayTest';
 import TournamentList from './pages/TournamentList';
 import TournamentCreation from './pages/TournamentCreation';
 import TournamentDetail from './pages/TournamentDetailV2';
@@ -42,6 +44,9 @@ import UnifiedOverlay from './pages/UnifiedOverlay';
 import PredictionPage from './pages/PredictionPage';
 import PredictionsPage from './pages/PredictionsPage';
 import StreamerDashboard from './pages/StreamerDashboard';
+import TournamentBracketPage from './pages/TournamentBracketPage';
+import RiotApiTesting from './pages/RiotApiTesting';
+import RiotMatchDetails from './pages/RiotMatchDetails';
 import type { User, Team, Match, TeamInvitation } from './types/tournament';
 import { 
   getTeams, 
@@ -324,13 +329,13 @@ function App() {
           <div className="text-center">
             <div className="mb-6">
                              <img 
-                 src="/logo.png" 
-                 alt="Unity League Logo" 
+                 src="/bodax-pfp.png" 
+                 alt="Bodax Masters Logo" 
                  className="w-32 h-32 mx-auto mb-4 animate-spin-slow drop-shadow-2xl rounded-full"
                />
             </div>
             <div className="animate-pulse">
-              <h2 className="text-3xl font-bold text-white mb-2 font-mono tracking-tight">UNITY LEAGUE</h2>
+              <h2 className="text-3xl font-bold text-white mb-2 font-mono tracking-tight">BODAX MASTERS</h2>
               <p className="text-white/80 font-mono tracking-tight text-lg">Loading Tournament Platform...</p>
             </div>
           </div>
@@ -344,8 +349,12 @@ function App() {
       <Routes>
         {/* Overlay Routes - No Navbar/Footer */}
         <Route path="/stream/:matchId" element={<StreamingOverlay />} />
+        <Route path="/playoff-stream/:matchId" element={<PlayoffStreamingOverlay />} />
+        <Route path="/playoff-test" element={<PlayoffOverlayTest />} />
         <Route path="/overlay/:streamerId?" element={<UnifiedOverlay />} />
         <Route path="/predict/:matchId" element={<PredictionPage />} />
+        <Route path="/tournaments/:id/bracket" element={<TournamentBracketPage currentUser={currentUser} />} />
+        <Route path="/tournament/:id/bracket" element={<TournamentBracketPage currentUser={currentUser} />} />
         
         {/* All other routes with full layout */}
         <Route path="*" element={
@@ -555,6 +564,8 @@ function AppContent({
           <Route path="/admin/bracket-reveal/:id" element={isAdmin === true ? <BracketReveal currentUser={currentUser} /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           <Route path="/admin/stats" element={isAdmin === true ? <AdminStats /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           <Route path="/admin/stream-overlays" element={isAdmin === true ? <StreamOverlayManager /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/riot-api-testing" element={isAdmin === true ? <RiotApiTesting /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/riot-api-testing/match/:matchId" element={isAdmin === true ? <RiotMatchDetails /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           
           {/* Streamer Control Dashboard */}
           <Route path="/streamer-control/:streamerId?" element={<StreamerControl />} />

@@ -290,66 +290,87 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-400 mx-auto mb-4"></div>
-          <p className="text-white font-mono tracking-tight">Loading teams...</p>
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center relative">
+        {/* Background Grid Pattern */}
+        <div className="absolute inset-0 z-0 pointer-events-none opacity-20" 
+             style={{
+               backgroundImage: 'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+               backgroundSize: '40px 40px'
+             }} />
+        <div className="text-center relative z-10">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
+          <p className="text-gray-300 font-mono tracking-wide uppercase">Loading teams...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
-      {/* Unity League Header */}
-      <div className="bg-black/20 backdrop-blur-sm border-b border-white/20">
+    <div className="min-h-screen bg-[#050505] relative">
+      {/* Background Grid Pattern */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-20" 
+           style={{
+             backgroundImage: 'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+             backgroundSize: '40px 40px'
+           }} />
+
+      <div className="bg-[#0a0a0a] border-b border-gray-800 relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-6">
               <button
                 onClick={() => navigate(-1)}
-                className="p-2 text-white/80 hover:text-white transition-colors"
+                className="text-gray-500 hover:text-red-500 transition-colors"
               >
-                <ArrowLeft className="w-6 h-6" />
+                <ArrowLeft className="w-8 h-8" />
               </button>
               <div>
-                <h1 className="text-3xl font-bold text-white mb-2 font-mono tracking-tight">TEAM MANAGEMENT</h1>
-                <p className="text-white/80 font-mono tracking-tight">MANAGE YOUR TEAMS AND MEMBERS</p>
+                <h1 className="text-3xl md:text-4xl font-bold text-white font-bodax tracking-wide uppercase leading-none">
+                  TEAM MANAGEMENT
+                </h1>
+                <p className="text-red-500 font-mono text-sm tracking-widest uppercase mt-1">
+                  MANAGE YOUR TEAMS AND MEMBERS
+                </p>
               </div>
             </div>
             <button
               onClick={handleCreateTeam}
-              className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors font-medium font-mono tracking-tight"
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>CREATE TEAM</span>
+              <span className="font-mono uppercase tracking-wider">CREATE TEAM</span>
             </button>
           </div>
         </div>
       </div>
       
-      <div className="max-w-7xl mx-auto py-8 px-4">
+      <div className="max-w-7xl mx-auto py-8 px-4 relative z-10">
 
         {/* Error/Success Messages */}
         {error && (
-          <div className="mb-6 p-4 bg-red-900/50 border border-red-400/30 rounded-xl backdrop-blur-sm">
-            <p className="text-red-200 font-mono tracking-tight">{error}</p>
+          <div className="mb-6 p-4 bg-red-900/20 border border-red-700 rounded-lg">
+            <p className="text-red-300">{error}</p>
           </div>
         )}
         {success && (
-          <div className="mb-6 p-4 bg-green-900/50 border border-green-400/30 rounded-xl backdrop-blur-sm">
-            <p className="text-green-200 font-mono tracking-tight">{success}</p>
+          <div className="mb-6 p-4 bg-green-900/20 border border-green-700 rounded-lg">
+            <p className="text-green-300">{success}</p>
           </div>
         )}
 
         {/* Teams List */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {teams.map((team) => (
-            <div key={team.id} className="unity-card-pink">
-              <div className="flex items-center justify-between mb-4">
+            <div key={team.id} className="bg-[#0a0a0a] border border-gray-800 p-6 rounded-lg relative group overflow-hidden hover:border-red-900/50 transition-colors">
+              {/* Corner accents */}
+              <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-red-600"></div>
+              <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-red-600"></div>
+              <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-red-600"></div>
+              <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-red-600"></div>
+              <div className="flex items-center justify-between mb-4 relative">
                 <div>
-                  <h3 className="text-xl font-bold text-white font-mono tracking-tight">{team.name}</h3>
-                  <p className="text-pink-300 text-sm font-mono tracking-tight">[{team.teamTag}]</p>
+                  <h3 className="text-xl font-bold text-white font-bodax tracking-wide uppercase">{team.name}</h3>
+                  <p className="text-red-500 text-sm font-mono tracking-widest uppercase">[{team.teamTag}]</p>
                 </div>
                 {canManageTeam(team) && (
                   <div className="relative">
@@ -358,7 +379,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                         setSelectedTeam(team);
                         setShowSettingsModal(true);
                       }}
-                      className="p-2 text-pink-300 hover:text-white transition-colors"
+                      className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                     >
                       <Settings className="w-5 h-5" />
                     </button>
@@ -373,15 +394,15 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                 )}
               </div>
 
-              <p className="text-pink-200 text-sm mb-4 font-mono tracking-tight">{team.description}</p>
+              <p className="text-gray-400 text-sm mb-4">{team.description}</p>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-pink-300 font-mono tracking-tight">MEMBERS:</span>
-                  <span className="text-white font-mono tracking-tight">{team.members.length}/{team.maxMembers}</span>
+                  <span className="text-gray-500 font-mono uppercase tracking-wider text-xs">MEMBERS:</span>
+                  <span className="text-white font-mono">{team.members.length}/{team.maxMembers}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-pink-300 font-mono tracking-tight">YOUR ROLE:</span>
+                  <span className="text-gray-500 font-mono uppercase tracking-wider text-xs">YOUR ROLE:</span>
                   <div className="flex items-center space-x-1">
                     {getRoleIcon(getUserRole(team, currentUser!.id))}
                     <span className={getRoleColor(getUserRole(team, currentUser!.id))}>
@@ -389,50 +410,11 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                     </span>
                   </div>
                 </div>
-                
-                {/* Roster Change Status */}
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-pink-300 font-mono tracking-tight">ROSTER CHANGES:</span>
-                  <div className="flex items-center space-x-2">
-                    {team.rosterLocked ? (
-                      <div className="flex items-center space-x-1 text-red-400">
-                        <Lock className="w-4 h-4" />
-                        <span className="font-mono tracking-tight">LOCKED</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-1">
-                        <span className={`font-mono tracking-tight ${
-                          team.rosterChangesUsed >= 3 ? 'text-red-400' : 
-                          team.rosterChangesUsed >= 2 ? 'text-yellow-400' : 
-                          'text-green-400'
-                        }`}>
-                          {team.rosterChangesUsed}/3
-                        </span>
-                        {team.rosterChangesUsed >= 3 && (
-                          <AlertTriangle className="w-4 h-4 text-red-400" />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Roster Change Deadline */}
-                {!team.rosterLocked && team.rosterChangeDeadline && new Date(team.rosterChangeDeadline).getTime() > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-pink-300 font-mono tracking-tight">DEADLINE:</span>
-                    <div className="flex items-center space-x-1">
-                      <Calendar className="w-4 h-4 text-blue-400" />
-                      <span className="text-blue-400 font-mono tracking-tight">
-                        {new Date(team.rosterChangeDeadline).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Team Members */}
-              <div className="mt-4 pt-4 border-t border-gray-700">
-                <h4 className="text-sm font-medium text-white mb-2">Members</h4>
+              <div className="mt-4 pt-4 border-t border-gray-800">
+                <h4 className="text-sm font-medium text-white mb-2 font-mono uppercase tracking-wider">Members</h4>
                 <div className="space-y-2">
                   {team.members.map((member) => {
                     const user = allUsers.find(u => u.id === member.userId);
@@ -450,7 +432,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                             <select
                               value={member.role}
                               onChange={(e) => handleRoleChange(team.id, member.userId, e.target.value as any)}
-                              className="text-xs bg-black/60 border border-gray-600 rounded px-2 py-1 text-white"
+                              className="text-xs bg-gray-900/50 border border-gray-700 rounded px-2 py-1 text-white"
                             >
                               <option value="member">Member</option>
                               <option value="captain">Captain</option>
@@ -474,14 +456,14 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
               {/* Pending Invitations */}
               {canManageTeam(team) && pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-700">
+                <div className="mt-4 pt-4 border-t border-gray-800">
                   <h4 className="text-sm font-medium text-white mb-3 flex items-center">
                     <Clock className="w-4 h-4 mr-2 text-yellow-400" />
                     Pending Invitations ({pendingInvitations[team.id].length})
                   </h4>
                   <div className="space-y-2">
                     {pendingInvitations[team.id].map((invitation) => (
-                      <div key={invitation.id} className="flex items-center justify-between p-2 bg-gradient-to-r from-yellow-900/30 to-orange-900/20 border border-yellow-700/40 rounded">
+                      <div key={invitation.id} className="flex items-center justify-between p-2 bg-yellow-900/20 border border-yellow-700/40 rounded">
                         <div className="flex items-center space-x-2">
                           <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
                           <span className="text-sm text-yellow-200 font-medium">
@@ -509,72 +491,54 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
               )}
 
               {/* Invite Button */}
-              {canManageTeam(team) && team.members.length < team.maxMembers && (
-                <div className="mt-4 space-y-2">
-                  {/* Check if roster changes are allowed */}
-                  {team.rosterLocked ? (
-                    <div className="w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 bg-red-900/20 text-red-400 border border-red-700">
-                      <Lock className="w-4 h-4" />
-                      <span>Roster Locked</span>
-                    </div>
-                  ) : team.rosterChangesUsed >= 3 ? (
-                    <div className="w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 bg-red-900/20 text-red-400 border border-red-700">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>No Roster Changes Left</span>
-                    </div>
-                  ) : team.rosterChangeDeadline && new Date(team.rosterChangeDeadline).getTime() > 0 && new Date() > team.rosterChangeDeadline ? (
-                    <div className="w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 bg-red-900/20 text-red-400 border border-red-700">
-                      <Calendar className="w-4 h-4" />
-                      <span>Deadline Passed</span>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setSelectedTeam(team);
-                        setShowInviteForm(true);
-                      }}
-                      className={`w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border ${
-                        pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
-                          ? 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white border-yellow-700'
-                          : 'bg-black/60 hover:bg-black/80 text-white border-gray-700'
-                      }`}
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      <span>
-                        {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
-                          ? `Invite Member (${pendingInvitations[team.id].length} pending)`
-                          : 'Invite Member'
-                        }
-                      </span>
-                      {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
-                        <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                      )}
-                    </button>
-                  )}
+              <div className="mt-4 space-y-2">
+                {canManageTeam(team) && team.members.length < team.maxMembers && (
+                  <button
+                    onClick={() => {
+                      setSelectedTeam(team);
+                      setShowInviteForm(true);
+                    }}
+                    className={`w-full px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${
+                      pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
+                        ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                        : 'bg-gray-900/50 hover:bg-gray-800 border border-gray-700 text-white'
+                    }`}
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>
+                      {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0
+                        ? `Invite Member (${pendingInvitations[team.id].length} pending)`
+                        : 'Invite Member'
+                      }
+                    </span>
+                    {pendingInvitations[team.id] && pendingInvitations[team.id].length > 0 && (
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    )}
+                  </button>
+                )}
                   
-                  {/* Fill Team Button - Only show if team has less than 5 members and user is admin */}
-                  {currentUser?.isAdmin && team.members.length < 5 && (
-                    <button
-                      onClick={() => handleFillTeam(team.id)}
-                      className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2 border border-orange-800"
-                    >
-                      <Users className="w-4 h-4" />
-                      <span>Fill Team (Demo Players)</span>
-                    </button>
-                  )}
-                </div>
-              )}
+                {/* Fill Team Button - Only show if team has less than 5 members and user is admin */}
+                {currentUser?.isAdmin && team.members.length < 5 && (
+                  <button
+                    onClick={() => handleFillTeam(team.id)}
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Fill Team (Demo Players)</span>
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
 
         {teams.length === 0 && (
           <div className="text-center py-12">
-            <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">No Teams Yet</h3>
+            <Users className="w-16 h-16 text-gray-700 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2 font-bodax tracking-wide uppercase">No Teams Yet</h3>
             <button
               onClick={handleCreateTeam}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 mx-auto transition-colors border border-red-800"
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 mx-auto transition-colors"
             >
               <Plus className="w-4 h-4" />
               <span>Create Team</span>
@@ -585,7 +549,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
         {/* Invite Modal */}
         {showInviteForm && selectedTeam && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-black/90 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto relative">
+              {/* Corner accents */}
+              <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-red-600"></div>
+              <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-red-600"></div>
+              <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-red-600"></div>
+              <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-red-600"></div>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-white">Invite to {selectedTeam.name}</h3>
                 <button
@@ -598,7 +567,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
               {/* Pending Invitations Section */}
               {pendingInvitations[selectedTeam.id] && pendingInvitations[selectedTeam.id].length > 0 && (
-                <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/30 rounded-lg">
+                <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/40 rounded-lg">
                   <h4 className="text-sm font-medium text-white mb-3 flex items-center">
                     <Clock className="w-4 h-4 mr-2 text-yellow-400" />
                     Pending Invitations ({pendingInvitations[selectedTeam.id].length})
@@ -638,7 +607,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                     type="text"
                     value={inviteUsername}
                     onChange={(e) => setInviteUsername(e.target.value)}
-                    className="w-full px-3 py-2 bg-black/60 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500"
+                    className="w-full px-3 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
                     placeholder="Enter username"
                     required
                   />
@@ -649,7 +618,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                   <textarea
                     value={inviteMessage}
                     onChange={(e) => setInviteMessage(e.target.value)}
-                    className="w-full px-3 py-2 bg-black/60 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500"
+                    className="w-full px-3 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
                     placeholder="Add a personal message..."
                     rows={3}
                   />
@@ -659,13 +628,13 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                   <button
                     type="button"
                     onClick={() => setShowInviteForm(false)}
-                    className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors border border-gray-600"
+                    className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border border-red-800"
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                   >
                     <Mail className="w-4 h-4" />
                     <span>Send Invite</span>
@@ -679,7 +648,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
         {/* Settings Modal */}
         {showSettingsModal && selectedTeam && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-black/90 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4">
+            <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative">
+              {/* Corner accents */}
+              <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-red-600"></div>
+              <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-red-600"></div>
+              <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-red-600"></div>
+              <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-red-600"></div>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-white">Team Settings - {selectedTeam.name}</h3>
                 <button
@@ -692,7 +666,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
               <div className="space-y-4">
                 {/* Team Info */}
-                <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
+                <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-white mb-2">Team Information</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
@@ -720,7 +694,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                 </div>
 
                 {/* Role Permissions */}
-                <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
+                <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-white mb-2">Role Permissions</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center space-x-2">
@@ -747,7 +721,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                         setShowSettingsModal(false);
                         setShowInviteForm(true);
                       }}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border border-blue-800"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                     >
                       <UserPlus className="w-4 h-4" />
                       <span>Invite Member</span>
@@ -761,7 +735,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                         setShowSettingsModal(false);
                         handleFillTeam(selectedTeam.id);
                       }}
-                      className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border border-orange-800"
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                     >
                       <Users className="w-4 h-4" />
                       <span>Fill Team (Demo Players)</span>
@@ -775,7 +749,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
                         setShowSettingsModal(false);
                         handleDeleteTeam(selectedTeam.id);
                       }}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors border border-red-800"
+                      className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                       <span>Delete Team</span>
@@ -785,7 +759,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
 
                 <button
                   onClick={() => setShowSettingsModal(false)}
-                  className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors border border-gray-600"
+                  className="w-full px-4 py-2 bg-gray-900/50 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors"
                 >
                   Close
                 </button>
@@ -793,14 +767,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
             </div>
           </div>
         )}
-      </div>
-      
-      {/* Unity League Footer */}
-      <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
-        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
-          <span>&gt; TEAM MANAGEMENT</span>
-          <span className="text-cyan-400">// Unity League 2025</span>
-        </div>
       </div>
     </div>
   );

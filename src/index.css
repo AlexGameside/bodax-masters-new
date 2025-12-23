@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Teko:wght@300;400;500;600;700&family=Chakra+Petch:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -36,7 +36,11 @@
 
   body {
     @apply text-white;
-    background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 50%, #06b6d9 100%);
+    background-color: #050505;
+    background-image: 
+      linear-gradient(rgba(30, 30, 30, 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 30, 30, 0.3) 1px, transparent 1px);
+    background-size: 40px 40px;
     background-attachment: fixed;
     font-family: 'Inter', system-ui, sans-serif;
     line-height: 1.6;

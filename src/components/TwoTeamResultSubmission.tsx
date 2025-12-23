@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-react';
-import { submitMatchResult, createDispute } from '../services/firebaseService';
+import { CheckCircle, XCircle, AlertTriangle, Clock, Zap, RefreshCw } from 'lucide-react';
+import { submitMatchResult, createDispute, getPublicUserData, autoDetectAndSubmitMatchResult } from '../services/firebaseService';
+// Riot API imports disabled - features hidden from users
+// import { suggestMatchOutcome, getTeamStatistics } from '../services/riotApiService';
 import type { Match, Team } from '../types/tournament';
 
 interface TwoTeamResultSubmissionProps {
@@ -21,11 +23,62 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
   const [team2Score, setTeam2Score] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDisputing, setIsDisputing] = useState(false);
+  const [isAutoDetecting, setIsAutoDetecting] = useState(false);
+  const [autoDetectedResult, setAutoDetectedResult] = useState<any>(null);
+  // Riot API state variables disabled (not used, but kept to avoid breaking anything)
+  // const [suggestion, setSuggestion] = useState<any>(null);
+  // const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+  // const [suggestionConfirmed, setSuggestionConfirmed] = useState(false);
+  // const [teamStats, setTeamStats] = useState<any>(null);
+  // const [showAnalytics, setShowAnalytics] = useState(false);
 
   const team1 = teams.find(t => t.id === match.team1Id);
   const team2 = teams.find(t => t.id === match.team2Id);
   const isTeam1 = currentUserTeamId === match.team1Id;
   const isTeam2 = currentUserTeamId === match.team2Id;
+
+  // Check for auto-detected results
+  useEffect(() => {
+    if (match.autoDetectedResult) {
+      setAutoDetectedResult(match.autoDetectedResult);
+      // Pre-fill scores if auto-detected
+      if (match.autoDetectedResult.team1Score !== undefined && match.autoDetectedResult.team2Score !== undefined) {
+        setTeam1Score(match.autoDetectedResult.team1Score.toString());
+        setTeam2Score(match.autoDetectedResult.team2Score.toString());
+      }
+    }
+  }, [match.autoDetectedResult]);
+
+  // Auto-detect match result
+  const handleAutoDetect = async () => {
+    setIsAutoDetecting(true);
+    try {
+      const result = await autoDetectAndSubmitMatchResult(match.id);
+      if (result.success && result.detected) {
+        toast.success(`Match detected! Score: ${result.team1Score} - ${result.team2Score}`);
+        setAutoDetectedResult({
+          detected: true,
+          team1Score: result.team1Score,
+          team2Score: result.team2Score,
+          detectedAt: new Date(),
+          confidence: result.matchDetails?.confidence || 'medium'
+        });
+        setTeam1Score(result.team1Score?.toString() || '');
+        setTeam2Score(result.team2Score?.toString() || '');
+        // Close modal after successful auto-detection
+        setTimeout(() => {
+          onClose();
+        }, 2000);
+      } else {
+        toast.error(result.error || 'No match found. Make sure players have played the match and have Riot IDs set.');
+      }
+    } catch (error: any) {
+      console.error('Error auto-detecting match:', error);
+      toast.error(error.message || 'Failed to auto-detect match result');
+    } finally {
+      setIsAutoDetecting(false);
+    }
+  };
 
   // Check if this team has already submitted
   const hasSubmitted = isTeam1 
@@ -50,6 +103,11 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
       setTeam2Score(numericValue);
     }
   };
+
+  // Riot API suggestion handler disabled
+  // const handleConfirmSuggestion = () => {
+  //   // DISABLED
+  // };
 
   const handleSubmit = async () => {
     if (!currentUserTeamId) {
@@ -140,23 +198,32 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
 
   if (bothTeamsSubmitted && !scoresMatch) {
     return (
-      <div className="bg-gradient-to-br from-red-500/10 via-orange-600/10 to-red-700/10 backdrop-blur-sm rounded-2xl p-6 border border-red-400/30 shadow-2xl">
+      <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative border-l-4 border-red-600 pl-4">
         <div className="text-center mb-6">
-          <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h3 className="text-2xl font-bold text-white mb-2">Score Discrepancy Detected</h3>
-          <p className="text-red-200">Both teams have submitted different scores</p>
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-3xl font-bold text-white font-bodax uppercase tracking-wide mb-2">Score Discrepancy Detected</h3>
+          <p className="text-red-400 font-mono uppercase tracking-widest text-sm">Both teams have submitted different scores</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-600/30">
-            <h4 className="text-white font-bold mb-2">{team1?.name} Submitted:</h4>
-            <div className="text-2xl font-bold text-white">
+          <div className="p-4 bg-[#0a0a0a] border border-gray-800">
+            <h4 className="text-white font-bold mb-2 text-sm font-mono uppercase tracking-widest">{team1?.name} Submitted:</h4>
+            <div className="text-3xl font-bold text-white font-bodax uppercase tracking-wide">
               {match.resultSubmission?.team1SubmittedScore?.team1Score} - {match.resultSubmission?.team1SubmittedScore?.team2Score}
             </div>
           </div>
-          <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-600/30">
-            <h4 className="text-white font-bold mb-2">{team2?.name} Submitted:</h4>
-            <div className="text-2xl font-bold text-white">
+          <div className="p-4 bg-[#0a0a0a] border border-gray-800">
+            <h4 className="text-white font-bold mb-2 text-sm font-mono uppercase tracking-widest">{team2?.name} Submitted:</h4>
+            <div className="text-3xl font-bold text-white font-bodax uppercase tracking-wide">
               {match.resultSubmission?.team2SubmittedScore?.team1Score} - {match.resultSubmission?.team2SubmittedScore?.team2Score}
             </div>
           </div>
@@ -171,7 +238,7 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
             <button
               onClick={handleAgree}
               disabled={isSubmitting}
-              className="flex items-center justify-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
+              className="flex items-center justify-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors"
             >
               <CheckCircle className="w-5 h-5 mr-2" />
               Agree with {isTeam1 ? team2?.name : team1?.name}'s Score
@@ -180,12 +247,13 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
             <button
               onClick={handleDispute}
               disabled={isDisputing}
-              className="flex items-center justify-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
+              className="flex items-center justify-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors"
             >
               <AlertTriangle className="w-5 h-5 mr-2" />
               Create Dispute
             </button>
           </div>
+        </div>
         </div>
       </div>
     );
@@ -194,16 +262,25 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
   // If this team has already submitted, show waiting message
   if (hasSubmitted) {
     return (
-      <div className="bg-gradient-to-br from-blue-500/10 via-cyan-600/10 to-blue-700/10 backdrop-blur-sm rounded-2xl p-6 border border-blue-400/30 shadow-2xl">
+      <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative border-l-4 border-blue-600 pl-4">
         <div className="text-center mb-6">
-          <CheckCircle className="w-12 h-12 text-blue-400 mx-auto mb-4" />
-          <h3 className="text-2xl font-bold text-white mb-2">Results Submitted!</h3>
-          <p className="text-blue-200">Waiting for the other team to submit their results</p>
+          <CheckCircle className="w-12 h-12 text-blue-500 mx-auto mb-4" />
+          <h3 className="text-3xl font-bold text-white font-bodax uppercase tracking-wide mb-2">Results Submitted!</h3>
+          <p className="text-blue-400 font-mono uppercase tracking-widest text-sm">Waiting for the other team to submit their results</p>
         </div>
 
-        <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-600/30 mb-6">
-          <h4 className="text-white font-bold mb-2">Your Submitted Score:</h4>
-          <div className="text-2xl font-bold text-white">
+        <div className="p-4 bg-[#0a0a0a] border border-gray-800 mb-6">
+          <h4 className="text-white font-bold mb-2 text-sm font-mono uppercase tracking-widest">Your Submitted Score:</h4>
+          <div className="text-3xl font-bold text-white font-bodax uppercase tracking-wide">
             {match.resultSubmission?.team1SubmittedScore?.team1Score || match.resultSubmission?.team2SubmittedScore?.team1Score} - {match.resultSubmission?.team1SubmittedScore?.team2Score || match.resultSubmission?.team2SubmittedScore?.team2Score}
           </div>
         </div>
@@ -214,6 +291,7 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
             Waiting for {isTeam1 ? team2?.name : team1?.name} to submit...
           </div>
         </div>
+        </div>
       </div>
     );
   }
@@ -221,16 +299,25 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
   // If other team has submitted, show their score and allow agreement or new submission
   if (otherTeamSubmission) {
     return (
-      <div className="bg-gradient-to-br from-yellow-500/10 via-orange-600/10 to-yellow-700/10 backdrop-blur-sm rounded-2xl p-6 border border-yellow-400/30 shadow-2xl">
+      <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative border-l-4 border-yellow-600 pl-4">
         <div className="text-center mb-6">
-          <AlertTriangle className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
-          <h3 className="text-2xl font-bold text-white mb-2">Other Team Has Submitted</h3>
-          <p className="text-yellow-200">Review their score and either agree or submit your own</p>
+          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <h3 className="text-3xl font-bold text-white font-bodax uppercase tracking-wide mb-2">Other Team Has Submitted</h3>
+          <p className="text-yellow-400 font-mono uppercase tracking-widest text-sm">Review their score and either agree or submit your own</p>
         </div>
 
-        <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-600/30 mb-6">
-          <h4 className="text-white font-bold mb-2">{isTeam1 ? team2?.name : team1?.name} Submitted:</h4>
-          <div className="text-2xl font-bold text-white">
+        <div className="p-4 bg-[#0a0a0a] border border-gray-800 mb-6">
+          <h4 className="text-white font-bold mb-2 text-sm font-mono uppercase tracking-widest">{isTeam1 ? team2?.name : team1?.name} Submitted:</h4>
+          <div className="text-3xl font-bold text-white font-bodax uppercase tracking-wide">
             {otherTeamSubmission.team1Score} - {otherTeamSubmission.team2Score}
           </div>
         </div>
@@ -243,7 +330,7 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
               <button
                 onClick={handleAgree}
                 disabled={isSubmitting}
-                className="flex items-center justify-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
+                className="flex items-center justify-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors"
               >
                 <CheckCircle className="w-5 h-5 mr-2" />
                 Agree
@@ -252,7 +339,7 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
               <button
                 onClick={() => setTeam1Score(otherTeamSubmission.team1Score.toString())}
                 disabled={isSubmitting}
-                className="flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
+                className="flex items-center justify-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors"
               >
                 Submit Different Score
               </button>
@@ -263,22 +350,22 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
             <h4 className="text-white font-bold mb-3">Or submit your own score:</h4>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-white font-medium mb-2">{team1?.name}</label>
+                <label className="block text-white font-medium mb-2 font-mono uppercase tracking-widest text-sm">{team1?.name}</label>
                 <input
                   type="text"
                   value={team1Score}
                   onChange={(e) => handleScoreChange('team1', e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-xl font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2 bg-[#0a0a0a] border border-gray-800 text-white text-center text-xl font-bold font-bodax uppercase tracking-wide focus:ring-2 focus:ring-red-500 focus:border-red-600"
                   placeholder="0"
                 />
               </div>
               <div>
-                <label className="block text-white font-medium mb-2">{team2?.name}</label>
+                <label className="block text-white font-medium mb-2 font-mono uppercase tracking-widest text-sm">{team2?.name}</label>
                 <input
                   type="text"
                   value={team2Score}
                   onChange={(e) => handleScoreChange('team2', e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-xl font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2 bg-[#0a0a0a] border border-gray-800 text-white text-center text-xl font-bold font-bodax uppercase tracking-wide focus:ring-2 focus:ring-red-500 focus:border-red-600"
                   placeholder="0"
                 />
               </div>
@@ -287,11 +374,12 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
             <button
               onClick={handleSubmit}
               disabled={isSubmitting || !team1Score || !team2Score}
-              className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
+              className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors"
             >
               Submit Different Score
             </button>
           </div>
+        </div>
         </div>
       </div>
     );
@@ -299,30 +387,85 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
 
   // Default submission form
   return (
-    <div className="bg-gradient-to-br from-green-500/10 via-emerald-600/10 to-green-700/10 backdrop-blur-sm rounded-2xl p-6 border border-green-400/30 shadow-2xl">
+    <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+      <div
+        className="absolute inset-0 pointer-events-none opacity-20"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }}
+      />
+      <div className="relative border-l-4 border-green-600 pl-4">
+        {/* Auto-Detection Section */}
+        {(autoDetectedResult || match.autoDetectedResult) && (
+          <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="w-5 h-5 text-green-400" />
+              <h4 className="text-green-400 font-bold font-mono uppercase tracking-widest text-sm">Auto-Detected Match</h4>
+            </div>
+            <div className="text-white font-mono text-sm">
+              Score: <span className="font-bold text-lg">{autoDetectedResult?.team1Score || match.autoDetectedResult?.team1Score} - {autoDetectedResult?.team2Score || match.autoDetectedResult?.team2Score}</span>
+              {autoDetectedResult?.confidence && (
+                <span className="ml-2 text-green-300">({autoDetectedResult.confidence} confidence)</span>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Auto-Detect Button */}
+        <div className="mb-6">
+          <button
+            onClick={handleAutoDetect}
+            disabled={isAutoDetecting}
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-all"
+          >
+            {isAutoDetecting ? (
+              <>
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                Detecting Match...
+              </>
+            ) : (
+              <>
+                <Zap className="w-5 h-5" />
+                Auto-Detect Match Result
+              </>
+            )}
+          </button>
+          <p className="text-gray-400 text-xs font-mono mt-2 text-center">
+            Automatically detect match result from Riot API (requires players to have Riot IDs set)
+          </p>
+        </div>
+        
+        <div className="text-center mb-6">
+          <h3 className="text-3xl font-bold text-white font-bodax uppercase tracking-wide mb-2">Submit Match Results</h3>
+          <p className="text-gray-400 font-mono uppercase tracking-widest text-sm">Enter the final score for both teams</p>
+        </div>
       <div className="text-center mb-6">
-        <h3 className="text-2xl font-bold text-white mb-2">Submit Match Results</h3>
-        <p className="text-green-200">Enter the final score for this match</p>
+        <h3 className="text-3xl font-bold text-white font-bodax uppercase tracking-wide mb-2">Submit Match Results</h3>
+        <p className="text-green-400 font-mono uppercase tracking-widest text-sm">Enter the final score for this match</p>
       </div>
+
+      {/* Riot API features DISABLED - all suggestion and analytics UI removed */}
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div>
-          <label className="block text-white font-medium mb-2">{team1?.name}</label>
+          <label className="block text-white font-medium mb-2 font-mono uppercase tracking-widest text-sm">{team1?.name}</label>
           <input
             type="text"
             value={team1Score}
             onChange={(e) => handleScoreChange('team1', e.target.value)}
-            className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-xl font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-2 bg-[#0a0a0a] border border-gray-800 text-white text-center text-xl font-bold font-bodax uppercase tracking-wide focus:ring-2 focus:ring-red-500 focus:border-red-600"
             placeholder="0"
           />
         </div>
         <div>
-          <label className="block text-white font-medium mb-2">{team2?.name}</label>
+          <label className="block text-white font-medium mb-2 font-mono uppercase tracking-widest text-sm">{team2?.name}</label>
           <input
             type="text"
             value={team2Score}
             onChange={(e) => handleScoreChange('team2', e.target.value)}
-            className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-xl font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-2 bg-[#0a0a0a] border border-gray-800 text-white text-center text-xl font-bold font-bodax uppercase tracking-wide focus:ring-2 focus:ring-red-500 focus:border-red-600"
             placeholder="0"
           />
         </div>
@@ -332,15 +475,16 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
         <button
           onClick={handleSubmit}
           disabled={isSubmitting || !team1Score || !team2Score}
-          className="px-8 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
+          className="px-8 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-colors"
         >
           {isSubmitting ? 'Submitting...' : 'Submit Results'}
         </button>
       </div>
 
-      <div className="mt-4 text-center text-sm text-gray-400">
+      <div className="mt-4 text-center text-xs text-gray-500 font-mono uppercase tracking-widest">
         <p>Both teams must submit and agree on the results</p>
         <p>If scores don't match, a dispute will be created for admin review</p>
+      </div>
       </div>
     </div>
   );

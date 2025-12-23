@@ -86,7 +86,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
       };
 
       await onRegister(userData);
-      toast.success('Account created successfully! Welcome to Unity League! 🎉');
+      toast.success('Account created successfully! Welcome to Bodax!');
       // Small delay to show the toast before redirecting
       setTimeout(() => {
         navigate('/profile');
@@ -128,34 +128,29 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 text-white font-sans relative overflow-hidden flex items-center justify-center py-12">
-      {/* Geometric background pattern inspired by Unity League */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-20" 
-           style={{
-             backgroundImage: `
-               linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%),
-               linear-gradient(-45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%),
-               radial-gradient(circle at 25% 25%, rgba(0,255,255,0.1) 0 1px, transparent 1px 100px),
-               radial-gradient(circle at 75% 75%, rgba(255,255,255,0.1) 0 1px, transparent 1px 100px)
-             `
-           }} />
-      
-      {/* Diagonal accent lines like Unity League poster */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute top-0 right-0 w-32 h-1 bg-cyan-400 transform rotate-45 origin-top-right"></div>
-        <div className="absolute bottom-20 right-10 w-24 h-1 bg-cyan-400 transform -rotate-45 origin-bottom-right"></div>
-        <div className="absolute top-40 left-0 w-20 h-1 bg-white transform rotate-45 origin-top-left"></div>
-      </div>
+    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden flex items-center justify-center py-12">
+      <div
+        className="absolute inset-0 z-0 pointer-events-none opacity-20"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }}
+      />
+      <div className="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_center,rgba(255,0,0,0.08),transparent_55%)]" />
 
       <div className="relative z-20 max-w-md w-full mx-4">
-        <div className="bg-black/60 border border-pink-400/30 rounded-2xl shadow-2xl p-8 backdrop-blur-sm">
+        <div className="bg-[#0a0a0a] border border-gray-800 shadow-2xl p-8">
           <div className="text-center mb-8">
-            <div className="bg-gradient-to-r from-cyan-500 to-blue-600 p-3 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-              <User className="w-8 h-8 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Join Unity League</h1>
-            <p className="text-pink-200">Create your account and start competing</p>
-            <p className="text-pink-100 text-sm mt-2">You can link your Discord account later in your profile</p>
+            <h1 className="text-4xl font-bold text-white mb-2 font-bodax tracking-wide uppercase leading-none">
+              Create Account
+            </h1>
+            <p className="text-gray-400 font-mono uppercase tracking-widest text-sm">
+              Join Bodax and start competing
+            </p>
+            <p className="text-gray-500 text-xs mt-2 font-mono uppercase tracking-widest">
+              You can link Discord later in your profile
+            </p>
           </div>
 
           {errors.general && (
@@ -167,17 +162,17 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Username */}
             <div>
-              <label className="block text-sm font-medium text-pink-200 mb-2">
+              <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                 Username *
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   type="text"
                   value={formData.username}
                   onChange={(e) => handleInputChange('username', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300 ${
-                    errors.username ? 'border-red-500' : 'border-pink-400/30'
+                  className={`w-full pl-10 pr-4 py-3 bg-black/40 border focus:outline-none transition-colors text-white placeholder-gray-600 ${
+                    errors.username ? 'border-red-600' : 'border-gray-800 focus:border-red-600'
                   }`}
                   placeholder="Enter username"
                 />
@@ -189,17 +184,17 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-pink-200 mb-2">
+              <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                 Email Address *
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300 ${
-                    errors.email ? 'border-red-500' : 'border-pink-400/30'
+                  className={`w-full pl-10 pr-4 py-3 bg-black/40 border focus:outline-none transition-colors text-white placeholder-gray-600 ${
+                    errors.email ? 'border-red-600' : 'border-gray-800 focus:border-red-600'
                   }`}
                   placeholder="Enter email address"
                 />
@@ -211,24 +206,24 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-pink-200 mb-2">
+              <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                 Password *
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
-                  className={`w-full pl-10 pr-12 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300 ${
-                    errors.password ? 'border-red-500' : 'border-pink-400/30'
+                  className={`w-full pl-10 pr-12 py-3 bg-black/40 border focus:outline-none transition-colors text-white placeholder-gray-600 ${
+                    errors.password ? 'border-red-600' : 'border-gray-800 focus:border-red-600'
                   }`}
                   placeholder="Enter password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-pink-300 hover:text-cyan-400 transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-red-500 transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -240,24 +235,24 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-medium text-pink-200 mb-2">
+              <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                 Confirm Password *
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={formData.confirmPassword}
                   onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                  className={`w-full pl-10 pr-12 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300 ${
-                    errors.confirmPassword ? 'border-red-500' : 'border-pink-400/30'
+                  className={`w-full pl-10 pr-12 py-3 bg-black/40 border focus:outline-none transition-colors text-white placeholder-gray-600 ${
+                    errors.confirmPassword ? 'border-red-600' : 'border-gray-800 focus:border-red-600'
                   }`}
                   placeholder="Confirm password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-pink-300 hover:text-cyan-400 transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-red-500 transition-colors"
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -269,17 +264,17 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
 
             {/* Riot ID */}
             <div>
-              <label className="block text-sm font-medium text-pink-200 mb-2">
+              <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
                 Riot ID *
               </label>
               <div className="relative">
-                <Gamepad2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-cyan-400" />
+                <Gamepad2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   type="text"
                   value={formData.riotId}
                   onChange={(e) => handleInputChange('riotId', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 bg-black/40 border rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-white placeholder-pink-300 ${
-                    errors.riotId ? 'border-red-500' : 'border-pink-400/30'
+                  className={`w-full pl-10 pr-4 py-3 bg-black/40 border focus:outline-none transition-colors text-white placeholder-gray-600 ${
+                    errors.riotId ? 'border-red-600' : 'border-gray-800 focus:border-red-600'
                   }`}
                   placeholder="e.g., PlayerName#TAG"
                 />
@@ -292,18 +287,18 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-black font-bold py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              className="w-full bg-red-600 hover:bg-red-700 text-white border border-red-800 font-bodax text-2xl uppercase tracking-wider py-3 px-6 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-pink-200 text-sm">
+            <p className="text-gray-400 text-sm font-mono uppercase tracking-widest">
               Already have an account?{' '}
               <button
                 onClick={() => navigate('/login')}
-                className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                className="text-red-500 hover:text-red-400 transition-colors"
               >
                 Sign In
               </button>

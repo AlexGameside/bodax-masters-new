@@ -3,6 +3,7 @@ import type { Match, Team } from '../types/tournament';
 import { submitMatchResult, submitMatchResultAdminOverride } from '../services/firebaseService';
 import { toast } from 'react-hot-toast';
 import { X, Trophy, CheckCircle, AlertCircle } from 'lucide-react';
+import { BodaxModal } from './ui';
 
 interface ResultSubmissionModalProps {
   isOpen: boolean;
@@ -130,29 +131,40 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-700">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <div className="flex items-center space-x-2">
-            <Trophy className="h-5 w-5 text-yellow-500" />
-            <h3 className="text-lg font-semibold text-white">Submit Match Results</h3>
-          </div>
+    <BodaxModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Submit Results"
+      subtitle="Both teams must submit matching scores"
+      maxWidthClassName="max-w-md"
+      footer={
+        <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
           <button
+            type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            disabled={isSubmitting}
+            className="px-5 py-3 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 font-bodax text-xl uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <X className="h-5 w-5" />
+            Cancel
           </button>
+          {!hasSubmitted && (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting || !team1Score || !team2Score || (parseInt(team1Score) === 0 && parseInt(team2Score) === 0)}
+              className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white border border-red-800 font-bodax text-xl uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Submitting...' : 'Submit'}
+            </button>
+          )}
         </div>
-
-        {/* Content */}
-        <div className="p-6">
+      }
+    >
           {/* Match Info */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Team 1</span>
-              <span className="text-sm text-gray-400">Team 2</span>
+              <span className="text-xs text-gray-500 font-mono uppercase tracking-widest">Team 1</span>
+              <span className="text-xs text-gray-500 font-mono uppercase tracking-widest">Team 2</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="font-medium text-white">{team1?.name || 'Team 1'}</span>
@@ -164,25 +176,25 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
           {/* Score Input */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <label className="text-sm text-gray-300">{team1?.name || 'Team 1'} Score:</label>
+              <label className="text-xs text-gray-400 font-mono uppercase tracking-widest">{team1?.name || 'Team 1'} Score</label>
               <input
                 type="text"
                 inputMode="numeric"
                 value={team1Score}
                 onChange={(e) => handleScoreChange('team1', e.target.value)}
-                className="w-20 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-center focus:outline-none focus:border-blue-500"
+                className="w-24 px-3 py-2 bg-black/40 border border-gray-800 text-white text-center focus:outline-none focus:border-red-600 font-mono"
                 placeholder="0"
                 disabled={hasSubmitted || isSubmitting}
               />
             </div>
             <div className="flex items-center justify-between">
-              <label className="text-sm text-gray-300">{team2?.name || 'Team 2'} Score:</label>
+              <label className="text-xs text-gray-400 font-mono uppercase tracking-widest">{team2?.name || 'Team 2'} Score</label>
               <input
                 type="text"
                 inputMode="numeric"
                 value={team2Score}
                 onChange={(e) => handleScoreChange('team2', e.target.value)}
-                className="w-20 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-center focus:outline-none focus:border-blue-500"
+                className="w-24 px-3 py-2 bg-black/40 border border-gray-800 text-white text-center focus:outline-none focus:border-red-600 font-mono"
                 placeholder="0"
                 disabled={hasSubmitted || isSubmitting}
               />
@@ -191,20 +203,20 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
 
           {/* Submission Status */}
           {hasSubmitted && (
-            <div className="mt-4 p-3 bg-green-900 border border-green-700 rounded-lg">
+            <div className="mt-4 p-4 bg-green-900/10 border border-green-900">
               <div className="flex items-center space-x-2">
                 <CheckCircle className="h-4 w-4 text-green-400" />
-                <span className="text-sm text-green-300">Results already submitted</span>
+                <span className="text-sm text-green-300 font-mono uppercase tracking-widest">Results already submitted</span>
               </div>
             </div>
           )}
 
           {/* Other Team Status */}
           {!hasSubmitted && (
-            <div className="mt-4 p-3 bg-blue-900 border border-blue-700 rounded-lg">
+            <div className="mt-4 p-4 bg-black/30 border border-gray-800">
               <div className="flex items-center space-x-2">
-                <AlertCircle className="h-4 w-4 text-blue-400" />
-                <span className="text-sm text-blue-300">
+                <AlertCircle className="h-4 w-4 text-red-500" />
+                <span className="text-sm text-gray-300 font-mono uppercase tracking-widest">
                   {match.resultSubmission?.team1Submitted || match.resultSubmission?.team2Submitted
                     ? 'Waiting for other team to submit results'
                     : 'Both teams need to submit matching results'}
@@ -215,18 +227,18 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
 
           {/* Admin Override Section */}
           {isAdmin && (
-            <div className="mt-4 p-3 bg-purple-900 border border-purple-700 rounded-lg">
+            <div className="mt-4 p-4 bg-red-900/10 border border-red-900/50">
               <div className="flex items-center space-x-2 mb-2">
-                <AlertCircle className="h-4 w-4 text-purple-400" />
-                <span className="text-sm text-purple-300 font-medium">Admin Override</span>
+                <AlertCircle className="h-4 w-4 text-red-400" />
+                <span className="text-sm text-red-300 font-medium font-mono uppercase tracking-widest">Admin Override</span>
               </div>
-              <div className="text-xs text-purple-200 mb-3">
+              <div className="text-xs text-gray-400 mb-3 font-mono">
                 As an admin, you can force confirm results without waiting for both teams.
               </div>
               <button
                 onClick={handleAdminOverride}
                 disabled={isSubmitting || !team1Score || !team2Score || (parseInt(team1Score) === 0 && parseInt(team2Score) === 0)}
-                className="w-full px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                className="w-full px-4 py-3 bg-gray-900 hover:bg-gray-800 text-white border border-gray-700 font-mono uppercase tracking-widest transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
                 {isSubmitting ? 'Processing...' : 'Force Confirm Results (Admin)'}
               </button>
@@ -235,8 +247,8 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
 
           {/* Confirmation Status */}
           {match.resultSubmission && (
-            <div className="mt-4 p-3 bg-gray-700 border border-gray-600 rounded-lg">
-              <h4 className="text-white font-medium mb-2 text-sm">Confirmation Status:</h4>
+            <div className="mt-4 p-4 bg-black/30 border border-gray-800">
+              <h4 className="text-white font-medium mb-3 text-sm font-mono uppercase tracking-widest">Confirmation Status</h4>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-300">{team1?.name || 'Team 1'}:</span>
@@ -258,29 +270,7 @@ const ResultSubmissionModal: React.FC<ResultSubmissionModalProps> = ({
               </div>
             </div>
           )}
-
-          {/* Buttons */}
-          <div className="flex space-x-3 mt-6">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition-colors"
-              disabled={isSubmitting}
-            >
-              Cancel
-            </button>
-            {!hasSubmitted && (
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !team1Score || !team2Score || (parseInt(team1Score) === 0 && parseInt(team2Score) === 0)}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Submitting...' : 'Submit Results'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </BodaxModal>
   );
 };
 

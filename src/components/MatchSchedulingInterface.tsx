@@ -6,6 +6,7 @@ import { Send, Clock, Calendar, MessageCircle, CheckCircle, XCircle, AlertCircle
 import MatchReadyUpInterface from './MatchReadyUpInterface';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { BodaxModal } from './ui';
 
 interface MatchSchedulingInterfaceProps {
   match: Match;
@@ -58,6 +59,7 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const lastFetchedTournamentId = useRef<string | null>(null);
 
   const currentTeam = teams.find(t => t.id === currentTeamId);
   const opponentTeam = teams.find(t => 
@@ -66,35 +68,57 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
 
   // Fetch tournament data and current matchday to get the correct scheduling window
   useEffect(() => {
+    // Reset if tournamentId changed
+    if (lastFetchedTournamentId.current && lastFetchedTournamentId.current !== match.tournamentId) {
+      lastFetchedTournamentId.current = null;
+      setTournament(null);
+      setCurrentMatchday(null);
+    }
+
+    // Skip if we already have the tournament data for this tournamentId
+    if (!match.tournamentId || lastFetchedTournamentId.current === match.tournamentId) {
+      return;
+    }
+
     const fetchTournamentAndMatchday = async () => {
-      if (match.tournamentId) {
-        try {
-          // Fetch tournament data
-          const tournamentRef = doc(db, 'tournaments', match.tournamentId);
-          const tournamentDoc = await getDoc(tournamentRef);
-          if (tournamentDoc.exists()) {
-            const tournamentData = tournamentDoc.data() as Tournament;
-            setTournament(tournamentData);
+      try {
+        // Mark that we're fetching this tournament
+        lastFetchedTournamentId.current = match.tournamentId;
+        
+        // Fetch tournament data
+        const tournamentRef = doc(db, 'tournaments', match.tournamentId);
+        const tournamentDoc = await getDoc(tournamentRef);
+        if (tournamentDoc.exists()) {
+          const tournamentData = tournamentDoc.data() as Tournament;
+          setTournament(tournamentData);
+          
+          // Fetch current matchday data for Swiss tournaments
+          if (tournamentData.stageManagement?.swissStage?.currentRound && 
+              match.tournamentType === 'swiss-round') {
+            const currentRound = tournamentData.stageManagement.swissStage.currentRound;
             
-            // Fetch current matchday data for Swiss tournaments
-            if (tournamentData.stageManagement?.swissStage?.currentRound && 
-                match.tournamentType === 'swiss-round') {
-              const currentRound = tournamentData.stageManagement.swissStage.currentRound;
-              
-              
-              // Import the SwissTournamentService to get matchday data
-              const { SwissTournamentService } = await import('../services/swissTournamentService');
-              const matchday = await SwissTournamentService.getMatchdayByNumber(match.tournamentId, currentRound);
-              
-              if (matchday) {
-                setCurrentMatchday(matchday);
-              } else {
-              }
+            
+            // Import the SwissTournamentService to get matchday data
+            const { SwissTournamentService } = await import('../services/swissTournamentService');
+            const matchday = await SwissTournamentService.getMatchdayByNumber(match.tournamentId, currentRound);
+            
+            if (matchday) {
+              setCurrentMatchday(matchday);
             }
           }
-        } catch (error) {
-          console.error('Error fetching tournament and matchday:', error);
         }
+      } catch (error: any) {
+        // Handle rate limiting errors
+        if (error?.code === 'resource-exhausted' || error?.code === 429) {
+          console.warn('Rate limited while fetching tournament, will retry later');
+          // Reset the ref so we can retry later
+          lastFetchedTournamentId.current = null;
+          // Don't throw, just log - the component can work without tournament data
+          return;
+        }
+        console.error('Error fetching tournament and matchday:', error);
+        // Reset the ref on error so we can retry
+        lastFetchedTournamentId.current = null;
       }
     };
 
@@ -729,27 +753,44 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
       </div>
 
       {/* Proposal Form Modal */}
-      {showProposalForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-start justify-center z-50 pt-8">
-          <div className="bg-gray-800 rounded-lg p-4 max-w-md w-full mx-4 border border-gray-600">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="bg-blue-600 p-1.5 rounded">
-                <Calendar className="w-4 h-4 text-white" />
-              </div>
-              <h4 className="text-sm font-bold text-white">
-                {needsResponse ? 'Propose Alternative Time' : 'Send Scheduling Proposal'}
-              </h4>
-            </div>
-            
-            <div className="space-y-3">
+      <BodaxModal
+        isOpen={showProposalForm}
+        onClose={() => setShowProposalForm(false)}
+        title={needsResponse ? 'Alternative Time' : 'Schedule Match'}
+        subtitle={needsResponse ? 'Deny & propose a new time' : 'Send a scheduling proposal'}
+        maxWidthClassName="max-w-md"
+        footer={
+          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowProposalForm(false)}
+              className="px-5 py-3 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 font-bodax text-xl uppercase tracking-wider transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={needsResponse ? 
+                () => handleRespondToProposal(pendingProposal!.id, 'deny') : 
+                handleSendProposal
+              }
+              disabled={isSubmitting || !selectedDate || !selectedTime}
+              className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white border border-red-800 font-bodax text-xl uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Sending...' : (needsResponse ? 'Send Alternative' : 'Send Proposal')}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
               {/* Scheduling Window Info */}
               {(tournament?.stageManagement?.swissStage?.currentRound && (match.tournamentType === 'swiss-round')) && (
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                  <div className="flex items-center space-x-2 text-blue-300 text-sm mb-1">
+                <div className="bg-black/30 border border-gray-800 p-4">
+                  <div className="flex items-center space-x-2 text-red-500 text-sm mb-1 font-mono uppercase tracking-widest">
                     <Calendar className="w-4 h-4" />
                     <span className="font-medium">Round {tournament.stageManagement.swissStage.currentRound} Scheduling Window</span>
                   </div>
-                  <div className="text-xs text-blue-200">
+                  <div className="text-xs text-gray-400 font-mono">
                     Available: {constraints.minDate.toLocaleDateString()} - {constraints.maxDate.toLocaleDateString()}
                     {constraints.daysRemaining > 0 && (
                       <span className="ml-2 text-green-300">
@@ -763,13 +804,13 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
               {/* Team Selection for Admins without a team */}
               {isAdmin && !currentTeamId && (
                 <div>
-                  <label className="block text-blue-300 text-sm font-medium mb-1">
+                  <label className="block text-gray-400 text-sm font-bold mb-2 font-mono uppercase tracking-widest">
                     Act on behalf of
                   </label>
                   <select
                     value={selectedTeamId}
                     onChange={(e) => setSelectedTeamId(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-black/40 border border-gray-800 px-3 py-3 text-white text-sm focus:outline-none focus:border-red-600 font-mono uppercase tracking-wider"
                   >
                     {teams.map(team => (
                       <option key={team.id} value={team.id}>
@@ -782,7 +823,7 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
               
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-blue-300 text-sm font-medium mb-1">
+                  <label className="block text-gray-400 text-sm font-bold mb-2 font-mono uppercase tracking-widest">
                     Date
                   </label>
                   <input
@@ -791,24 +832,24 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
                     onChange={(e) => setSelectedDate(e.target.value)}
                     min={constraints.minDate.toISOString().split('T')[0]}
                     max={constraints.maxDate.toISOString().split('T')[0]}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-black/40 border border-gray-800 px-3 py-3 text-white text-sm focus:outline-none focus:border-red-600 font-mono uppercase tracking-wider"
                   />
                 </div>
                 <div>
-                  <label className="block text-blue-300 text-sm font-medium mb-1">
+                  <label className="block text-gray-400 text-sm font-bold mb-2 font-mono uppercase tracking-widest">
                     Time
                   </label>
                   <input
                     type="time"
                     value={selectedTime}
                     onChange={(e) => setSelectedTime(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-black/40 border border-gray-800 px-3 py-3 text-white text-sm focus:outline-none focus:border-red-600 font-mono uppercase tracking-wider"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-blue-300 text-sm font-medium mb-1">
+                <label className="block text-gray-400 text-sm font-bold mb-2 font-mono uppercase tracking-widest">
                   Message (Optional)
                 </label>
                 <textarea
@@ -816,42 +857,21 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder={needsResponse ? "Why are you denying and what's your alternative?" : "Add a message for your opponent..."}
                   rows={3}
-                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                  className="w-full bg-black/40 border border-gray-800 px-3 py-3 text-white text-sm focus:outline-none focus:border-red-600 resize-none"
                 />
               </div>
 
               {/* Error Message Display */}
               {error && (
-                <div className="bg-red-900/20 border border-red-600 rounded p-2">
+                <div className="bg-red-900/10 border border-red-900 p-3">
                   <div className="flex items-center gap-1">
                     <XCircle className="w-3 h-3 text-red-400" />
-                    <div className="text-red-300 text-sm">{error}</div>
+                    <div className="text-red-300 text-sm font-mono uppercase tracking-widest">{error}</div>
                   </div>
                 </div>
               )}
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowProposalForm(false)}
-                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 rounded text-sm font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={needsResponse ? 
-                    () => handleRespondToProposal(pendingProposal!.id, 'deny') : 
-                    handleSendProposal
-                  }
-                  disabled={isSubmitting || !selectedDate || !selectedTime}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white py-2 rounded text-sm font-bold transition-colors"
-                >
-                  {isSubmitting ? 'Sending...' : (needsResponse ? 'Send Alternative' : 'Send Proposal')}
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
-      )}
+      </BodaxModal>
     </div>
   );
 };

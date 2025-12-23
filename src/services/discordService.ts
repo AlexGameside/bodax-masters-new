@@ -40,7 +40,9 @@ const sendDiscordNotification = async (data: DiscordNotificationData): Promise<b
       hasBotToken: !!botToken 
     });
 
-    const response = await fetch('https://oauth-proxy-n619ywlnz-alexgamesides-projects.vercel.app/api/discord/send-notification', {
+    // Use production domain which automatically points to latest deployment
+    const proxyUrl = 'https://oauth-proxy-gilt.vercel.app';
+    const response = await fetch(`${proxyUrl}/api/discord/send-notification`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -530,12 +532,12 @@ export const getDiscordAuthUrl = (): string => {
 };
 
 export const exchangeCodeForToken = async (code: string): Promise<string> => {
-  const proxyUrl = import.meta.env.VITE_OAUTH_PROXY_URL;
+  // Use production domain as fallback if env var not set or is old URL
+  const envProxyUrl = import.meta.env.VITE_OAUTH_PROXY_URL;
+  const proxyUrl = envProxyUrl && !envProxyUrl.includes('5t15g09rb') 
+    ? envProxyUrl 
+    : 'https://oauth-proxy-gilt.vercel.app';
   const redirectUri = `${window.location.origin}/discord-callback`;
-
-  if (!proxyUrl) {
-    throw new Error('OAuth proxy URL not configured');
-  }
     
   const response = await fetch(`${proxyUrl}/api/discord/token`, {
       method: 'POST',
@@ -558,11 +560,11 @@ export const exchangeCodeForToken = async (code: string): Promise<string> => {
 };
 
 export const getDiscordUser = async (accessToken: string): Promise<any> => {
-  const proxyUrl = import.meta.env.VITE_OAUTH_PROXY_URL;
-
-  if (!proxyUrl) {
-    throw new Error('OAuth proxy URL not configured');
-  }
+  // Use production domain as fallback if env var not set or is old URL
+  const envProxyUrl = import.meta.env.VITE_OAUTH_PROXY_URL;
+  const proxyUrl = envProxyUrl && !envProxyUrl.includes('5t15g09rb') 
+    ? envProxyUrl 
+    : 'https://oauth-proxy-gilt.vercel.app';
 
   const response = await fetch(`${proxyUrl}/api/discord/user`, {
       method: 'POST',

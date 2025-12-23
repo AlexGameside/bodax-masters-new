@@ -17,6 +17,7 @@ import type {
   RegistrationRequirements
 } from '../types/tournament';
 import { createTournament, publishTournament } from '../services/tournamentService';
+import { DEFAULT_MAP_POOL } from '../constants/mapPool';
 
 // Helper function to clean objects for Firestore (remove undefined values)
 const cleanForFirestore = (obj: any): any => {
@@ -54,6 +55,7 @@ const TournamentCreation = () => {
   // Tournament format
   const [tournamentType, setTournamentType] = useState<'single-elimination' | 'double-elimination' | 'swiss-system'>('single-elimination');
   const [matchFormat, setMatchFormat] = useState<'BO1' | 'BO3' | 'BO5'>('BO3');
+  const [finalsBO3, setFinalsBO3] = useState<boolean>(false);
   const [seedingMethod, setSeedingMethod] = useState<'random' | 'manual'>('random');
   
   // Swiss system specific
@@ -143,7 +145,8 @@ const TournamentCreation = () => {
         type: tournamentType,
         teamCount: maxTeams,
         matchFormat,
-        mapPool: ['Corrode', 'Ascent', 'Bind', 'Haven', 'Icebox', 'Lotus', 'Sunset'],
+      finalsMatchFormat: finalsBO3 ? 'BO3' : matchFormat,
+      mapPool: DEFAULT_MAP_POOL,
         sideSelection: 'coin-flip',
         seedingMethod: seedingMethod,
         ...(tournamentType === 'swiss-system' && {
@@ -501,6 +504,24 @@ const TournamentCreation = () => {
                   <p className="mt-1 text-xs text-gray-400">
                     Manual seeding allows you to arrange teams in custom order
                   </p>
+                </div>
+
+                <div className="col-span-2 flex items-center space-x-3">
+                  <input
+                    id="finalsBO3"
+                    type="checkbox"
+                    checked={finalsBO3}
+                    onChange={(e) => setFinalsBO3(e.target.checked)}
+                    className="h-4 w-4 text-indigo-600 border-gray-600 rounded focus:ring-indigo-500"
+                  />
+                  <div>
+                    <label htmlFor="finalsBO3" className="text-sm font-medium text-gray-200">
+                      Make the grand final a BO3 (full veto)
+                    </label>
+                    <p className="text-xs text-gray-400">
+                      Earlier rounds follow the match format above; the final uses BO3 when enabled.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

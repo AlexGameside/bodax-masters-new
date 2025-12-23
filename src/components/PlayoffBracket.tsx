@@ -23,14 +23,6 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
   // Check if playoffs are active (new system) or legacy teams advancing
   const hasActivePlayoffs = playoffStage?.isActive || (swissStage?.teamsAdvancingToPlayoffs && swissStage.teamsAdvancingToPlayoffs.length > 0);
   
-  console.log('🏆 PlayoffBracket Debug:');
-  console.log('  - Total matches passed:', matches.length);
-  console.log('  - Playoff matches found:', playoffMatches.length);
-  console.log('  - Playoff stage data:', playoffStage);
-  console.log('  - Swiss stage data:', swissStage);
-  console.log('  - Teams advancing (legacy):', swissStage?.teamsAdvancingToPlayoffs);
-  console.log('  - hasActivePlayoffs:', hasActivePlayoffs);
-  
   if (!hasActivePlayoffs) {
     return (
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
@@ -182,7 +174,7 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
     const bracketStructure: { round: number; matches: Match[] }[] = [];
     
     for (let round = 1; round <= rounds; round++) {
-      const roundMatches = playoffMatches.filter(m => m.round === round);
+      const roundMatches = playoffMatches.filter(m => m.round === round).sort((a, b) => a.matchNumber - b.matchNumber);
       bracketStructure.push({ round, matches: roundMatches });
     }
     
@@ -212,7 +204,7 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
                 Quarter Finals
               </div>
               <div className="space-y-8">
-                {playoffMatches.filter(m => m.round === 1).map((match, index) => (
+                {playoffMatches.filter(m => m.round === 1).sort((a, b) => a.matchNumber - b.matchNumber).map((match, index) => (
                   <div key={match.id} className="relative">
                     {getMatchDisplay(match)}
                     {/* Connection lines to semifinals */}
@@ -235,7 +227,7 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
                 Semifinals
               </div>
               <div className="space-y-16">
-                {playoffMatches.filter(m => m.round === 2).map((match, index) => (
+                {playoffMatches.filter(m => m.round === 2).sort((a, b) => a.matchNumber - b.matchNumber).map((match, index) => (
                   <div key={match.id} className="relative">
                     {getMatchDisplay(match)}
                     {/* Connection line to final */}
@@ -255,7 +247,7 @@ const PlayoffBracket: React.FC<PlayoffBracketProps> = ({
                 Grand Final
               </div>
               <div className="space-y-6">
-                {playoffMatches.filter(m => m.round === 3).map((match) => (
+                {playoffMatches.filter(m => m.round === 3).sort((a, b) => a.matchNumber - b.matchNumber).map((match) => (
                   <div key={match.id} className="relative">
                     {getMatchDisplay(match, true)}
                   </div>
