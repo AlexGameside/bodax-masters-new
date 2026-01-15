@@ -28,9 +28,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Missing access_token parameter' });
     }
 
-    // Get account info using the access token
-    // Using Europe region endpoint - adjust if needed for other regions
-    const accountResponse = await fetch('https://europe.api.riotgames.com/riot/account/v1/accounts/me', {
+    // Get user info using the access token
+    // According to official Riot RSO docs: Use /userinfo endpoint
+    const accountResponse = await fetch('https://auth.riotgames.com/userinfo', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${access_token}`,
@@ -48,12 +48,45 @@ export default async function handler(req, res) {
 
     const accountData = await accountResponse.json();
     
+    // Riot /userinfo returns: { sub, cpid }
+    // We need to get the Riot ID (gameName#tagLine) from a different endpoint
+    // For now, return what we have and use the account endpoint for Riot ID
+    // The 'sub' is the subject identifier (player identifier)
+    
+    // Try to get Riot ID from account endpoint using the sub
+    // Actually, we should use the account endpoint with the access token
+    // But first, let's return what userinfo gives us
+    let riotId = null;
+    let gameName = null;
+    let tagLine = null;
+    
+    // Try to get account info from account endpoint
+    try {
+      const accountEndpointResponse = await fetch('https://europe.api.riotgames.com/riot/account/v1/accounts/me', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+        },
+      });
+      
+      if (accountEndpointResponse.ok) {
+        const accountInfo = await accountEndpointResponse.json();
+        gameName = accountInfo.gameName;
+        tagLine = accountInfo.tagLine;
+        riotId = `${accountInfo.gameName}#${accountInfo.tagLine}`;
+      }
+    } catch (e) {
+      console.warn('Could not fetch account info from account endpoint:', e);
+    }
+    
     // Return the account information
     res.status(200).json({
-      puuid: accountData.puuid,
-      gameName: accountData.gameName,
-      tagLine: accountData.tagLine,
-      riotId: `${accountData.gameName}#${accountData.tagLine}`,
+      sub: accountData.sub, // Subject identifier from userinfo
+      cpid: accountData.cpid, // Game region (e.g., "NA1")
+      puuid: accountData.sub, // Use sub as puuid for now
+      gameName: gameName,
+      tagLine: tagLine,
+      riotId: riotId || accountData.sub, // Fallback to sub if we can't get Riot ID
     });
 
   } catch (error) {

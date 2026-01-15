@@ -7,18 +7,35 @@ This guide will help you set up Riot Sign-On (RSO) authentication for your appli
 1. **Riot Developer Account**: You need a Riot Developer Portal account
 2. **Production API Key**: RSO requires a production-level API key (not development)
 3. **Client ID**: `9a2ae5ad-6116-4173-a13f-eb39c15fa4c8` ✅
-4. **Client Secret**: `mxjMgMRwX0GBtgJyzw_M8HDsXdzkp9iwY3LMzUhq_2_` ✅
+4. **Client Authentication Method**: 
+   - **Older clients**: `client_secret_basic` - Use `RIOT_CLIENT_SECRET`
+   - **Newer clients**: `client_secret_jwt` - Use `RIOT_CLIENT_ASSERTION` (JWT token)
+5. **Client Secret** (if older client): `mxjMgMRwX0GBtgJyzw_M8HDsXdzkp9iwY3LMzUhq_2_` ✅
+6. **Client Assertion** (if newer client): The signed JWT token provided by Riot (100-year example token or self-signed)
 
 ## Step 1: Configure Riot Developer Portal
 
 1. Go to [Riot Developer Portal](https://developer.riotgames.com/)
 2. Navigate to your application settings
-3. Add your redirect URIs (you can add multiple):
+3. **Add your redirect URIs** (you can add multiple):
    - **Development**: `http://127.0.0.1:5173/riot/callback` (use 127.0.0.1 instead of localhost)
    - **Production**: `https://bodax-masters.web.app/riot/callback`
    
    **Note**: Riot Developer Portal may not accept `localhost` URLs. Use `127.0.0.1` instead.
-4. Note your **Client ID**: `9a2ae5ad-6116-4173-a13f-eb39c15fa4c8` ✅
+4. **Add branding information** (optional but recommended):
+   - **Client Name**: `Bodax Masters` (or localized versions)
+   - **Logo URI**: `https://bodax-masters.web.app/logo.png` (60px x 60px image)
+   - **Privacy Policy URI**: `https://bodax-masters.web.app/privacy-policy`
+   - **Terms of Service URI**: `https://bodax-masters.web.app/terms-of-service`
+   
+   For localized versions, use format: `<field>#<locale>: <url>`
+   Example: `privacy policy url#de_DE: https://bodax-masters.web.app/privacy-policy-de`
+   
+   Supported locales: `cs_CZ`, `de_DE`, `el_GR`, `en_AU`, `en_GB`, `en_PL`, `en_US`, `es_AR`, `es_ES`, `es_MX`, `fr_FR`, `hu_HU`, `it_IT`, `ja_JP`, `pl_PL`, `pt_BR`, `ro_RO`, `ru_RU`, `tr_TR`
+5. **Check your authentication method**:
+   - **Token endpoint auth method**: Check if it's `client_secret_basic` or `client_secret_jwt`
+   - If `client_secret_jwt`, you'll need the JWT assertion token
+6. Note your **Client ID**: `9a2ae5ad-6116-4173-a13f-eb39c15fa4c8` ✅
 
 ## Step 2: Set Environment Variables
 
@@ -36,13 +53,24 @@ VITE_OAUTH_PROXY_URL=https://your-oauth-proxy.vercel.app
 
 In your Vercel dashboard for the `oauth-proxy` project, add these environment variables:
 
+**For older clients (client_secret_basic):**
 ```env
 # Riot RSO Configuration
 RIOT_CLIENT_ID=9a2ae5ad-6116-4173-a13f-eb39c15fa4c8
 RIOT_CLIENT_SECRET=mxjMgMRwX0GBtgJyzw_M8HDsXdzkp9iwY3LMzUhq_2_
 ```
 
-**Important**: The client secret should NEVER be exposed in the frontend code. It must only be stored in the OAuth proxy backend.
+**For newer clients (client_secret_jwt):**
+```env
+# Riot RSO Configuration
+RIOT_CLIENT_ID=9a2ae5ad-6116-4173-a13f-eb39c15fa4c8
+RIOT_CLIENT_ASSERTION=your-signed-jwt-token-here
+```
+
+**Important**: 
+- The client secret/JWT should NEVER be exposed in the frontend code. It must only be stored in the OAuth proxy backend.
+- If you have a newer client, you'll receive a "100-year example token" from Riot that you can use as `RIOT_CLIENT_ASSERTION`
+- The code automatically detects which method to use based on which environment variable is set
 
 ## Step 3: Deploy OAuth Proxy
 

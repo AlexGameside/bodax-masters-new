@@ -40,32 +40,69 @@ export default async function handler(req, res) {
     }
 
     // Check if environment variables are set
-    if (!process.env.RIOT_CLIENT_ID || !process.env.RIOT_CLIENT_SECRET) {
+    // Newer Riot clients use JWT (client_assertion), older clients use Basic Auth (client_secret)
+    const clientId = process.env.RIOT_CLIENT_ID?.trim();
+    const clientSecret = process.env.RIOT_CLIENT_SECRET?.trim();
+    const clientAssertion = process.env.RIOT_CLIENT_ASSERTION?.trim(); // JWT token for newer clients
+    
+    if (!clientId) {
       return res.status(500).json({ 
         message: 'OAuth proxy not configured',
-        error: 'Missing RIOT_CLIENT_ID or RIOT_CLIENT_SECRET environment variables'
+        error: 'Missing RIOT_CLIENT_ID environment variable'
       });
     }
-
-    // Exchange the authorization code for an access token
-    // According to official Riot RSO docs: Use Basic Auth with client_id:client_secret
-    // Authorization: Basic Base64(client_id:client_secret)
-    // Form data: grant_type=authorization_code, code, redirect_uri
-    const credentials = Buffer.from(`${process.env.RIOT_CLIENT_ID}:${process.env.RIOT_CLIENT_SECRET}`).toString('base64');
     
-    console.log('Exchanging code with Basic Auth (official Riot RSO method)');
+    // Determine authentication method: JWT (newer) or Basic Auth (older)
+    const useJWT = !!clientAssertion;
+    const useBasicAuth = !!clientSecret && !useJWT;
+    
+    if (!useJWT && !useBasicAuth) {
+      return res.status(500).json({ 
+        message: 'OAuth proxy not configured',
+        error: 'Missing RIOT_CLIENT_ASSERTION (JWT) or RIOT_CLIENT_SECRET (Basic Auth) environment variable'
+      });
+    }
+    
+    const requestBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri,
+    });
+    
+    let headers = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    
+    // Use JWT authentication for newer clients
+    if (useJWT) {
+      requestBody.append('client_assertion_type', 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer');
+      requestBody.append('client_assertion', clientAssertion);
+      
+      console.log('Exchanging code with JWT (newer client):', {
+        clientIdLength: clientId.length,
+        redirect_uri: redirect_uri,
+        codeLength: code?.length,
+        grantType: 'authorization_code',
+        hasClientAssertion: true
+      });
+    } else {
+      // Use Basic Auth for older clients
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      headers['Authorization'] = `Basic ${credentials}`;
+      
+      console.log('Exchanging code with Basic Auth (older client):', {
+        clientIdLength: clientId.length,
+        clientSecretLength: clientSecret.length,
+        redirect_uri: redirect_uri,
+        codeLength: code?.length,
+        grantType: 'authorization_code'
+      });
+    }
     
     const tokenResponse = await fetch('https://auth.riotgames.com/token', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${credentials}`,
-      },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri,
-      }),
+      headers,
+      body: requestBody,
     });
 
     if (!tokenResponse.ok) {
@@ -76,16 +113,22 @@ export default async function handler(req, res) {
       } catch (e) {
         errorData = { message: errorText };
       }
-      console.error('Riot OAuth error:', {
+      
+      // Log full error details for debugging
+      console.error('Riot OAuth error (full details):', {
         status: tokenResponse.status,
         statusText: tokenResponse.statusText,
         error: errorData,
+        errorText: errorText,
         redirect_uri: redirect_uri,
-        code_length: code?.length
+        code_length: code?.length,
+        clientId: clientId.substring(0, 8) + '...', // Log first 8 chars only
+        headers: Object.fromEntries(tokenResponse.headers.entries())
       });
+      
       return res.status(400).json({ 
         message: 'Failed to exchange code for token',
-        error: errorData.message || errorText,
+        error: errorData.error_description || errorData.message || errorText,
         details: errorData
       });
     }
