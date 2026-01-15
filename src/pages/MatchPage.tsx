@@ -431,10 +431,15 @@ const MatchPage = () => {
      (userTeam.id === match?.team2Id && match?.team2Ready));
 
   const getUserDisplayName = (user: User) => {
+    // Prioritize username for matches (as requested)
+    if (user?.username && user.username.trim()) {
+      return user.username;
+    }
+    // Fallback to Riot ID if username is not available
     const riot = (user as any)?.riotId;
     if (typeof riot === 'string' && riot.trim() && riot !== 'No Riot ID') return riot;
-    // If Riot ID is missing, still show something (but this should be rare after getUsersByIds fallback)
-    return user?.username || 'Unknown';
+    // Final fallback
+    return 'Unknown';
   };
 
   useEffect(() => {
