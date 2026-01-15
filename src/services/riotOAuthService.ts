@@ -13,6 +13,12 @@ export const getRiotAuthUrl = (): string => {
     redirectUri = redirectUri.replace('localhost', '127.0.0.1');
   }
   
+  console.log('Generating Riot auth URL:', {
+    redirectUri,
+    origin: window.location.origin,
+    hostname: window.location.hostname
+  });
+  
   if (!clientId) {
     throw new Error('Riot Client ID not configured');
   }
@@ -39,6 +45,13 @@ export const exchangeCodeForToken = async (code: string): Promise<{ access_token
   if (window.location.hostname === 'localhost') {
     redirectUri = redirectUri.replace('localhost', '127.0.0.1');
   }
+  
+  console.log('Exchanging Riot code for token:', {
+    redirectUri,
+    origin: window.location.origin,
+    hostname: window.location.hostname,
+    codeLength: code?.length
+  });
     
   const response = await fetch(`${proxyUrl}/api/riot/token`, {
     method: 'POST',
@@ -52,8 +65,17 @@ export const exchangeCodeForToken = async (code: string): Promise<{ access_token
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to exchange code for token');
+    let errorMessage = 'Failed to exchange code for token';
+    try {
+      const error = await response.json();
+      errorMessage = error.message || error.error || error.details?.message || JSON.stringify(error);
+      console.error('Riot token exchange error:', error);
+    } catch (e) {
+      const errorText = await response.text();
+      errorMessage = errorText || errorMessage;
+      console.error('Riot token exchange error (text):', errorText);
+    }
+    throw new Error(errorMessage);
   }
 
   const data = await response.json();
