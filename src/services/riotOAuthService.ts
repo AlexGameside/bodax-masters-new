@@ -3,12 +3,15 @@
 
 export const getRiotAuthUrl = (): string => {
   const clientId = import.meta.env.VITE_RIOT_CLIENT_ID;
-  // Use 127.0.0.1 instead of localhost for Riot Developer Portal compatibility
-  let origin = window.location.origin;
-  if (origin.includes('localhost')) {
-    origin = origin.replace('localhost', '127.0.0.1');
+  // Use the exact redirect URI that's registered in Riot Developer Portal
+  // For production: https://bodax-masters.web.app/riot/callback
+  // For development: http://127.0.0.1:5173/riot/callback (if registered)
+  let redirectUri = `${window.location.origin}/riot/callback`;
+  
+  // Only convert localhost to 127.0.0.1 if we're in development
+  if (window.location.hostname === 'localhost') {
+    redirectUri = redirectUri.replace('localhost', '127.0.0.1');
   }
-  const redirectUri = `${origin}/riot/callback`;
   
   if (!clientId) {
     throw new Error('Riot Client ID not configured');
@@ -29,12 +32,13 @@ export const exchangeCodeForToken = async (code: string): Promise<{ access_token
   const proxyUrl = envProxyUrl && !envProxyUrl.includes('5t15g09rb') 
     ? envProxyUrl 
     : 'https://oauth-proxy-gilt.vercel.app';
-  // Use 127.0.0.1 instead of localhost for Riot Developer Portal compatibility
-  let origin = window.location.origin;
-  if (origin.includes('localhost')) {
-    origin = origin.replace('localhost', '127.0.0.1');
+  
+  // CRITICAL: redirect_uri must match EXACTLY what was used in the authorization request
+  // Use the exact same logic as getRiotAuthUrl()
+  let redirectUri = `${window.location.origin}/riot/callback`;
+  if (window.location.hostname === 'localhost') {
+    redirectUri = redirectUri.replace('localhost', '127.0.0.1');
   }
-  const redirectUri = `${origin}/riot/callback`;
     
   const response = await fetch(`${proxyUrl}/api/riot/token`, {
     method: 'POST',

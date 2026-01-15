@@ -24,8 +24,18 @@ export default async function handler(req, res) {
   try {
     const { code, redirect_uri } = req.body;
 
+    console.log('Riot token exchange request:', {
+      hasCode: !!code,
+      codeLength: code?.length,
+      redirect_uri: redirect_uri,
+      clientId: process.env.RIOT_CLIENT_ID ? 'set' : 'missing'
+    });
+
     if (!code || !redirect_uri) {
-      return res.status(400).json({ message: 'Missing required parameters' });
+      return res.status(400).json({ 
+        message: 'Missing required parameters',
+        received: { hasCode: !!code, hasRedirectUri: !!redirect_uri }
+      });
     }
 
     // Check if environment variables are set
@@ -54,11 +64,24 @@ export default async function handler(req, res) {
     });
 
     if (!tokenResponse.ok) {
-      const error = await tokenResponse.text();
-      console.error('Riot OAuth error:', error);
+      const errorText = await tokenResponse.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { message: errorText };
+      }
+      console.error('Riot OAuth error:', {
+        status: tokenResponse.status,
+        statusText: tokenResponse.statusText,
+        error: errorData,
+        redirect_uri: redirect_uri,
+        code_length: code?.length
+      });
       return res.status(400).json({ 
         message: 'Failed to exchange code for token',
-        error: error
+        error: errorData.message || errorText,
+        details: errorData
       });
     }
 
