@@ -324,21 +324,26 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 flex items-center justify-center">
-        <div className="bg-black/20 backdrop-blur-sm rounded-xl p-8 border border-white/20 shadow-2xl max-w-md mx-auto">
-          <div className="text-center">
-            <div className="mb-6">
-                             <img 
-                 src="/bodax-pfp.png" 
-                 alt="Bodax Masters Logo" 
-                 className="w-32 h-32 mx-auto mb-4 animate-spin-slow drop-shadow-2xl rounded-full"
-               />
-            </div>
-            <div className="animate-pulse">
-              <h2 className="text-3xl font-bold text-white mb-2 font-mono tracking-tight">BODAX MASTERS</h2>
-              <p className="text-white/80 font-mono tracking-tight text-lg">Loading Tournament Platform...</p>
-            </div>
+      <div className="min-h-screen bg-[#050505] relative flex items-center justify-center">
+        {/* Background Grid Pattern */}
+        <div 
+          className="absolute inset-0 z-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage: 'linear-gradient(rgba(30, 30, 30, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(30, 30, 30, 0.3) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative z-10 text-center">
+          <div className="mb-6">
+            <img 
+              src="/bodax-pfp.png" 
+              alt="Bodax Masters Logo" 
+              className="w-24 h-24 mx-auto mb-4 rounded-full"
+            />
           </div>
+          <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-white mb-1 font-mono tracking-tight">BODAX MASTERS</h2>
+          <p className="text-white/60 font-mono text-sm">Loading...</p>
         </div>
       </div>
     );
@@ -561,6 +566,20 @@ function AppContent({
           } />
           <Route path="/admin/tournaments/create" element={isAdmin === true ? <TournamentCreation /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           <Route path="/admin/tournaments/manage" element={isAdmin === true ? <TournamentManagement /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+
+          {/* Back-compat: old create tournament URL -> admin scoped route */}
+          <Route
+            path="/tournaments/create"
+            element={
+              isAdmin === true ? (
+                <Navigate to="/admin/tournaments/create" replace />
+              ) : isAdmin === false ? (
+                <Navigate to="/" replace />
+              ) : (
+                <div>Loading...</div>
+              )
+            }
+          />
           <Route path="/admin/bracket-reveal/:id" element={isAdmin === true ? <BracketReveal currentUser={currentUser} /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           <Route path="/admin/stats" element={isAdmin === true ? <AdminStats /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
           <Route path="/admin/stream-overlays" element={isAdmin === true ? <StreamOverlayManager /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />

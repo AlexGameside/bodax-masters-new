@@ -31,14 +31,12 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/tournaments/create" className="hover:text-red-500 transition-colors duration-150">
+                <Link to="/admin/tournaments/create" className="hover:text-red-500 transition-colors duration-150">
                   Host a Tournament
                 </Link>
               </li>
               <li>
-                <Link to="/my-matches" className="hover:text-red-500 transition-colors duration-150">
-                  My Matches
-                </Link>
+                {/* My Matches removed from nav; users jump to active matches via navbar */}
               </li>
               <li className="flex items-center gap-2">
                 <Link to="/login" className="hover:text-red-500 transition-colors duration-150">

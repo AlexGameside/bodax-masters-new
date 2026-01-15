@@ -47,6 +47,10 @@ export class SwissTournamentService {
       const tournamentDoc = await getDoc(tournamentDocRef);
       const tournamentData = tournamentDoc.data();
       const tournamentStartDate = tournamentData?.startedAt?.toDate() || new Date();
+      const schedulingWindowDays =
+        tournamentData?.format?.swissConfig?.schedulingWindow && Number.isFinite(tournamentData.format.swissConfig.schedulingWindow)
+          ? tournamentData.format.swissConfig.schedulingWindow
+          : 7;
       
       console.log(`📅 Tournament start date: ${tournamentStartDate.toISOString()}`);
       
@@ -54,9 +58,9 @@ export class SwissTournamentService {
       for (let matchday = 1; matchday <= rounds; matchday++) {
         const matchdayRef = doc(collection(db, 'matchdays'));
         const startDate = new Date(tournamentStartDate);
-        startDate.setDate(startDate.getDate() + (matchday - 1) * 7); // 7 days per matchday from tournament start
+        startDate.setDate(startDate.getDate() + (matchday - 1) * schedulingWindowDays); // configurable days per matchday
         const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 6); // 7-day window
+        endDate.setDate(endDate.getDate() + (schedulingWindowDays - 1)); // window length
         
         console.log(`📅 Matchday ${matchday}: ${startDate.toDateString()} to ${endDate.toDateString()}`);
         

@@ -37,7 +37,8 @@ import { checkUserInDiscordServer } from './discordService';
 import { getUserById } from './firebaseService';
 import { 
   generateSingleEliminationBracket, 
-  generateDoubleEliminationBracket 
+  generateDoubleEliminationBracket,
+  generateBracketWithManualSeeding
 } from './firebaseService';
 import { SwissTournamentService } from './swissTournamentService';
 
@@ -581,28 +582,48 @@ export const startTournament = async (tournamentId: string): Promise<void> => {
     const teamsForBracket = tournament.teams.slice(0, configuredTeamCount);
     
 
-    // Update tournament status
-    await updateDoc(doc(db, 'tournaments', tournamentId), {
-      status: 'in-progress',
-      startedAt: new Date(),
-      updatedAt: new Date()
-    });
+    const now = new Date();
 
-    // Generate brackets based on tournament type using the configured team count
+    // Swiss needs startedAt stored so matchdays are created from it.
     if (tournament.format.type === 'swiss-system') {
-      
       const swissConfig = tournament.format.swissConfig;
-      if (!swissConfig) {
-        throw new Error('Swiss system configuration missing');
-      }
+      if (!swissConfig) throw new Error('Swiss system configuration missing');
+
+      await updateDoc(doc(db, 'tournaments', tournamentId), {
+        startedAt: now,
+        updatedAt: now,
+      });
+
       await SwissTournamentService.generateSwissRounds(tournamentId, teamsForBracket, swissConfig.rounds);
+      return;
+    }
+
+    // Elimination tournaments: respect manual seeding when configured
+    const manualSeedingEnabled =
+      tournament.seeding?.method === 'manual' || tournament.format?.seedingMethod === 'manual';
+
+    if (manualSeedingEnabled) {
+      if (!tournament.seeding?.rankings || tournament.seeding.rankings.length === 0) {
+        throw new Error('Manual seeding is enabled but no seeding has been saved. Please seed teams before starting.');
+      }
+      await generateBracketWithManualSeeding(tournamentId);
     } else if (tournament.format.type === 'double-elimination') {
-      
+      // Double elimination requires 4/8/16/32 teams for bracket generation
+      const validTeamSizes = [4, 8, 16, 32];
+      if (!validTeamSizes.includes(teamsForBracket.length)) {
+        throw new Error(`Double elimination requires 4, 8, 16, or 32 teams. Got ${teamsForBracket.length} teams.`);
+      }
       await generateDoubleEliminationBracket(tournamentId, teamsForBracket);
     } else {
-      
       await generateSingleEliminationBracket(tournamentId, teamsForBracket);
     }
+
+    // Mark tournament as started only after successful bracket generation
+    await updateDoc(doc(db, 'tournaments', tournamentId), {
+      status: 'in-progress',
+      startedAt: now,
+      updatedAt: now,
+    });
 
     
   } catch (error) {

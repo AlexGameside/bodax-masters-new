@@ -234,7 +234,7 @@ const TournamentList = ({ currentUser }: TournamentListProps) => {
             {isAdmin && (
               <div className="flex items-center space-x-3">
                 <button
-                  onClick={() => navigate('/tournaments/create')}
+                  onClick={() => navigate('/admin/tournaments/create')}
                   className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 transition-colors font-bodax tracking-wider uppercase text-lg border border-red-800"
                 >
                   Create Tournament

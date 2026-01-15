@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { banMap, selectMap } from '../services/firebaseService';
+import {
+  banMap,
+  selectMap,
+  performVetoCoinflip,
+  setVetoCoinflipWinnerChoice,
+  adminSetVetoTeams,
+  adminSetVetoBanTurnOrder,
+  adminClearVetoOverride
+} from '../services/firebaseService';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { DEFAULT_MAP_POOL } from '../constants/mapPool';
@@ -10,12 +18,20 @@ interface MapBanningProps {
   userTeam: any | null;
   team1?: any;
   team2?: any;
+  isAdmin?: boolean;
+  currentUserId?: string;
   onMapBanningComplete: () => void;
 }
 
-const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, onMapBanningComplete }) => {
+const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, isAdmin = false, currentUserId, onMapBanningComplete }) => {
   const [banningLoading, setBanningLoading] = useState(false);
   const [localMatch, setLocalMatch] = useState(match);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [coinflipAnimating, setCoinflipAnimating] = useState(false);
+  const [choiceLoading, setChoiceLoading] = useState(false);
+  const [adminTeamAId, setAdminTeamAId] = useState<string>('');
+  const [adminOverrideEnabled, setAdminOverrideEnabled] = useState(false);
+  const [adminBanOrder, setAdminBanOrder] = useState<string[]>([]);
 
   // Listen for real-time match updates
   useEffect(() => {
@@ -53,6 +69,28 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
 
   const isTeam1 = !!userTeam && userTeam.id === currentMatch.team1Id;
   const isTeam2 = !!userTeam && userTeam.id === currentMatch.team2Id;
+
+  const getTeamName = (teamId?: string | null) => {
+    if (!teamId) return 'Unknown';
+    if (team1?.id === teamId) return team1?.name || 'Team 1';
+    if (team2?.id === teamId) return team2?.name || 'Team 2';
+    return 'Team';
+  };
+
+  const teamAId: string | null = (() => {
+    const a = currentMatch?.veto?.teamAId;
+    if (a && (a === currentMatch.team1Id || a === currentMatch.team2Id)) return a;
+    return currentMatch.team1Id || null; // legacy default
+  })();
+  const teamBId: string | null = (() => {
+    const b = currentMatch?.veto?.teamBId;
+    if (b && (b === currentMatch.team1Id || b === currentMatch.team2Id)) return b;
+    if (!teamAId) return currentMatch.team2Id || null;
+    return teamAId === currentMatch.team1Id ? currentMatch.team2Id : currentMatch.team1Id;
+  })();
+
+  const isTeamA = !!userTeam?.id && !!teamAId && userTeam.id === teamAId;
+  const isTeamB = !!userTeam?.id && !!teamBId && userTeam.id === teamBId;
   
   // Get current banned maps
   const bannedMaps = currentMatch.bannedMaps || { team1: [], team2: [] };
@@ -69,6 +107,193 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
 
   // BO3 Phase Logic - Corrected and simplified
   const totalBans = allBannedMaps.length;
+
+  const canConfigureVeto =
+    totalBans === 0 &&
+    !currentMatch.selectedMap &&
+    !currentMatch.map1 &&
+    !currentMatch.map2 &&
+    !currentMatch.deciderMap;
+
+  const winnerTeamId: string | null | undefined = currentMatch?.veto?.coinflip?.winnerTeamId;
+  const winnerChoice: 'A' | 'B' | undefined = currentMatch?.veto?.coinflip?.winnerChoice;
+
+  const hasExplicitVetoTeams = !!currentMatch?.veto?.teamAId && !!currentMatch?.veto?.teamBId;
+  const vetoOverrideEnabled = !!currentMatch?.veto?.adminOverride?.enabled;
+  const coinflipRequired = canConfigureVeto && !vetoOverrideEnabled && !hasExplicitVetoTeams;
+  const vetoLocked = coinflipRequired && (!winnerTeamId || !winnerChoice);
+
+  const isCurrentUserOnTeam = (teamId?: string | null) => {
+    if (!teamId || !currentUserId) return false;
+    if (team1?.id === teamId) return !!team1?.members?.some?.((m: any) => m.userId === currentUserId);
+    if (team2?.id === teamId) return !!team2?.members?.some?.((m: any) => m.userId === currentUserId);
+    return false;
+  };
+
+  const isCurrentUserOnRoster = (teamId?: string | null) => {
+    if (!teamId || !currentUserId) return false;
+    if (teamId === currentMatch?.team1Id) {
+      const ids: string[] = currentMatch?.team1Roster?.mainPlayers || [];
+      return ids.includes(currentUserId);
+    }
+    if (teamId === currentMatch?.team2Id) {
+      const ids: string[] = currentMatch?.team2Roster?.mainPlayers || [];
+      return ids.includes(currentUserId);
+    }
+    return false;
+  };
+
+  // IMPORTANT: Only the WINNING TEAM may choose Team A/B.
+  // Admins can still override via the Admin Override panel (separate path).
+  const canWinnerChoose =
+    !!winnerTeamId &&
+    (
+      // Primary: your detected match team
+      userTeam?.id === winnerTeamId ||
+      // Fallbacks: roster membership or team members
+      isCurrentUserOnRoster(winnerTeamId) ||
+      isCurrentUserOnTeam(winnerTeamId)
+    );
+
+  const handleChooseTeamLetter = async (choice: 'A' | 'B') => {
+    // DEBUG: click handler visibility
+    console.log('[MapBanning] handleChooseTeamLetter: click', {
+      choice,
+      isAdmin,
+      currentUserId,
+      userTeamId: userTeam?.id,
+      winnerTeamId,
+      canWinnerChoose,
+      setupLoading,
+      coinflipRequired,
+      vetoLocked,
+      matchId: currentMatch?.id,
+      team1Id: currentMatch?.team1Id,
+      team2Id: currentMatch?.team2Id,
+      team1HasMembers: !!team1?.members?.length,
+      team2HasMembers: !!team2?.members?.length,
+      team1RosterMainCount: currentMatch?.team1Roster?.mainPlayers?.length || 0,
+      team2RosterMainCount: currentMatch?.team2Roster?.mainPlayers?.length || 0,
+      isCurrentUserOnTeamWinner: isCurrentUserOnTeam(winnerTeamId),
+      isCurrentUserOnRosterWinner: isCurrentUserOnRoster(winnerTeamId)
+    });
+    if (!winnerTeamId) return;
+    if (!canWinnerChoose) {
+      toast.error(`Only ${getTeamName(winnerTeamId)} can choose Team A/B`);
+      return;
+    }
+    try {
+      setChoiceLoading(true);
+      console.log('[MapBanning] calling setVetoCoinflipWinnerChoice', {
+        matchId: currentMatch.id,
+        choice,
+        currentUserId
+      });
+      await setVetoCoinflipWinnerChoice(currentMatch.id, choice, currentUserId);
+      toast.success(`${getTeamName(winnerTeamId)} chose Team ${choice}`);
+    } catch (e: any) {
+      console.error('[MapBanning] setVetoCoinflipWinnerChoice failed', e);
+      toast.error(e?.message || 'Failed to set veto order');
+    } finally {
+      setChoiceLoading(false);
+    }
+  };
+
+  // Watchdog: if coinflip winner is already known, never keep the A/B buttons disabled due to setupLoading.
+  useEffect(() => {
+    if (!winnerTeamId) return;
+    if (winnerChoice) return;
+    if (!setupLoading) return;
+    const t = setTimeout(() => {
+      console.warn('[MapBanning] watchdog clearing setupLoading (winner is known but setupLoading still true)', {
+        matchId: currentMatch?.id,
+        winnerTeamId
+      });
+      setSetupLoading(false);
+      setCoinflipAnimating(false);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [winnerTeamId, winnerChoice, setupLoading, currentMatch?.id]);
+
+  // DEBUG: state snapshot when coinflip is pending / blocked
+  useEffect(() => {
+    if (!coinflipRequired) return;
+    if (!winnerTeamId) return;
+    if (winnerChoice) return;
+    console.log('[MapBanning] coinflip pending: state snapshot', {
+      isAdmin,
+      currentUserId,
+      userTeamId: userTeam?.id,
+      winnerTeamId,
+      canWinnerChoose,
+      setupLoading,
+      matchId: currentMatch?.id
+    });
+  }, [coinflipRequired, winnerTeamId, winnerChoice, canWinnerChoose, setupLoading, isAdmin, currentUserId, userTeam?.id, currentMatch?.id]);
+
+  // Keep admin control state in sync with match data
+  useEffect(() => {
+    if (!isAdmin) return;
+    const initialTeamA = (teamAId || currentMatch.team1Id || '').toString();
+    setAdminTeamAId(initialTeamA);
+    const enabled = !!currentMatch?.veto?.adminOverride?.enabled;
+    setAdminOverrideEnabled(enabled);
+    const order = Array.isArray(currentMatch?.veto?.adminOverride?.banTurnOrderTeamIds)
+      ? currentMatch.veto.adminOverride.banTurnOrderTeamIds
+      : [];
+    setAdminBanOrder(order);
+  }, [isAdmin, teamAId, currentMatch?.id, currentMatch?.veto?.adminOverride?.enabled, currentMatch?.veto?.adminOverride?.banTurnOrderTeamIds, currentMatch?.team1Id, currentMatch?.team2Id]);
+
+  const banStepsTotal = isBO3 ? 4 : Math.max(0, maps.length - 1);
+
+  const getExpectedBanTeamId = (banIndex: number): string | null => {
+    // Block banning until coinflip + winner choice completes (unless admin set explicit teams / override)
+    if (vetoLocked) return null;
+    if (!teamAId || !teamBId) return null;
+    const override = currentMatch?.veto?.adminOverride?.enabled ? currentMatch?.veto?.adminOverride?.banTurnOrderTeamIds : undefined;
+    if (Array.isArray(override) && override.length > banIndex && (override[banIndex] === teamAId || override[banIndex] === teamBId)) {
+      return override[banIndex];
+    }
+    if (isBO3) {
+      if (banIndex === 0 || banIndex === 2) return teamAId;
+      return teamBId;
+    }
+    return banIndex % 2 === 0 ? teamAId : teamBId;
+  };
+
+  // Auto-start coinflip when both teams are ready and veto hasn't started yet
+  useEffect(() => {
+    const bothTeamsReady = !!currentMatch?.team1Ready && !!currentMatch?.team2Ready;
+    if (!coinflipRequired) return;
+    if (!bothTeamsReady) return;
+    if (!!winnerTeamId) return; // already done/started
+    if (setupLoading) return;
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setSetupLoading(true);
+        setCoinflipAnimating(true);
+        await performVetoCoinflip(currentMatch.id, currentUserId);
+        // Keep the animation briefly even if Firestore updates fast
+        setTimeout(() => {
+          if (!cancelled) setCoinflipAnimating(false);
+        }, 900);
+      } catch (e: any) {
+        if (!cancelled) {
+          setCoinflipAnimating(false);
+          toast.error(e?.message || 'Coinflip failed');
+        }
+      } finally {
+        if (!cancelled) setSetupLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [coinflipRequired, currentMatch?.team1Ready, currentMatch?.team2Ready, winnerTeamId, setupLoading, currentMatch?.id, currentUserId]);
   
   // Determine current phase and what needs to happen
   let phaseInfo: {
@@ -106,12 +331,25 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
     currentStep: 'Waiting'
   };
 
-  if (isBO3 && isUserInMatch && !currentMatch.map1) {
+  if (vetoLocked) {
+    phaseInfo = {
+      phase: 'Coinflip',
+      description: winnerTeamId ? 'Coinflip complete — waiting for winner to choose Team A/B' : 'Coinflip in progress…',
+      isBanPhase: false,
+      isMapSelectionPhase: false,
+      isSideSelectionPhase: false,
+      isUserTeamTurn: false,
+      actionText: 'Waiting',
+      currentStep: 'Complete coinflip setup to start veto'
+    };
+  }
+
+  if (!vetoLocked && isBO3 && (isUserInMatch || isAdmin) && !currentMatch.map1) {
     // Phase 1: Map 1 Selection
     if (totalBans < 2) {
       // Still banning maps for Map 1
-      const isTeam1Turn = totalBans === 0; // Team A bans first, then Team B
-      const isUserTeamTurn = (isTeam1 && isTeam1Turn) || (isTeam2 && !isTeam1Turn);
+      const expectedTeamId = getExpectedBanTeamId(totalBans);
+      const isUserTeamTurn = !!userTeam?.id && !!expectedTeamId && userTeam.id === expectedTeamId;
       
       phaseInfo = {
         phase: 'Map 1 Banning',
@@ -121,12 +359,12 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
         isSideSelectionPhase: false,
         isUserTeamTurn,
         actionText: totalBans === 0 ? 'Ban first map' : 'Ban second map',
-        currentStep: totalBans === 0 ? 'Team A bans 1 map' : 'Team B bans 1 map'
+        currentStep: `Ban step ${totalBans + 1}/${banStepsTotal} · ${expectedTeamId ? getTeamName(expectedTeamId) : 'Team A/B'} bans`
       };
     } else if (totalBans >= 2) {
       // Map 1 selection phase - after 2 bans, 5 maps remain
       // Team A should pick Map 1 (they banned first)
-      const isUserTeamTurn = currentMatch.team1Id === userTeam.id;
+      const isUserTeamTurn = !!userTeam?.id && !!teamAId && userTeam.id === teamAId;
       
       phaseInfo = {
         phase: 'Map 1 Selection',
@@ -136,7 +374,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
         isSideSelectionPhase: false,
         isUserTeamTurn,
         actionText: 'Select Map 1',
-        currentStep: 'Team A picks Map 1'
+        currentStep: `Team A (${teamAId ? getTeamName(teamAId) : '—'}) picks Map 1`
       };
     } else {
       // Fallback case
@@ -151,9 +389,9 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
         currentStep: 'Unknown state'
       };
     }
-  } else if (isBO3 && isUserInMatch && currentMatch.map1 && !currentMatch.map1Side) {
+  } else if (!vetoLocked && isBO3 && (isUserInMatch || isAdmin) && currentMatch.map1 && !currentMatch.map1Side) {
     // Side selection for Map 1
-    const isUserTeamTurn = currentMatch.team2Id === userTeam.id; // Team B picks side for Map 1
+    const isUserTeamTurn = !!userTeam?.id && !!teamBId && userTeam.id === teamBId; // Team B picks side for Map 1
     
     phaseInfo = {
       phase: 'Map 1 Side Selection',
@@ -163,12 +401,12 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       isSideSelectionPhase: true,
       isUserTeamTurn,
       actionText: 'Pick side for Map 1',
-      currentStep: 'Team B picks side for Map 1'
+      currentStep: `Team B (${teamBId ? getTeamName(teamBId) : '—'}) picks side for Map 1`
     };
-  } else if (isBO3 && isUserInMatch && currentMatch.map1 && currentMatch.map1Side && !currentMatch.map2) {
+  } else if (!vetoLocked && isBO3 && (isUserInMatch || isAdmin) && currentMatch.map1 && currentMatch.map1Side && !currentMatch.map2) {
     // Map 2 selection phase - Team B picks Map 2 immediately after Map 1 side selection
     // Team B should pick Map 2 from 5 remaining maps
-    const isUserTeamTurn = currentMatch.team2Id === userTeam.id;
+    const isUserTeamTurn = !!userTeam?.id && !!teamBId && userTeam.id === teamBId;
     
     phaseInfo = {
       phase: 'Map 2 Selection',
@@ -178,11 +416,11 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       isSideSelectionPhase: false,
       isUserTeamTurn,
       actionText: 'Select Map 2',
-      currentStep: 'Team B picks Map 2'
+      currentStep: `Team B (${teamBId ? getTeamName(teamBId) : '—'}) picks Map 2`
     };
-  } else if (isBO3 && isUserInMatch && currentMatch.map2 && !currentMatch.map2Side) {
+  } else if (!vetoLocked && isBO3 && (isUserInMatch || isAdmin) && currentMatch.map2 && !currentMatch.map2Side) {
     // Side selection for Map 2
-    const isUserTeamTurn = currentMatch.team1Id === userTeam.id; // Team A picks side for Map 2
+    const isUserTeamTurn = !!userTeam?.id && !!teamAId && userTeam.id === teamAId; // Team A picks side for Map 2
     
     phaseInfo = {
       phase: 'Map 2 Side Selection',
@@ -192,14 +430,14 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       isSideSelectionPhase: true,
       isUserTeamTurn,
       actionText: 'Pick side for Map 2',
-      currentStep: 'Team A picks side for Map 2'
+      currentStep: `Team A (${teamAId ? getTeamName(teamAId) : '—'}) picks side for Map 2`
     };
-  } else if (isBO3 && isUserInMatch && currentMatch.map2 && currentMatch.map2Side && !currentMatch.deciderMap) {
+  } else if (!vetoLocked && isBO3 && (isUserInMatch || isAdmin) && currentMatch.map2 && currentMatch.map2Side && !currentMatch.deciderMap) {
     // Phase 3: Ban 2 more maps for Decider
     if (totalBans < 4) {
       // Still banning maps for Decider
-      const isTeam1Turn = totalBans === 2; // Team A bans first for Decider, then Team B
-      const isUserTeamTurn = (isTeam1 && isTeam1Turn) || (isTeam2 && !isTeam1Turn);
+      const expectedTeamId = getExpectedBanTeamId(totalBans);
+      const isUserTeamTurn = !!userTeam?.id && !!expectedTeamId && userTeam.id === expectedTeamId;
       
       phaseInfo = {
         phase: 'Decider Banning',
@@ -209,7 +447,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
         isSideSelectionPhase: false,
         isUserTeamTurn,
         actionText: totalBans === 2 ? 'Ban third map' : 'Ban fourth map',
-        currentStep: totalBans === 2 ? 'Team A bans 1 map' : 'Team B bans 1 map'
+        currentStep: `Ban step ${totalBans + 1}/${banStepsTotal} · ${expectedTeamId ? getTeamName(expectedTeamId) : 'Team A/B'} bans`
       };
     } else if (totalBans >= 4) {
       // Decider map selection - after 4 bans, 3 maps remain
@@ -234,9 +472,9 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
           isBanPhase: false,
           isMapSelectionPhase: false,
           isSideSelectionPhase: true,
-          isUserTeamTurn: currentMatch.team1Id === userTeam.id, // Team A picks side for Decider
+          isUserTeamTurn: !!userTeam?.id && !!teamAId && userTeam.id === teamAId, // Team A picks side for Decider
           actionText: 'Pick side for Decider',
-          currentStep: 'Team A picks side for Decider Map'
+          currentStep: `Team A (${teamAId ? getTeamName(teamAId) : '—'}) picks side for Decider Map`
         };
       } else {
         // Should not happen, but fallback
@@ -264,9 +502,9 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
         currentStep: 'Unknown state'
       };
     }
-  } else if (isBO3 && isUserInMatch && currentMatch.deciderMap && !currentMatch.deciderMapSide) {
+  } else if (!vetoLocked && isBO3 && (isUserInMatch || isAdmin) && currentMatch.deciderMap && !currentMatch.deciderMapSide) {
     // Side selection for Decider Map
-    const isUserTeamTurn = currentMatch.team1Id === userTeam.id; // Team A picks side for Decider
+    const isUserTeamTurn = !!userTeam?.id && !!teamAId && userTeam.id === teamAId; // Team A picks side for Decider
     
     phaseInfo = {
       phase: 'Decider Side Selection',
@@ -276,9 +514,9 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
       isSideSelectionPhase: true,
       isUserTeamTurn,
       actionText: 'Pick side for Decider',
-      currentStep: 'Team A picks side for Decider Map'
+      currentStep: `Team A (${teamAId ? getTeamName(teamAId) : '—'}) picks side for Decider Map`
     };
-  } else if (isBO3 && isUserInMatch) {
+  } else if (!vetoLocked && isBO3 && (isUserInMatch || isAdmin)) {
     // All phases complete
     phaseInfo = {
       phase: 'Complete',
@@ -295,22 +533,22 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
   // BO1 flow (until finals): ban until 1 map remains, backend auto-selects `selectedMap`
   const bansNeededBO1 = Math.max(0, maps.length - 1);
   const remainingMapsBO1 = maps.filter(m => !allBannedMaps.includes(m));
-  const isTeam1TurnBO1 = totalBans % 2 === 0; // Team 1 starts
-  const isUserTeamTurnBO1 = (isTeam1 && isTeam1TurnBO1) || (isTeam2 && !isTeam1TurnBO1);
+  const expectedBanTeamIdBO1 = getExpectedBanTeamId(totalBans);
+  const isUserTeamTurnBO1 = !!userTeam?.id && !!expectedBanTeamIdBO1 && userTeam.id === expectedBanTeamIdBO1;
 
   const getTurnIndicator = () => {
     if (phaseInfo.isBanPhase) {
       return phaseInfo.isUserTeamTurn 
         ? `🎯 Your turn to BAN a map` 
-        : `⏳ Waiting for ${isTeam1 ? 'Team B' : 'Team A'} to ban a map`;
+        : `⏳ Waiting for the other team to ban a map`;
     } else if (phaseInfo.isMapSelectionPhase) {
       return phaseInfo.isUserTeamTurn 
         ? `🎯 Your turn to SELECT a map` 
-        : `⏳ Waiting for ${isTeam1 ? 'Team A' : 'Team B'} to select a map`;
+        : `⏳ Waiting for the other team to select a map`;
     } else if (phaseInfo.isSideSelectionPhase) {
       return phaseInfo.isUserTeamTurn 
         ? `🎯 Your turn to pick ATTACK or DEFENSE` 
-        : `⏳ Waiting for ${isTeam1 ? 'Team B' : 'Team A'} to pick their side`;
+        : `⏳ Waiting for the other team to pick their side`;
     }
     return '⏳ Waiting...';
   };
@@ -327,6 +565,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
   const handleBanMap = async (mapName: string) => {
     if (!isBO3) return;
     if (!phaseInfo.isBanPhase || !phaseInfo.isUserTeamTurn) return;
+    if (!userTeam?.id) return;
     
     setBanningLoading(true);
     try {
@@ -348,6 +587,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
 
     setBanningLoading(true);
     try {
+      if (!userTeam?.id) throw new Error('No team context');
       await banMap(currentMatch.id, userTeam.id, mapName);
       toast.success(`Banned ${mapName}`);
     } catch (error: any) {
@@ -359,6 +599,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
 
   const handleSelectMap = async (mapName: string) => {
     if (!phaseInfo.isMapSelectionPhase || !phaseInfo.isUserTeamTurn) return;
+    if (!userTeam?.id) return;
     
     setBanningLoading(true);
     try {
@@ -373,6 +614,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
 
   const handleSideSelection = async (side: string) => {
     if (!phaseInfo.isSideSelectionPhase || !phaseInfo.isUserTeamTurn) return;
+    if (!userTeam?.id) return;
     
     setBanningLoading(true);
     try {
@@ -443,7 +685,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
   }, [isBO3, isUserInMatch, phaseInfo.phase, currentMatch.matchState, currentMatch.id, currentMatch.map1, currentMatch.map1Side, currentMatch.map2, currentMatch.map2Side, currentMatch.deciderMap, currentMatch.deciderMapSide]);
 
   // Render guards AFTER hooks (Rules of Hooks)
-  if (!hasUserTeam) {
+  if (!hasUserTeam && !isAdmin) {
     return (
       <div className="text-center py-8">
         <div className="text-gray-400 mb-4">No team information available</div>
@@ -452,11 +694,278 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
     );
   }
 
-  if (!isUserInMatch) {
+  if (!isUserInMatch && !isAdmin) {
     return (
       <div className="text-center py-8">
         <div className="text-gray-400 mb-4">Not part of this match</div>
         <div className="text-sm text-gray-500">You are not a member of either team in this match</div>
+      </div>
+    );
+  }
+
+  const renderVetoSetup = () => {
+    return (
+      <div className="mb-6 bg-black/30 border border-gray-800 p-4">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-xs text-gray-500 font-mono uppercase tracking-widest">Veto Setup</div>
+            <div className="mt-2 text-sm text-gray-200 font-mono">
+              Team A (starts): <span className="text-white font-semibold">{teamAId ? getTeamName(teamAId) : '—'}</span>
+              <span className="text-gray-600 mx-2">/</span>
+              Team B: <span className="text-white font-semibold">{teamBId ? getTeamName(teamBId) : '—'}</span>
+            </div>
+            <div className="mt-2 text-xs text-gray-500 font-mono uppercase tracking-widest">
+              {currentMatch?.veto?.adminOverride?.enabled ? 'Admin override: ON' : 'Admin override: OFF'}
+            </div>
+          </div>
+
+          {(isUserInMatch || isAdmin) && (
+            <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
+              {/* Keep this section minimal once veto order is set */}
+              {!vetoLocked && (
+                <div className="px-4 py-2 border border-gray-800 bg-[#0a0a0a] text-gray-300 font-mono text-xs uppercase tracking-widest">
+                  Veto order locked: <span className="text-white">{teamAId ? getTeamName(teamAId) : '—'}</span> starts
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {isAdmin && (
+          <div className="mt-4 pt-4 border-t border-gray-800">
+            <div className="text-xs text-gray-500 font-mono uppercase tracking-widest mb-2">Admin override</div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-start">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-gray-500 font-mono uppercase tracking-widest mb-1">Team A</div>
+                  <select
+                    className="w-full bg-[#0a0a0a] text-white border border-gray-700 rounded px-3 py-2 font-mono text-sm"
+                    value={adminTeamAId || ''}
+                    onChange={(e) => setAdminTeamAId(e.target.value)}
+                    disabled={!currentMatch.team1Id || !currentMatch.team2Id}
+                  >
+                    <option value="" disabled>Select Team A</option>
+                    {currentMatch.team1Id && <option value={currentMatch.team1Id}>{getTeamName(currentMatch.team1Id)}</option>}
+                    {currentMatch.team2Id && <option value={currentMatch.team2Id}>{getTeamName(currentMatch.team2Id)}</option>}
+                  </select>
+                  <div className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mt-1">
+                    Team A starts banning and picks Map 1 (BO3).
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500 font-mono uppercase tracking-widest mb-1">Custom ban turn order</div>
+                  <label className="flex items-center gap-2 text-sm text-gray-300 font-mono">
+                    <input
+                      type="checkbox"
+                      checked={adminOverrideEnabled}
+                      onChange={(e) => setAdminOverrideEnabled(e.target.checked)}
+                    />
+                    Enable per-ban order
+                  </label>
+                  <div className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mt-1">
+                    Allows repeats (e.g. Team X bans twice).
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={!canConfigureVeto || setupLoading || !adminTeamAId}
+                  onClick={async () => {
+                    try {
+                      setSetupLoading(true);
+                      await adminSetVetoTeams(currentMatch.id, adminTeamAId, currentUserId, 'admin set Team A/B');
+                      toast.success('Set Team A/B');
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to set Team A/B');
+                    } finally {
+                      setSetupLoading(false);
+                    }
+                  }}
+                  className="px-4 py-2 border border-gray-700 hover:border-red-700 bg-[#0a0a0a] hover:bg-white/5 text-white font-mono uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={!canConfigureVeto ? 'Only available before veto actions start' : 'Set Team A/B'}
+                >
+                  Save Team A/B
+                </button>
+
+                <button
+                  type="button"
+                  disabled={setupLoading || !currentMatch?.veto?.adminOverride?.enabled}
+                  onClick={async () => {
+                    try {
+                      setSetupLoading(true);
+                      await adminClearVetoOverride(currentMatch.id, currentUserId);
+                      toast.success('Cleared override');
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to clear override');
+                    } finally {
+                      setSetupLoading(false);
+                    }
+                  }}
+                  className="px-4 py-2 border border-gray-700 hover:border-gray-500 bg-transparent hover:bg-white/5 text-white font-mono uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Clear override
+                </button>
+              </div>
+            </div>
+
+            {adminOverrideEnabled && (
+              <div className="mt-4 bg-[#0a0a0a] border border-gray-800 p-3">
+                <div className="text-xs text-gray-500 font-mono uppercase tracking-widest mb-2">
+                  Ban order ({banStepsTotal} steps)
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Array.from({ length: banStepsTotal }).map((_, idx) => {
+                    const value = adminBanOrder[idx] || getExpectedBanTeamId(idx) || '';
+                    return (
+                      <div key={`ban-order-${idx}`}>
+                        <div className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mb-1">Ban #{idx + 1}</div>
+                        <select
+                          className="w-full bg-black text-white border border-gray-700 rounded px-3 py-2 font-mono text-sm"
+                          value={value}
+                          onChange={(e) => {
+                            const next = [...adminBanOrder];
+                            next[idx] = e.target.value;
+                            setAdminBanOrder(next);
+                          }}
+                        >
+                          <option value="" disabled>Select team</option>
+                          {currentMatch.team1Id && <option value={currentMatch.team1Id}>{getTeamName(currentMatch.team1Id)}</option>}
+                          {currentMatch.team2Id && <option value={currentMatch.team2Id}>{getTeamName(currentMatch.team2Id)}</option>}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={!canConfigureVeto || setupLoading}
+                    onClick={async () => {
+                      try {
+                        setSetupLoading(true);
+                        const normalized = Array.from({ length: banStepsTotal }).map((_, i) => {
+                          const v = adminBanOrder[i] || getExpectedBanTeamId(i) || '';
+                          return v;
+                        });
+                        await adminSetVetoBanTurnOrder(currentMatch.id, normalized, currentUserId, 'admin set ban order');
+                        toast.success('Saved ban order override');
+                      } catch (e: any) {
+                        toast.error(e?.message || 'Failed to save ban order');
+                      } finally {
+                        setSetupLoading(false);
+                      }
+                    }}
+                    className="px-4 py-2 border border-gray-700 hover:border-red-700 bg-[#0a0a0a] hover:bg-white/5 text-white font-mono uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={!canConfigureVeto ? 'Only available before veto actions start' : 'Save ban order'}
+                  >
+                    Save ban order
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+  // If coinflip/choice is required, block the banning UI entirely and show a guided panel.
+  if (vetoLocked) {
+    return (
+      <div className="bg-[#0a0a0a] border border-gray-800 p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative">
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <div>
+              <h3 className="text-3xl font-bold text-white font-bodax tracking-wide uppercase leading-none">
+                Veto Setup <span className="text-red-500">Required</span>
+              </h3>
+              <p className="mt-2 text-sm text-gray-400 font-mono uppercase tracking-widest">
+                Step 1: coinflip · Step 2: winner chooses Team A/B · then veto starts
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-black/30 border border-gray-800 p-4 mb-6">
+            <div className="text-gray-500 font-mono text-[11px] uppercase tracking-[0.3em] mb-2">What’s happening?</div>
+            <div className="text-gray-300 font-mono text-sm leading-relaxed">
+              A coinflip decides which team gets to choose the veto order.
+              <div className="mt-2 text-gray-400 text-xs">
+                - <span className="text-white">Team A</span> starts banning first.<br />
+                - <span className="text-white">Team B</span> bans second.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3 px-4 py-3 border border-gray-800 bg-[#0a0a0a]">
+              <div
+                className={`w-10 h-10 rounded-full border border-red-800 bg-red-900/10 flex items-center justify-center ${
+                  coinflipAnimating ? 'animate-spin' : winnerTeamId ? '' : 'animate-pulse'
+                }`}
+                title="Coinflip"
+              >
+                <span className="text-red-400 font-bodax text-base">C</span>
+              </div>
+              <div className="text-gray-300 font-mono text-xs uppercase tracking-widest">
+                {!winnerTeamId ? (coinflipAnimating ? 'Coinflip…' : 'Coinflip starting…') : (
+                  <>Winner: <span className="text-white">{getTeamName(winnerTeamId)}</span></>
+                )}
+              </div>
+            </div>
+
+            {winnerTeamId && !winnerChoice && (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={choiceLoading || !canWinnerChoose}
+                  onClick={() => handleChooseTeamLetter('A')}
+                  title={!canWinnerChoose && winnerTeamId ? `Only ${getTeamName(winnerTeamId)} can choose Team A/B` : ''}
+                  className="px-5 py-3 border border-gray-700 hover:border-red-700 bg-[#0a0a0a] hover:bg-red-900/10 text-white font-mono uppercase tracking-widest text-xs disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-700 disabled:hover:bg-[#0a0a0a]"
+                >
+                  Be Team A (ban first)
+                </button>
+                <button
+                  type="button"
+                  disabled={choiceLoading || !canWinnerChoose}
+                  onClick={() => handleChooseTeamLetter('B')}
+                  title={!canWinnerChoose && winnerTeamId ? `Only ${getTeamName(winnerTeamId)} can choose Team A/B` : ''}
+                  className="px-5 py-3 border border-gray-700 hover:border-red-700 bg-[#0a0a0a] hover:bg-white/5 text-white font-mono uppercase tracking-widest text-xs disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-700 disabled:hover:bg-[#0a0a0a]"
+                >
+                  Be Team B (ban second)
+                </button>
+              </div>
+            )}
+          </div>
+
+          {winnerTeamId && !winnerChoice && (
+            <div className="bg-black/30 border border-gray-800 p-4 text-gray-400 font-mono text-xs uppercase tracking-widest">
+              Waiting for <span className="text-white">{getTeamName(winnerTeamId)}</span> to choose Team A/B…
+              {isAdmin && !canWinnerChoose && (
+                <span className="block mt-2 text-gray-500">
+                  Admin: if needed, use the override section below to set Team A/B.
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Keep admin override visible even during lock */}
+          {isAdmin && (
+            <div className="mt-6">
+              {renderVetoSetup()}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -475,6 +984,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
         />
 
         <div className="relative">
+          {renderVetoSetup()}
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
               <h3 className="text-3xl font-bold text-white font-bodax tracking-wide uppercase leading-none">
@@ -607,6 +1117,7 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
         }}
       />
       <div className="relative">
+        {renderVetoSetup()}
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
             <h3 className="text-3xl font-bold text-white font-bodax tracking-wide uppercase leading-none">
@@ -631,8 +1142,8 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
             <div className="text-xs text-gray-400 font-mono uppercase tracking-widest mt-1">
               {currentMatch.map1 && currentMatch.map1Side ? (
                 <div>
-                  <div className="text-gray-300">Team 2: {currentMatch.map1Side}</div>
-                  <div className="text-gray-300">Team 1: {currentMatch.map1Side === 'Attack' ? 'Defense' : 'Attack'}</div>
+                  <div className="text-gray-300">Team B: {currentMatch.map1Side}</div>
+                  <div className="text-gray-300">Team A: {currentMatch.map1Side === 'Attack' ? 'Defense' : 'Attack'}</div>
                 </div>
               ) : 'No Side'}
             </div>
@@ -643,8 +1154,8 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
             <div className="text-xs text-gray-400 font-mono uppercase tracking-widest mt-1">
               {currentMatch.map2 && currentMatch.map2Side ? (
                 <div>
-                  <div className="text-gray-300">Team 1: {currentMatch.map2Side}</div>
-                  <div className="text-gray-300">Team 2: {currentMatch.map2Side === 'Attack' ? 'Defense' : 'Attack'}</div>
+                  <div className="text-gray-300">Team A: {currentMatch.map2Side}</div>
+                  <div className="text-gray-300">Team B: {currentMatch.map2Side === 'Attack' ? 'Defense' : 'Attack'}</div>
                 </div>
               ) : 'No Side'}
             </div>
@@ -655,8 +1166,8 @@ const MapBanning: React.FC<MapBanningProps> = ({ match, userTeam, team1, team2, 
             <div className="text-xs text-gray-400 font-mono uppercase tracking-widest mt-1">
               {currentMatch.deciderMap && currentMatch.deciderMapSide ? (
                 <div>
-                  <div className="text-gray-300">Team 1: {currentMatch.deciderMapSide}</div>
-                  <div className="text-gray-300">Team 2: {currentMatch.deciderMapSide === 'Attack' ? 'Defense' : 'Attack'}</div>
+                  <div className="text-gray-300">Team A: {currentMatch.deciderMapSide}</div>
+                  <div className="text-gray-300">Team B: {currentMatch.deciderMapSide === 'Attack' ? 'Defense' : 'Attack'}</div>
                 </div>
               ) : 'No Side'}
             </div>

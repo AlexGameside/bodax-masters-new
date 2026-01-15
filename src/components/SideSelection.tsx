@@ -23,7 +23,11 @@ const getSideChoosingTeam = (match: Match): 'team1' | 'team2' | null => {
     (match.bannedMaps?.team2?.length || 0);
 
   if (totalBans > 0) {
-    const lastBanByTeam1 = totalBans % 2 === 1; // odd ban count => Team 1 was last
+    // If we don't have a banSequence (legacy/partial data), infer based on who started banning.
+    // Team A starts; if Team A is team1 => odd total means team1 was last, else even total means team1 was last.
+    const teamAId = match.veto?.teamAId || match.team1Id;
+    const teamAIsTeam1 = teamAId === match.team1Id;
+    const lastBanByTeam1 = teamAIsTeam1 ? totalBans % 2 === 1 : totalBans % 2 === 0;
     return lastBanByTeam1 ? 'team2' : 'team1';
   }
 

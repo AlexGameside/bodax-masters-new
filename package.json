@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:deploy": "vite build",
+    "vercel-build": "npm run build",
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "npm run build:deploy && firebase deploy",
+    "deploy:vercel": "vercel --prod --yes",
     "fix-map3": "tsx src/scripts/fixMap3DataSimple.ts",
     "analyze-map3": "tsx src/scripts/analyzeMap3Issues.ts"
   },

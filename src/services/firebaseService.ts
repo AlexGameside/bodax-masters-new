@@ -24,7 +24,7 @@ import {
   deleteField
 } from 'firebase/firestore';
 import { notifyTeamInvitation, notifyTeamMemberJoined, notifyMatchCompleted } from './discordService';
-import type { Team, Match, TeamInvitation, User, Tournament, TeamMember, Notification } from '../types/tournament';
+import type { Team, Match, TeamInvitation, User, Tournament, TeamMember, Notification, MatchFormat } from '../types/tournament';
 import { ValidationService } from './validationService';
 import { auth, db } from '../config/firebase';
 import { DEFAULT_MAP_POOL } from '../constants/mapPool';
@@ -112,6 +112,7 @@ export const getTeamById = async (teamId: string): Promise<Team | null> => {
       createdAt: data.createdAt?.toDate() || new Date(),
       registeredForTournament: data.registeredForTournament || false,
       tournamentRegistrationDate: data.tournamentRegistrationDate?.toDate(),
+      activePlayers: Array.isArray(data.activePlayers) ? data.activePlayers : [],
       maxMembers: data.maxMembers || 10 // Default max members
     } as Team;
   }
@@ -142,7 +143,10 @@ export const getTeamsByIds = async (teamIds: string[]): Promise<Team[]> => {
 };
 
 export const getUserTeams = async (userId: string): Promise<Team[]> => {
-  const teams = await getTeams();
+  // IMPORTANT: `getTeams()` without a userId returns public/minimal team objects (often without `members`),
+  // which makes membership filtering always return empty. Pass userId so `getTeams` includes full data for
+  // teams the user belongs to.
+  const teams = await getTeams(userId);
   return teams.filter(team => 
     team.members && team.members.some(member => member.userId === userId)
   );
@@ -3947,6 +3951,252 @@ export const handleMapBanningComplete = async (matchId: string): Promise<void> =
   }
 };
 
+// ---------------------------
+// Veto / coinflip + overrides
+// ---------------------------
+
+const getTeamAandB = (matchData: any): { teamAId: string; teamBId: string } => {
+  const team1Id: string | null = matchData.team1Id ?? null;
+  const team2Id: string | null = matchData.team2Id ?? null;
+  if (!team1Id || !team2Id) {
+    throw new Error('Match is missing teams. Cannot determine Team A / Team B.');
+  }
+
+  const configuredA: string | null | undefined = matchData.veto?.teamAId;
+  const configuredB: string | null | undefined = matchData.veto?.teamBId;
+
+  // Backwards compatible default: team1 is Team A
+  if (!configuredA || !configuredB) {
+    return { teamAId: team1Id, teamBId: team2Id };
+  }
+
+  // Ensure values are one of the match teams; otherwise fallback
+  const isValid =
+    (configuredA === team1Id || configuredA === team2Id) &&
+    (configuredB === team1Id || configuredB === team2Id) &&
+    configuredA !== configuredB;
+
+  return isValid ? { teamAId: configuredA, teamBId: configuredB } : { teamAId: team1Id, teamBId: team2Id };
+};
+
+export const performVetoCoinflip = async (
+  matchId: string,
+  performedByUserId?: string
+): Promise<{ winnerTeamId: string }> => {
+  const matchRef = doc(db, 'matches', matchId);
+
+  return await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(matchRef);
+    if (!snap.exists()) {
+      throw new Error('Match not found');
+    }
+
+    const data: any = snap.data();
+    const team1Id: string | null = data.team1Id ?? null;
+    const team2Id: string | null = data.team2Id ?? null;
+    if (!team1Id || !team2Id) {
+      throw new Error('Both teams must be set before coinflip.');
+    }
+
+    const existingWinner: string | null | undefined = data.veto?.coinflip?.winnerTeamId;
+    if (existingWinner) {
+      return { winnerTeamId: existingWinner };
+    }
+
+    const winnerTeamId = Math.random() < 0.5 ? team1Id : team2Id;
+    const vetoUpdate = {
+      veto: {
+        ...(data.veto || {}),
+        coinflip: {
+          performed: true,
+          winnerTeamId,
+          performedAt: serverTimestamp(),
+          performedByUserId: performedByUserId || null
+        }
+      }
+    };
+
+    transaction.update(matchRef, vetoUpdate as any);
+    return { winnerTeamId };
+  });
+};
+
+export const setVetoCoinflipWinnerChoice = async (
+  matchId: string,
+  winnerChoice: 'A' | 'B',
+  chosenByUserId?: string
+): Promise<void> => {
+  const matchRef = doc(db, 'matches', matchId);
+
+  await runTransaction(db, async (transaction) => {
+    console.log('[setVetoCoinflipWinnerChoice] start', { matchId, winnerChoice, chosenByUserId });
+    const snap = await transaction.get(matchRef);
+    if (!snap.exists()) throw new Error('Match not found');
+    const data: any = snap.data();
+
+    const team1Id: string | null = data.team1Id ?? null;
+    const team2Id: string | null = data.team2Id ?? null;
+    if (!team1Id || !team2Id) throw new Error('Match is missing teams.');
+
+    const winnerTeamId: string | null | undefined = data.veto?.coinflip?.winnerTeamId;
+    if (!winnerTeamId) throw new Error('Coinflip must be performed first.');
+
+    // Enforce: only members of the winning team can choose A/B (admins should use admin override tools)
+    if (chosenByUserId) {
+      const teamSnap = await transaction.get(doc(db, 'teams', winnerTeamId));
+      if (!teamSnap.exists()) {
+        throw new Error('Winner team not found');
+      }
+      const teamData: any = teamSnap.data();
+      const members: any[] = Array.isArray(teamData.members) ? teamData.members : [];
+      const isMember = members.some(m => m?.userId === chosenByUserId);
+      if (!isMember) {
+        throw new Error('Only the coinflip winner team can choose Team A/B');
+      }
+    }
+
+    const alreadyChosen: 'A' | 'B' | undefined = data.veto?.coinflip?.winnerChoice;
+    if (alreadyChosen && alreadyChosen !== winnerChoice) {
+      // Prevent swapping after it was set (admins can override via admin override tools)
+      throw new Error('Veto order has already been chosen.');
+    }
+
+    const finalChoice: 'A' | 'B' = alreadyChosen || winnerChoice;
+    const otherTeamId = winnerTeamId === team1Id ? team2Id : team1Id;
+    const teamAId = finalChoice === 'A' ? winnerTeamId : otherTeamId;
+    const teamBId = finalChoice === 'A' ? otherTeamId : winnerTeamId;
+
+    console.log('[setVetoCoinflipWinnerChoice] computed', {
+      matchId,
+      team1Id,
+      team2Id,
+      winnerTeamId,
+      alreadyChosen,
+      finalChoice,
+      teamAId,
+      teamBId
+    });
+
+    transaction.update(matchRef, {
+      veto: {
+        ...(data.veto || {}),
+        teamAId,
+        teamBId,
+        coinflip: {
+          ...(data.veto?.coinflip || {}),
+          winnerChoice: finalChoice,
+          chosenAt: serverTimestamp(),
+          chosenByUserId: chosenByUserId || null
+        }
+      }
+    } as any);
+
+    console.log('[setVetoCoinflipWinnerChoice] transaction.update queued', { matchId });
+  });
+};
+
+export const adminSetVetoTeams = async (
+  matchId: string,
+  teamAId: string,
+  setByUserId?: string,
+  note?: string
+): Promise<void> => {
+  const matchRef = doc(db, 'matches', matchId);
+
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(matchRef);
+    if (!snap.exists()) throw new Error('Match not found');
+    const data: any = snap.data();
+
+    const team1Id: string | null = data.team1Id ?? null;
+    const team2Id: string | null = data.team2Id ?? null;
+    if (!team1Id || !team2Id) throw new Error('Match is missing teams.');
+
+    if (teamAId !== team1Id && teamAId !== team2Id) {
+      throw new Error('Team A must be one of the teams in the match.');
+    }
+
+    const teamBId = teamAId === team1Id ? team2Id : team1Id;
+
+    transaction.update(matchRef, {
+      veto: {
+        ...(data.veto || {}),
+        teamAId,
+        teamBId,
+        adminOverride: {
+          ...(data.veto?.adminOverride || {}),
+          enabled: true,
+          setByUserId: setByUserId || null,
+          setAt: serverTimestamp(),
+          note: note || null
+        }
+      }
+    } as any);
+  });
+};
+
+export const adminSetVetoBanTurnOrder = async (
+  matchId: string,
+  banTurnOrderTeamIds: string[],
+  setByUserId?: string,
+  note?: string
+): Promise<void> => {
+  const matchRef = doc(db, 'matches', matchId);
+
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(matchRef);
+    if (!snap.exists()) throw new Error('Match not found');
+    const data: any = snap.data();
+
+    const team1Id: string | null = data.team1Id ?? null;
+    const team2Id: string | null = data.team2Id ?? null;
+    if (!team1Id || !team2Id) throw new Error('Match is missing teams.');
+
+    const normalized = (banTurnOrderTeamIds || []).filter(Boolean);
+    for (const tId of normalized) {
+      if (tId !== team1Id && tId !== team2Id) {
+        throw new Error('Ban order contains a team that is not in this match.');
+      }
+    }
+
+    transaction.update(matchRef, {
+      veto: {
+        ...(data.veto || {}),
+        adminOverride: {
+          enabled: true,
+          banTurnOrderTeamIds: normalized,
+          setByUserId: setByUserId || null,
+          setAt: serverTimestamp(),
+          note: note || null
+        }
+      }
+    } as any);
+  });
+};
+
+export const adminClearVetoOverride = async (matchId: string, setByUserId?: string): Promise<void> => {
+  const matchRef = doc(db, 'matches', matchId);
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(matchRef);
+    if (!snap.exists()) throw new Error('Match not found');
+    const data: any = snap.data();
+
+    transaction.update(matchRef, {
+      veto: {
+        ...(data.veto || {}),
+        adminOverride: {
+          enabled: false,
+          banTurnOrderTeamIds: [],
+          setByUserId: setByUserId || null,
+          setAt: serverTimestamp(),
+          note: 'cleared'
+        }
+      },
+      updatedAt: serverTimestamp()
+    } as any);
+  });
+};
+
 // Function to ban a map
 export const banMap = async (matchId: string, teamId: string, mapName: string): Promise<void> => {
   
@@ -3979,6 +4229,17 @@ export const banMap = async (matchId: string, teamId: string, mapName: string): 
   const banSequence = matchData.banSequence || [];
   const totalBans = currentBannedMaps.team1.length + currentBannedMaps.team2.length;
 
+  // Require coinflip/assignment before veto starts (prevents teams from banning instantly without setup)
+  // Backwards compatible: only enforce at the very start of veto.
+  const vetoOverrideEnabled = !!matchData.veto?.adminOverride?.enabled;
+  const hasExplicitVetoTeams = !!matchData.veto?.teamAId && !!matchData.veto?.teamBId;
+  const hasWinnerChoice = !!matchData.veto?.coinflip?.winnerChoice;
+  const vetoHasStarted =
+    totalBans > 0 || !!matchData.selectedMap || !!matchData.map1 || !!matchData.map2 || !!matchData.deciderMap;
+  if (!vetoHasStarted && !vetoOverrideEnabled && !hasExplicitVetoTeams && !hasWinnerChoice) {
+    throw new Error('Coinflip must be completed before veto starts.');
+  }
+
   // Default to BO1 unless explicitly BO3 (finals)
   const matchFormat: 'BO1' | 'BO3' =
     matchData.matchFormat === 'BO3' || matchData.bracketType === 'grand_final' ? 'BO3' : 'BO1';
@@ -4004,20 +4265,26 @@ export const banMap = async (matchId: string, teamId: string, mapName: string): 
       throw new Error('Map banning phase is complete.');
     }
 
-    const isTeam1Turn = totalBans % 2 === 0; // Team 1 starts, then alternate
+    const { teamAId, teamBId } = getTeamAandB(matchData);
+    const overrideOrder: string[] | undefined = matchData.veto?.adminOverride?.enabled
+      ? matchData.veto?.adminOverride?.banTurnOrderTeamIds
+      : undefined;
+
+    const expectedTeamId =
+      Array.isArray(overrideOrder) && overrideOrder.length > totalBans
+        ? overrideOrder[totalBans]
+        : (totalBans % 2 === 0 ? teamAId : teamBId);
+
+    const isTeamsTurn = teamId === expectedTeamId;
 
     console.log('🗺️ [BO1] Turn calculation:', {
       totalBans,
-      isTeam1Turn,
-      isTeam1,
-      isTeam2,
+      expectedTeamId,
+      actingTeamId: teamId,
       bansNeeded
     });
 
-    if (isTeam1 && !isTeam1Turn) {
-      throw new Error("It's not your team's turn to ban. Please wait for the other team.");
-    }
-    if (isTeam2 && isTeam1Turn) {
+    if (!isTeamsTurn) {
       throw new Error("It's not your team's turn to ban. Please wait for the other team.");
     }
 
@@ -4062,29 +4329,32 @@ export const banMap = async (matchId: string, teamId: string, mapName: string): 
   }
 
   // Determine whose turn it is to ban based on BO3 flow
-  let isTeam1Turn: boolean;
+  const { teamAId, teamBId } = getTeamAandB(matchData);
+  const overrideOrder: string[] | undefined = matchData.veto?.adminOverride?.enabled
+    ? matchData.veto?.adminOverride?.banTurnOrderTeamIds
+    : undefined;
 
-  if (totalBans < 2) {
-    // Phase 1: Team A bans first, then Team B
-    isTeam1Turn = totalBans === 0;
-  } else {
-    // Phase 3: Team A bans first, then Team B (for decider)
-    isTeam1Turn = totalBans === 2;
-  }
-  
+  const defaultExpectedTeamId = (() => {
+    if (totalBans < 2) {
+      return totalBans === 0 ? teamAId : teamBId;
+    }
+    return totalBans === 2 ? teamAId : teamBId;
+  })();
+
+  const expectedTeamId =
+    Array.isArray(overrideOrder) && overrideOrder.length > totalBans
+      ? overrideOrder[totalBans]
+      : defaultExpectedTeamId;
+
   console.log('?? DEBUG: Turn calculation:', { 
     totalBans, 
-    isTeam1Turn, 
-    isTeam1, 
-    isTeam2,
+    expectedTeamId,
+    actingTeamId: teamId,
     phase: totalBans < 2 ? 'Phase 1 (Map 1)' : 'Phase 3 (Decider)'
   });
   
   // Check if it's the correct team's turn
-  if (isTeam1 && !isTeam1Turn) {
-    throw new Error("It's not your team's turn to ban. Please wait for the other team.");
-  }
-  if (isTeam2 && isTeam1Turn) {
+  if (teamId !== expectedTeamId) {
     throw new Error("It's not your team's turn to ban. Please wait for the other team.");
   }
   
@@ -4141,6 +4411,14 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
   const banSequence = matchData.banSequence || [];
   const totalBans = currentBannedMaps.team1.length + currentBannedMaps.team2.length;
 
+  // Safety: if we somehow reach map selection without veto assignment, block until setup is done.
+  const vetoOverrideEnabled = !!matchData.veto?.adminOverride?.enabled;
+  const hasExplicitVetoTeams = !!matchData.veto?.teamAId && !!matchData.veto?.teamBId;
+  const hasWinnerChoice = !!matchData.veto?.coinflip?.winnerChoice;
+  if (!vetoOverrideEnabled && !hasExplicitVetoTeams && !hasWinnerChoice) {
+    throw new Error('Coinflip must be completed before map selection.');
+  }
+
   // Default to BO1 unless explicitly BO3 (finals)
   const matchFormat: 'BO1' | 'BO3' =
     matchData.matchFormat === 'BO3' || matchData.bracketType === 'grand_final' ? 'BO3' : 'BO1';
@@ -4164,7 +4442,8 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
   // After Map 2 + side selection: 2 more bans, then Decider is automatic
   
   let mapSelectionPhase: 'map1' | 'map2' | 'decider' | 'none';
-  let teamThatShouldSelect: 'team1' | 'team2';
+  let teamThatShouldSelectId: string;
+  const { teamAId, teamBId } = getTeamAandB(matchData);
   
   if (!matchData.map1) {
     // Map 1 selection phase - after 2 bans
@@ -4172,22 +4451,22 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
       throw new Error('Map 1 selection phase has not started yet. Continue banning maps.');
     }
     mapSelectionPhase = 'map1';
-    teamThatShouldSelect = 'team1'; // Team A picks Map 1
+    teamThatShouldSelectId = teamAId; // Team A picks Map 1
   } else if (matchData.map1 && matchData.map1Side && !matchData.map2) {
     // Map 2 selection phase - Team B picks Map 2 immediately after Map 1 side selection
     mapSelectionPhase = 'map2';
-    teamThatShouldSelect = 'team2'; // Team B picks Map 2
+    teamThatShouldSelectId = teamBId; // Team B picks Map 2
   } else if (matchData.map2 && matchData.map2Side && totalBans >= 4) {
     // Decider map is automatically selected after 4 bans
     mapSelectionPhase = 'decider';
-    teamThatShouldSelect = 'team1'; // Team A picks side for Decider
+    teamThatShouldSelectId = teamAId; // Team A continues the flow
   } else {
     throw new Error('Map selection is not available at this time.');
   }
   
   console.log('?? DEBUG: Map selection phase:', { 
     mapSelectionPhase, 
-    teamThatShouldSelect,
+    teamThatShouldSelectId,
     totalBans,
     map1: matchData.map1,
     map1Side: matchData.map1Side,
@@ -4196,11 +4475,10 @@ export const selectMap = async (matchId: string, teamId: string, mapName: string
   });
   
   // Check if the current team is the one that should select
-  const currentTeamShouldSelect = (teamThatShouldSelect === 'team1' && isTeam1) || (teamThatShouldSelect === 'team2' && isTeam2);
+  const currentTeamShouldSelect = teamId === teamThatShouldSelectId;
   
   if (!currentTeamShouldSelect) {
-    const otherTeamName = teamThatShouldSelect === 'team1' ? 'Team 1' : 'Team 2';
-    throw new Error(`Only ${otherTeamName} can select a map at this time`);
+    throw new Error('Only the designated team can select a map at this time');
   }
   
   // Verify the map is available (not banned)
@@ -5863,22 +6141,36 @@ export const getUsersByIds = async (userIds: string[]): Promise<User[]> => {
     const userPromises = userIds.map(async (userId) => {
       try {
         const userData = await getPublicUserData(userId);
-        if (userData) {
-          return {
-            id: userId,
-            username: userData.username || 'Unknown',
-            email: userData.email || '',
-            riotId: userData.riotId || 'No Riot ID',
-            discordUsername: userData.discordUsername || '',
-            discordId: userData.discordId || '',
-            discordAvatar: userData.discordAvatar || '',
-            discordLinked: userData.discordLinked || false,
-            createdAt: userData.createdAt?.toDate() || new Date(),
-            teamIds: userData.teamIds || [],
-            isAdmin: userData.isAdmin || false
-          } as User;
-        }
-        return null;
+        const fullUser = await getUserById(userId);
+
+        const username =
+          userData?.username ||
+          fullUser?.username ||
+          'Unknown';
+
+        const riotIdCandidate =
+          userData?.riotId ||
+          fullUser?.riotId ||
+          '';
+
+        const riotId =
+          typeof riotIdCandidate === 'string' && riotIdCandidate.trim().length > 0
+            ? riotIdCandidate
+            : 'No Riot ID';
+
+        return {
+          id: userId,
+          username,
+          email: userData?.email || fullUser?.email || '',
+          riotId,
+          discordUsername: userData?.discordUsername || '',
+          discordId: userData?.discordId || '',
+          discordAvatar: userData?.discordAvatar || '',
+          discordLinked: userData?.discordLinked || false,
+          createdAt: userData?.createdAt?.toDate?.() || (fullUser as any)?.createdAt?.toDate?.() || new Date(),
+          teamIds: userData?.teamIds || fullUser?.teamIds || [],
+          isAdmin: userData?.isAdmin || fullUser?.isAdmin || false
+        } as User;
       } catch (error) {
         console.error(`Error fetching user ${userId}:`, error);
         return null;
@@ -5982,13 +6274,24 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
     await deleteMatch(match.id);
   }
 
+  // Pull tournament config (match format, finals format, map pool)
+  const tournamentRef = doc(db, 'tournaments', tournamentId);
+  const tournamentDoc = await getDoc(tournamentRef);
+  const tournamentFormat = tournamentDoc.exists() ? (tournamentDoc.data() as Tournament).format : undefined;
+  const configuredMapPool =
+    Array.isArray(tournamentFormat?.mapPool) && tournamentFormat.mapPool.length > 0
+      ? tournamentFormat.mapPool
+      : [...DEFAULT_MAP_POOL];
+  const defaultMatchFormat: MatchFormat = (tournamentFormat?.matchFormat as MatchFormat) || 'BO1';
+  const finalsMatchFormat: MatchFormat = (tournamentFormat?.finalsMatchFormat as MatchFormat) || defaultMatchFormat;
+
   // Shuffle teams for random seeding
   const seededTeams = [...teamIds].sort(() => Math.random() - 0.5);
   const n = seededTeams.length;
   const winnersRounds = Math.ceil(Math.log2(n));
   const losersRounds = 2 * (winnersRounds - 1);
 
-  const mapPool = [...DEFAULT_MAP_POOL];
+  const mapPool = configuredMapPool;
   const matches: Omit<Match, 'id'>[] = [];
 
   // Winners bracket: round + matchNumber are bracket-local (critical for correct advancement)
@@ -6008,7 +6311,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
         tournamentId,
         tournamentType: 'double-elim',
         bracketType: 'winners',
-        matchFormat: 'BO1',
+        matchFormat: defaultMatchFormat,
         matchState: 'ready_up',
         mapPool,
         bannedMaps: { team1: [], team2: [] },
@@ -6038,7 +6341,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
         tournamentId,
         tournamentType: 'double-elim',
         bracketType: 'losers',
-        matchFormat: 'BO1',
+        matchFormat: defaultMatchFormat,
         matchState: 'ready_up',
         mapPool,
         bannedMaps: { team1: [], team2: [] },
@@ -6064,7 +6367,7 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
     tournamentId,
     tournamentType: 'double-elim',
     bracketType: 'grand_final',
-    matchFormat: 'BO3',
+    matchFormat: finalsMatchFormat,
     matchState: 'ready_up',
     mapPool,
     bannedMaps: { team1: [], team2: [] },
@@ -7188,6 +7491,17 @@ export const generateSingleEliminationBracketWithSeeding = async (tournamentId: 
       throw new Error(`Single elimination requires 2, 4, 8, 16, or 32 teams. Got ${seededTeams.length} teams.`);
     }
     
+    // Pull tournament config (match format, finals format, map pool)
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    const tournamentDoc = await getDoc(tournamentRef);
+    const tournamentFormat = tournamentDoc.exists() ? (tournamentDoc.data() as Tournament).format : undefined;
+    const configuredMapPool =
+      Array.isArray(tournamentFormat?.mapPool) && tournamentFormat.mapPool.length > 0
+        ? tournamentFormat.mapPool
+        : [...DEFAULT_MAP_POOL];
+    const defaultMatchFormat: MatchFormat = (tournamentFormat?.matchFormat as MatchFormat) || 'BO1';
+    const finalsMatchFormat: MatchFormat = (tournamentFormat?.finalsMatchFormat as MatchFormat) || defaultMatchFormat;
+
     const matches: Omit<Match, 'id'>[] = [];
     let matchNumber = 1;
     
@@ -7205,8 +7519,9 @@ export const generateSingleEliminationBracketWithSeeding = async (tournamentId: 
         tournamentId,
         tournamentType: 'single-elim',
         createdAt: new Date(),
+        matchFormat: finalsMatchFormat,
         matchState: 'ready_up',
-        mapPool: [...DEFAULT_MAP_POOL],
+        mapPool: configuredMapPool,
         bannedMaps: {
           team1: [],
           team2: []
@@ -7240,8 +7555,9 @@ export const generateSingleEliminationBracketWithSeeding = async (tournamentId: 
           tournamentId,
           tournamentType: 'single-elim',
           createdAt: new Date(),
+          matchFormat: defaultMatchFormat,
           matchState: 'ready_up',
-        mapPool: [...DEFAULT_MAP_POOL],
+          mapPool: configuredMapPool,
           bannedMaps: {
             team1: [],
             team2: []
@@ -7274,8 +7590,9 @@ export const generateSingleEliminationBracketWithSeeding = async (tournamentId: 
             tournamentId,
             tournamentType: 'single-elim',
             createdAt: new Date(),
+            matchFormat: round === totalRounds ? finalsMatchFormat : defaultMatchFormat,
             matchState: 'ready_up',
-            mapPool: [...DEFAULT_MAP_POOL],
+            mapPool: configuredMapPool,
             bannedMaps: {
               team1: [],
               team2: []
@@ -7338,12 +7655,23 @@ export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: 
 
   
 
+  // Pull tournament config (match format, finals format, map pool)
+  const tournamentRef = doc(db, 'tournaments', tournamentId);
+  const tournamentDoc = await getDoc(tournamentRef);
+  const tournamentFormat = tournamentDoc.exists() ? (tournamentDoc.data() as Tournament).format : undefined;
+  const configuredMapPool =
+    Array.isArray(tournamentFormat?.mapPool) && tournamentFormat.mapPool.length > 0
+      ? tournamentFormat.mapPool
+      : [...DEFAULT_MAP_POOL];
+  const defaultMatchFormat: MatchFormat = (tournamentFormat?.matchFormat as MatchFormat) || 'BO1';
+  const finalsMatchFormat: MatchFormat = (tournamentFormat?.finalsMatchFormat as MatchFormat) || defaultMatchFormat;
+
   const matches: Omit<Match, 'id'>[] = [];
 
   const n = seededTeams.length;
   const winnersRounds = Math.ceil(Math.log2(n));
   const losersRounds = 2 * (winnersRounds - 1);
-  const mapPool = [...DEFAULT_MAP_POOL];
+  const mapPool = configuredMapPool;
 
   // Winners Round 1 - seeded bracket placement
   const firstRoundMatches = generateSeededFirstRound(seededTeams);
@@ -7360,7 +7688,7 @@ export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: 
       tournamentId,
       tournamentType: 'double-elim',
       bracketType: 'winners',
-      matchFormat: 'BO1',
+      matchFormat: defaultMatchFormat,
       matchState: 'ready_up',
       mapPool,
       bannedMaps: { team1: [], team2: [] },
@@ -7388,7 +7716,7 @@ export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: 
         tournamentId,
         tournamentType: 'double-elim',
         bracketType: 'winners',
-        matchFormat: 'BO1',
+        matchFormat: defaultMatchFormat,
         matchState: 'ready_up',
         mapPool,
         bannedMaps: { team1: [], team2: [] },
@@ -7418,7 +7746,7 @@ export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: 
         tournamentId,
         tournamentType: 'double-elim',
         bracketType: 'losers',
-        matchFormat: 'BO1',
+        matchFormat: defaultMatchFormat,
         matchState: 'ready_up',
         mapPool,
         bannedMaps: { team1: [], team2: [] },
@@ -7444,7 +7772,7 @@ export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: 
     tournamentId,
     tournamentType: 'double-elim',
     bracketType: 'grand_final',
-    matchFormat: 'BO3',
+    matchFormat: finalsMatchFormat,
     matchState: 'ready_up',
     mapPool,
     bannedMaps: { team1: [], team2: [] },

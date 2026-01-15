@@ -96,6 +96,7 @@ import type { Tournament, Match, Team, User } from '../types/tournament';
 import TournamentBracket from '../components/TournamentBracket';
 import DoubleEliminationBracket from '../components/DoubleEliminationBracket';
 import GroupStageBracket from '../components/GroupStageBracket';
+import SingleEliminationBracket from '../components/SingleEliminationBracket';
 import TournamentSchedule from '../components/TournamentSchedule';
 import TournamentLeaderboard from '../components/TournamentLeaderboard';
 import EnhancedTeamRegistration from '../components/EnhancedTeamRegistration';
@@ -201,9 +202,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     }
   };
 
-  // Check Discord requirements
-  const discordLinked = !!(authUser?.discordId && authUser?.discordLinked);
-  const inDiscordServer = discordLinked ? authUser?.inDiscordServer ?? false : false;
+  // Discord gating disabled for now
+  const inDiscordServer = authUser?.inDiscordServer ?? false;
 
   // Ref to ensure we only auto-navigate to match ONCE after tournament start
   const hasAutoNavigatedToMatch = useRef(false);
@@ -241,7 +241,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
             }
           } catch (error) {
             console.warn('Failed to load user teams:', error);
-            setUserTeams([]);
+            // Do not wipe previously loaded teams on a transient failure (causes stale UI until refresh)
           }
         }
         
@@ -287,7 +287,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               }
             } catch (error) {
               console.warn('Failed to load user teams:', error);
-              setUserTeams([]);
+              // Do not wipe previously loaded teams on a transient failure (causes stale UI until refresh)
             }
           }
           
@@ -746,6 +746,12 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const isUserTeamSignedUp = userTeams.some(team => (tournament?.teams || []).includes(team.id));
   const canSignupForUser = authUser && userTeams.length > 0 && !isUserTeamSignedUp && tournament && tournament.status === 'registration-open';
 
+  // Only show the right sidebar when it has something useful to display.
+  const shouldShowRightSidebar =
+    activeView !== 'playoff-bracket' &&
+    activeView !== 'bracket' &&
+    activeView !== 'overview';
+
   const handleAutoCompleteCurrentRound = async () => {
     if (!tournament || starting) return;
     try {
@@ -851,9 +857,11 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
   // Add a function to withdraw the user's team from the tournament
   const handleWithdraw = async (teamId: string) => {
-    if (!tournament || !teamId || !authUser?.uid) return;
+    if (!tournament || !teamId) return;
+    const userId = authUser?.uid || authUser?.id;
+    if (!userId) return;
     try {
-      await withdrawTeamFromTournament(tournament.id, teamId, authUser.uid);
+      await withdrawTeamFromTournament(tournament.id, teamId, userId);
       toast.success('Your team has been withdrawn from the tournament.');
       await reloadTournamentData();
     } catch (error) {
@@ -1033,10 +1041,10 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
+      <div className="min-h-screen bg-[#050505] text-white font-sans flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-500 text-2xl mb-4">LOADING...</div>
-          <div className="text-gray-400 text-sm">Fetching tournament data</div>
+          <div className="text-red-500 font-bodax text-2xl mb-4 uppercase tracking-wider">LOADING...</div>
+          <div className="text-gray-400 font-mono text-sm">Fetching tournament data</div>
         </div>
       </div>
     );
@@ -1045,13 +1053,13 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   // Error state
   if (error || !tournament) {
     return (
-      <div className="min-h-screen bg-black text-white font-mono flex items-center justify-center">
+      <div className="min-h-screen bg-[#050505] text-white font-sans flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-500 text-2xl mb-4">ERROR</div>
-          <div className="text-gray-400 text-sm mb-4">{error || 'Tournament not found'}</div>
+          <div className="text-red-500 font-bodax text-2xl mb-4 uppercase tracking-wider">ERROR</div>
+          <div className="text-gray-400 font-mono text-sm mb-4">{error || 'Tournament not found'}</div>
           <button
             onClick={() => navigate('/tournaments')}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"
+            className="bg-red-600 hover:bg-red-700 text-white font-bodax py-3 px-8 uppercase tracking-wider transition-all duration-300 border border-red-800 hover:border-red-500"
           >
             <ArrowLeft className="w-4 h-4 inline mr-2" />
             Back to Tournaments
@@ -1062,410 +1070,473 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   }
 
   return (
-    <div className="min-h-screen text-white font-mono relative overflow-hidden">
-      {/* Unity League Background Pattern */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-20" 
-           style={{
-             backgroundImage: `
-               linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%),
-               linear-gradient(-45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%),
-               radial-gradient(circle at 25% 25%, rgba(6,182,212,0.1) 0 1px, transparent 1px 100px),
-               radial-gradient(circle at 75% 75%, rgba(236,72,153,0.1) 0 1px, transparent 1px 100px)
-             `
-           }} />
+    <div className="min-h-screen bg-[#050505] text-white font-sans relative overflow-hidden">
+      {/* Bodax Background Pattern */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,0,76,0.08),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(0,178,255,0.08),transparent_35%)] pointer-events-none" />
       
-      {/* Diagonal accent lines like Unity League */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute top-0 right-0 w-32 h-1 bg-cyan-400 transform rotate-45 origin-top-right"></div>
-        <div className="absolute bottom-20 right-10 w-24 h-1 bg-cyan-400 transform -rotate-45 origin-bottom-right"></div>
-        <div className="absolute top-40 left-0 w-20 h-1 bg-pink-400 transform rotate-45 origin-top-left"></div>
-      </div>
+      {/* Bottom divider */}
+      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
 
       {/* Main Content */}
-      <div className="relative z-20 container mx-auto px-4 pt-24 pb-8">
+      <div className="relative z-20 mx-auto w-full max-w-[1600px] px-4 pt-20 sm:pt-28 pb-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-center mb-2 tracking-tight bg-gradient-to-r from-cyan-400 via-pink-400 to-purple-400 bg-clip-text text-transparent uppercase">
-            {tournament.name}
-          </h1>
-          <div className="text-center text-pink-200 mb-6 text-base md:text-lg">
-            {tournament.description}
-          </div>
-        </div>
-
-        {/* Tournament Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="unity-card-cyan">
-            <div className="text-cyan-400 font-bold text-sm mb-2">STATUS</div>
-            <div className="text-white text-lg font-bold capitalize">{tournament.status.replace('-', ' ')}</div>
-            <div className="text-cyan-200 text-xs mt-1">
-              {tournament.status === 'registration-open' && 'Open for team registration'}
-              {tournament.status === 'registration-closed' && 'Registration closed'}
-              {tournament.status === 'in-progress' && 'Tournament in progress'}
-              {tournament.status === 'completed' && 'Tournament completed'}
-              {tournament.status === 'group-stage' && 'Group stage in progress'}
-              {tournament.status === 'knockout-stage' && 'Knockout stage in progress'}
-            </div>
-          </div>
-
-          <div className="unity-card-pink">
-            <div className="text-pink-400 font-bold text-sm mb-2">START TIME</div>
-            <div className="text-white text-lg font-bold">{formatDate(tournament.schedule?.startDate)}</div>
-            <div className="text-pink-200 text-xs mt-1">
-              Tournament begins
-            </div>
-          </div>
-
-          <div className="unity-card-purple">
-            <div className="text-purple-400 font-bold text-sm mb-2">TEAMS</div>
-            <div className="text-white text-lg font-bold">
-              {tournament.teams?.length || 0} / {tournament.format?.teamCount || 8}
-            </div>
-            <div className="text-purple-200 text-xs mt-1">
-              {tournament.format?.teamCount || 8} teams maximum
-            </div>
-          </div>
-
-          <div className="unity-card">
-            <div className="text-pink-400 font-bold text-sm mb-2">PRIZE POOL</div>
-            <div className="text-white text-lg font-bold">€{tournament.prizePool?.total || 0}</div>
-            <div className="text-pink-200 text-xs mt-1">
-              {prizeDistributionText}
-            </div>
-          </div>
-        </div>
-
-        {/* Requirements */}
-        <div className="bg-black/60 border border-gray-700 rounded-lg p-4 mb-8">
-          <div className="text-red-400 font-bold text-sm mb-3">TOURNAMENT REQUIREMENTS</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-400">Starting Time:</span>
-              <span className="text-gray-200 ml-2">{formatDate(tournament.schedule?.startDate)}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Format:</span>
-              <span className="text-gray-200 ml-2 capitalize">{tournament.format?.type?.replace(/-/g, ' ') || 'Single Elimination'}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Team Size:</span>
-              <span className="text-gray-200 ml-2">{tournament.requirements?.teamSize || 5} players</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Max Teams:</span>
-              <span className="text-gray-200 ml-2">{tournament.format?.teamCount || 8}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Match Format:</span>
-              <span className="text-gray-200 ml-2">{tournament.format?.matchFormat || 'BO1'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Signup Section */}
-        {canSignupForUser && (
-          <div className="unity-card mb-8">
-            <div className="text-pink-400 font-bold text-lg mb-4">TEAM REGISTRATION</div>
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex-1">
-                <div className="text-pink-200 mb-2 font-medium">Select Your Team:</div>
-                <select
-                  className="w-full bg-black/40 text-white border border-pink-400/30 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-400"
-                  value={selectedSignupTeamId || ''}
-                  onChange={e => setSelectedSignupTeamId(e.target.value)}
-                >
-                  <option value="" disabled>Select a team</option>
-                  {getAvailableUserTeams().map(team => (
-                    <option key={team.id} value={team.id}>{team.name}</option>
-                  ))}
-                </select>
-                <div className="text-pink-200 text-sm">Choose a team to register with enhanced role selection</div>
+        <div className="mb-12">
+          <div className="flex items-center gap-4 mb-4">
+            <button
+              onClick={() => navigate('/tournaments')}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="flex-1">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold font-bodax tracking-wider text-white mb-3">
+                {tournament.name}
+              </h1>
+              <div className="inline-flex flex-wrap items-center gap-2 mb-3 bg-black/20 border border-gray-800 rounded-lg px-3 py-2">
+                <Badge variant={tournament.status === 'in-progress' ? 'warning' : tournament.status === 'completed' ? 'success' : 'default'} className="font-mono text-xs uppercase tracking-wider">
+                  {tournament.status.replace(/-/g, ' ')}
+                </Badge>
+                {isAdmin && (
+                  <Badge variant="error" className="font-mono text-xs uppercase tracking-wider">
+                    Admin
+                  </Badge>
+                )}
+                <span className="text-gray-600 font-mono text-sm">/</span>
+                <span className="text-gray-300 font-mono text-sm uppercase tracking-wider inline-flex items-center gap-2">
+                  <span className="text-gray-200">Start:</span>
+                  <span className="text-white font-semibold bg-white/5 border border-gray-700 rounded px-2 py-0.5">
+                    {formatDate(tournament.schedule?.startDate)}
+                  </span>
+                </span>
+                <span className="text-gray-600 font-mono text-sm">/</span>
+                <span className="text-gray-300 font-mono text-sm uppercase tracking-wider">
+                  {tournament.format?.type?.replace(/-/g, ' ') || 'single elimination'}
+                </span>
+                <span className="text-gray-600 font-mono text-sm">/</span>
+                <span className="text-gray-300 font-mono text-sm uppercase tracking-wider">
+                  Teams: <span className="text-white font-semibold">{tournament.teams?.length || 0}/{tournament.format?.teamCount || 8}</span>
+                </span>
+                <span className="text-gray-600 font-mono text-sm">/</span>
+                <span className="text-gray-300 font-mono text-sm uppercase tracking-wider">
+                  Prize: <span className="text-white font-semibold">€{tournament.prizePool?.total || 0}</span>
+                </span>
               </div>
-              <button
-                onClick={() => { if (selectedSignupTeamId) handleSignup(selectedSignupTeamId); }}
-                disabled={!selectedSignupTeamId || !!signingUp}
-                className="unity-btn-primary disabled:bg-gray-600 disabled:cursor-not-allowed"
-              >
-                {signingUp ? 'Registering...' : 'Register Team'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Admin Start Swiss Stage Button */}
-        {isAdmin && tournament.format?.type === 'swiss-system' && tournament.status === 'registration-open' && (
-          <div className="unity-card-cyan mb-8">
-            <div className="text-center">
-              <h3 className="text-xl font-bold text-cyan-400 mb-4">Ready to Start Swiss Stage?</h3>
-              <p className="text-cyan-200 mb-4">
-                Tournament has {tournament.teams?.length || 0} teams registered. 
-                Click below to start the Swiss system tournament.
-              </p>
-              <button
-                onClick={handleStartSwissStage}
-                disabled={starting}
-                className="unity-btn-primary disabled:bg-gray-600 disabled:cursor-not-allowed"
-              >
-                {starting ? 'Starting...' : 'Start Swiss Stage'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Leave Tournament Button (formerly Withdraw) */}
-        {tournament && userTeams && userTeams.length > 0 && userTeams.some(team => (tournament.teams || []).includes(team.id)) && (
-          userTeams
-            .filter(team => {
-              const userId = authUser?.uid || authUser?.id;
-              const isCaptainOrOwner = team.captainId === userId || team.ownerId === userId;
-              return (tournament.teams || []).includes(team.id) && isCaptainOrOwner;
-            })
-            .map(team => (
-              <button
-                key={`leave-${team.id}`}
-                onClick={() => handleWithdraw(team.id)}
-                className="bg-yellow-700 hover:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg shadow-lg border border-yellow-900 transition-all duration-200 mt-4 mb-8"
-              >
-                Leave Tournament
-              </button>
-            ))
-        )}
-
-        {/* Admin Tools (smaller, top-right) */}
-        {isAdmin && (
-          <div className="fixed top-28 right-8 z-40 bg-black/80 border border-yellow-700 rounded-lg p-3 w-64 shadow-lg">
-            <div className="text-yellow-400 font-bold text-xs mb-2 text-center">ADMIN TOOLS</div>
-            <div className="grid grid-cols-1 gap-2">
-              {/* Fix Tournament Dates Button */}
-              <button
-                onClick={handleFixDates}
-                className="bg-orange-700 hover:bg-orange-800 text-white font-bold py-1 px-2 rounded text-xs border border-orange-900 transition-all duration-200"
-              >
-                Fix Dates
-              </button>
-              {/* Bracket Reveal Button */}
-              <button
-                onClick={() => navigate(`/admin/bracket-reveal/${id}`)}
-                className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-1 px-2 rounded text-xs border border-purple-900 transition-all duration-200"
-              >
-                Bracket Reveal
-              </button>
-              {/* Manual Seeding Button: Show if seeding is manual (both open and closed registration) */}
-              {(tournament.seeding?.method === 'manual' || tournament.format?.seedingMethod === 'manual') && (
-                <button
-                  onClick={async () => {
-                    // Ensure teams are loaded before opening the modal
-                    if (teams.length === 0 && tournament.teams && tournament.teams.length > 0) {
-                      await reloadTournamentData();
-                    }
-                    setShowManualSeeding(true);
-                  }}
-                  className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-1 px-2 rounded text-xs border border-blue-900 transition-all duration-200"
-                >
-                  Manual Seeding
-                </button>
-              )}
-              {tournament.status === 'registration-open' && (
-                <>
-                  <button
-                    onClick={handleFillDemoTeams}
-                    disabled={starting}
-                    className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-1 px-2 rounded text-xs border border-purple-900 transition-all duration-200"
-                  >
-                    Fill Demo Teams
-                  </button>
-                  {/* Swiss System Start Button */}
-                  {tournament.format?.type === 'swiss-system' && (
-                    <button
-                      onClick={handleStartSwissStage}
-                      disabled={starting}
-                      className="bg-cyan-700 hover:bg-cyan-800 text-white font-bold py-1 px-2 rounded text-xs border border-cyan-900 transition-all duration-200"
-                    >
-                      Start Swiss Stage
-                    </button>
-                  )}
-                  <button
-                    onClick={handleStartGroupStage}
-                    disabled={starting}
-                    className="bg-green-700 hover:bg-green-800 text-white font-bold py-1 px-2 rounded text-xs border border-green-900 transition-all duration-200"
-                  >
-                    Start Group Stage
-                  </button>
-                  <button
-                    onClick={handleStartSingleElimination}
-                    disabled={starting}
-                    className="bg-green-700 hover:bg-green-800 text-white font-bold py-1 px-2 rounded text-xs border border-green-900 transition-all duration-200"
-                  >
-                    Start {tournament.format?.type === 'double-elimination' ? 'Double Elim' : 'Single Elim'}
-                  </button>
-                </>
-              )}
-              {tournament.status === 'registration-closed' && (
-                <>
-                  <button
-                    onClick={handleReopenRegistration}
-                    disabled={starting}
-                    className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-1 px-2 rounded text-xs border border-blue-900 transition-all duration-200"
-                  >
-                    Reopen Registration
-                  </button>
-                  {/* Swiss System Start Button */}
-                  {tournament.format?.type === 'swiss-system' && (
-                    <button
-                      onClick={handleStartSwissStage}
-                      disabled={starting}
-                      className="bg-cyan-700 hover:bg-cyan-800 text-white font-bold py-1 px-2 rounded text-xs border border-cyan-900 transition-all duration-200"
-                    >
-                      Start Swiss Stage
-                    </button>
-                  )}
-                  <button
-                    onClick={handleStartGroupStage}
-                    disabled={starting}
-                    className="bg-green-700 hover:bg-green-800 text-white font-bold py-1 px-2 rounded text-xs border border-green-900 transition-all duration-200"
-                  >
-                    Start Group Stage
-                  </button>
-                  <button
-                    onClick={handleStartSingleElimination}
-                    disabled={starting}
-                    className="bg-green-700 hover:bg-green-800 text-white font-bold py-1 px-2 rounded text-xs border border-green-900 transition-all duration-200"
-                  >
-                    Start {tournament.format?.type === 'double-elimination' ? 'Double Elim' : 'Single Elim'}
-                  </button>
-                </>
-              )}
-              {tournament.status === 'group-stage' && (
-                <button
-                  onClick={handleStartKnockoutStage}
-                  disabled={starting}
-                  className="bg-orange-700 hover:bg-orange-800 text-white font-bold py-1 px-2 rounded text-xs border border-orange-900 transition-all duration-200"
-                >
-                  Start Knockout Stage
-                </button>
-              )}
-              {(tournament.status === 'in-progress' || tournament.status === 'knockout-stage') && (
-                <>
-                  <button
-                    onClick={handleRegenerateBracket}
-                    disabled={starting}
-                    className="bg-yellow-700 hover:bg-yellow-800 text-white font-bold py-1 px-2 rounded text-xs border border-yellow-900 transition-all duration-200"
-                  >
-                    Regenerate Bracket
-                  </button>
-                  <button
-                    onClick={handleAutoCompleteCurrentRound}
-                    disabled={starting}
-                    className="bg-red-700 hover:bg-red-800 text-white font-bold py-1 px-2 rounded text-xs border border-red-900 transition-all duration-200"
-                  >
-                    Auto-Complete Round
-                  </button>
-                </>
+              {tournament.description && (
+                <p className="text-gray-300 font-mono text-sm sm:text-base max-w-3xl">
+                  {tournament.description}
+                </p>
               )}
             </div>
           </div>
-        )}
+        </div>
+
+        {/* Overview content is rendered inside the main layout (state-aware) */}
 
         {/* Tournament Teams Debug */}
         {/* Removed for now */}
 
-        {/* 3-Column Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Main Layout - Horizontal Navigation with Content */}
+        <div className="flex flex-col lg:flex-row gap-8">
           {/* LEFT SIDEBAR - Navigation */}
-          <div className="lg:col-span-2">
-            <Card variant="glass" padding="sm">
+          <div className="lg:w-64 flex-shrink-0">
+            <div className="bg-[#050505] border border-gray-800 p-4 rounded-lg sticky top-24">
+              <div className="text-red-500 font-bodax text-xs uppercase tracking-wider mb-4">Command Center</div>
               <div className="space-y-1">
-          {(() => {
-            const baseTabs = [
+                {(() => {
+                  const playerTabs: Array<{ key: TournamentView; label: string; icon: any }> = [
                     { key: 'overview', label: 'Overview', icon: Eye },
-                    { key: 'teams', label: 'Teams', icon: Users }
-            ];
-            
-            // Add Swiss system tabs if tournament is Swiss system
-            if (tournament.format?.type === 'swiss-system') {
-              baseTabs.push(
+                    { key: 'teams', label: 'Teams', icon: Users },
+                  ];
+
+                  // Swiss system tabs
+                  if (tournament.format?.type === 'swiss-system') {
+                    // Swiss tournaments need a schedule view; bracket tournaments don't.
+                    playerTabs.splice(1, 0, { key: 'schedule', label: 'Matches', icon: Calendar });
+                    playerTabs.push(
                       { key: 'swiss-standings', label: 'Standings', icon: Award },
-                      { key: 'matchday-management', label: 'Schedule', icon: Calendar }
-              );
-              
-              // Debug playoff tab conditions
-              console.log('🏆 Playoff Tab Check:');
-              console.log('  - playoffStage isActive:', tournament.stageManagement?.playoffStage?.isActive);
-              console.log('  - tournament.matches:', tournament.matches?.length);
-              console.log('  - All matches count:', matches.length);
-              console.log('  - Playoff matches:', matches.filter(m => m.tournamentType === 'playoff').length);
-              
-              // Add playoff bracket tab only if playoffs are available
-              if (tournament.stageManagement?.playoffStage?.isActive) {
-                      baseTabs.push({ key: 'playoff-bracket', label: 'Playoffs', icon: Crown });
-                      console.log('  ✅ Playoffs tab ADDED');
-              } else {
-                console.log('  ❌ Playoffs tab NOT added');
-              }
-            } else {
-              // For non-Swiss tournaments, show regular bracket
-                    baseTabs.push({ key: 'bracket', label: 'Bracket', icon: Grid3X3 });
+                      { key: 'matchday-management', label: 'Swiss Schedule', icon: Calendar }
+                    );
+
+                    if (tournament.stageManagement?.playoffStage?.isActive) {
+                      playerTabs.push({ key: 'playoff-bracket', label: 'Playoffs', icon: Crown });
+                    }
+                  } else {
+                    playerTabs.push({ key: 'bracket', label: 'Bracket', icon: Grid3X3 });
                   }
-                  
-                  // Add Admin tab for admins only
-                  if (isAdmin) {
-                    baseTabs.push({ key: 'admin', label: 'Admin', icon: Shield });
-                  }
-                  
-                  // Add veto tab if tournament has matches
+
                   if (matches.length > 0) {
-                    baseTabs.push({ key: 'veto', label: 'Veto', icon: Target });
+                    playerTabs.push({ key: 'veto', label: 'Veto', icon: Target });
                   }
-                  
-                  return baseTabs.map((tab) => {
+
+                  const adminTabs: Array<{ key: TournamentView; label: string; icon: any }> = [];
+                  if (isAdmin) {
+                    adminTabs.push({ key: 'admin', label: 'Admin Control Room', icon: Shield });
+                  }
+
+                  const renderTab = (tab: { key: TournamentView; label: string; icon: any }) => {
                     const TabIcon = tab.icon;
+                    const isActive = activeView === tab.key;
                     return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveView(tab.key as any)}
-                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
-                  activeView === tab.key
-                            ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
-                            : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-                }`}
-              >
+                      <button
+                        key={tab.key}
+                        onClick={() => setActiveView(tab.key as any)}
+                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-mono text-sm transition-all duration-200 border ${
+                          isActive
+                            ? 'bg-red-600/20 text-red-400 border-red-800'
+                            : 'text-gray-400 hover:text-white hover:bg-[#0a0a0a] border-transparent hover:border-gray-800'
+                        }`}
+                      >
                         <TabIcon className="w-4 h-4 flex-shrink-0" />
                         <span className="truncate">{tab.label}</span>
-              </button>
+                      </button>
                     );
-                  });
-          })()}
+                  };
+
+                  return (
+                    <>
+                      <div className="text-gray-500 font-mono text-[11px] uppercase tracking-[0.3em] mb-2">
+                        Player
+                      </div>
+                      {playerTabs.map(renderTab)}
+
+                      {adminTabs.length > 0 && (
+                        <>
+                          <div className="my-4 h-px bg-gradient-to-r from-transparent via-gray-800 to-transparent" />
+                          <div className="text-gray-500 font-mono text-[11px] uppercase tracking-[0.3em] mb-2">
+                            Admin
+                          </div>
+                          {adminTabs.map(renderTab)}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
-            </Card>
-        </div>
+            </div>
+          </div>
 
           {/* CENTER - Main Content */}
-          <div className={`${activeView === 'playoff-bracket' ? 'lg:col-span-9' : 'lg:col-span-7'}`}>
-            <div className="space-y-6">
-          {activeView === 'overview' && (
-            <>
-              {/* Tournament Progress */}
+          <div className="flex-1 min-w-0">
+            <div className="space-y-8">
+              {activeView === 'overview' && (
+                <div className="space-y-8">
+                  {/* STATE-AWARE OVERVIEW HEADER (registration vs in-progress vs completed) */}
+                  {tournament.status === 'registration-open' && (
+                    <div className="bg-[#050505] border border-gray-800 p-6 rounded-lg">
+                      <div className="flex items-start justify-between gap-6">
+                        <div className="min-w-0">
+                          <div className="text-red-500 font-bodax text-sm uppercase tracking-wider mb-2">
+                            Registration Open
+                          </div>
+                          <div className="text-gray-300 font-mono text-sm">
+                            Next step: register your team. Bracket tournaments don’t need a separate schedule — the bracket is the schedule.
+                          </div>
+                        </div>
+
+                        {isAdmin && (
+                          <div className="flex-shrink-0 flex flex-col items-end gap-2">
+                            {(() => {
+                              const configuredTeamCount = tournament.format?.teamCount || 0;
+                              const teamCountNow = tournament.teams?.length || 0;
+                              const isFull = configuredTeamCount > 0 && teamCountNow >= configuredTeamCount;
+                              const approvalProcess = tournament.requirements?.approvalProcess;
+                              const needsApproval = approvalProcess === 'manual';
+                              const approvedTeams = tournament.approvedTeams || [];
+                              const allApproved = !needsApproval || (tournament.teams || []).every(tid => approvedTeams.includes(tid));
+
+                              const canStart = isFull && allApproved;
+
+                              const onStart = async () => {
+                                if (!canStart) return;
+                                if (tournament.format?.type === 'swiss-system') {
+                                  await handleStartSwissStage();
+                                } else if ((tournament.format?.type || '').startsWith('group-stage')) {
+                                  await handleStartGroupStage();
+                                } else {
+                                  await handleStartSingleElimination();
+                                }
+                              };
+
+                              const startLabel =
+                                tournament.format?.type === 'swiss-system'
+                                  ? 'Start Swiss Stage'
+                                  : (tournament.format?.type || '').startsWith('group-stage')
+                                    ? 'Start Group Stage'
+                                    : 'Start Tournament';
+
+                              const disabledReason = !isFull
+                                ? `Need ${configuredTeamCount} teams to start`
+                                : !allApproved
+                                  ? 'Approve all teams to start'
+                                  : null;
+
+                              return (
+                                <>
+                                  <button
+                                    onClick={onStart}
+                                    disabled={!canStart || starting}
+                                    title={disabledReason || ''}
+                                    className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded font-mono text-xs uppercase tracking-wider transition-all duration-300 border border-red-800 hover:border-red-500 disabled:bg-gray-700 disabled:cursor-not-allowed disabled:border-gray-700"
+                                  >
+                                    {starting ? 'Starting…' : startLabel}
+                                  </button>
+                                  {disabledReason && (
+                                    <div className="text-[10px] text-gray-500 font-mono uppercase tracking-[0.25em]">
+                                      {disabledReason}
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
+                            <button
+                              onClick={() => setActiveView('admin')}
+                              className="bg-transparent hover:bg-white/5 text-white px-4 py-2 rounded font-mono text-xs uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500"
+                            >
+                              Open Admin Control Room →
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Registration UI (always visible if you have a team; disabled if Discord isn't linked) */}
+                      {canSignupForUser && (
+                        <div className="mt-5">
+                          <div className="text-gray-300 mb-2 font-mono text-sm">Select Your Team:</div>
+                          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-start">
+                            <div>
+                              <select
+                                className="w-full bg-[#0a0a0a] text-white border border-gray-700 hover:border-gray-600 rounded px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono text-sm transition-colors"
+                                value={selectedSignupTeamId || ''}
+                                onChange={e => setSelectedSignupTeamId(e.target.value)}
+                              >
+                                <option value="" disabled>Select a team</option>
+                                {getAvailableUserTeams().map(team => (
+                                  <option key={team.id} value={team.id}>{team.name}</option>
+                                ))}
+                              </select>
+                              <div className="text-gray-500 font-mono text-xs mt-2">
+                                Enhanced role selection happens in the RegisterV2 popup.
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => { if (selectedSignupTeamId) handleSignup(selectedSignupTeamId); }}
+                              disabled={!selectedSignupTeamId || !!signingUp}
+                              className="bg-red-600 hover:bg-red-700 text-white h-[46px] px-8 font-bodax text-sm uppercase tracking-wider transition-all duration-300 border border-red-800 hover:border-red-500 disabled:bg-gray-600 disabled:cursor-not-allowed disabled:border-gray-700 rounded"
+                            >
+                              {signingUp ? 'Opening…' : 'Register (V2)'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Helpful fallbacks */}
+                      {!canSignupForUser && (
+                        <div className="mt-5 text-gray-400 font-mono text-sm">
+                          {userTeams.length === 0 ? (
+                            <div>
+                              You don’t have a team yet. Create a team first, then come back to register.
+                              <div className="mt-3">
+                                <button
+                                  onClick={() => navigate('/teams/create')}
+                                  className="bg-transparent hover:bg-white/5 text-white px-4 py-2 rounded font-mono text-xs uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500"
+                                >
+                                  Create Team →
+                                </button>
+                              </div>
+                            </div>
+                          ) : isUserTeamSignedUp ? (
+                            <div className="space-y-4">
+                              <div className="text-gray-300 font-mono text-sm">
+                                Your team is registered.
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-4">
+                                  <div className="text-gray-500 font-mono text-[11px] uppercase tracking-[0.3em] mb-2">
+                                    Your status
+                                  </div>
+                                  {userTeams
+                                    .filter(t => (tournament.teams || []).includes(t.id))
+                                    .slice(0, 2)
+                                    .map(t => {
+                                      const approved = tournament.approvedTeams?.includes(t.id);
+                                      const rejected = tournament.rejectedTeams?.includes(t.id);
+                                      const label = rejected ? 'Rejected' : approved ? 'Approved' : 'Registered';
+                                      const labelClass = rejected ? 'text-red-400' : approved ? 'text-green-400' : 'text-gray-300';
+                                      return (
+                                        <div key={`reg-team-${t.id}`} className="flex items-center justify-between gap-3">
+                                          <div className="text-white font-bodax uppercase tracking-wide truncate">{t.name}</div>
+                                          <div className={`text-xs font-mono uppercase tracking-widest ${labelClass}`}>{label}</div>
+                                        </div>
+                                      );
+                                    })}
+                                  <div className="mt-3 text-gray-500 font-mono text-xs">
+                                    Manage roster in the <button onClick={() => setActiveView('teams')} className="text-red-400 hover:text-red-300 underline">Teams</button> tab.
+                                  </div>
+                                </div>
+
+                                <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-4">
+                                  <div className="text-gray-500 font-mono text-[11px] uppercase tracking-[0.3em] mb-2">
+                                    Next steps
+                                  </div>
+                                  <div className="text-gray-300 font-mono text-sm">
+                                    Keep an eye on the bracket tab. Once the tournament starts, matches will appear there.
+                                  </div>
+                                  <div className="mt-4 flex flex-wrap gap-2">
+                                    <button
+                                      onClick={() => setActiveView('bracket')}
+                                      className="bg-transparent hover:bg-white/5 text-white px-4 py-2 rounded font-mono text-xs uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500"
+                                    >
+                                      View Bracket →
+                                    </button>
+                                    <button
+                                      onClick={() => setActiveView('teams')}
+                                      className="bg-transparent hover:bg-white/5 text-white px-4 py-2 rounded font-mono text-xs uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500"
+                                    >
+                                      View Teams →
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              Registration is available, but you currently don’t meet the requirements. Check your team eligibility and try again.
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Leave tournament action (captain/owner) */}
+                      {tournament && userTeams && userTeams.length > 0 && userTeams.some(team => (tournament.teams || []).includes(team.id)) && (
+                        <div className="mt-6 pt-5 border-t border-gray-800">
+                          {userTeams
+                            .filter(team => {
+                              const userId = authUser?.uid || authUser?.id;
+                              const isCaptainOrOwner = team.captainId === userId || team.ownerId === userId;
+                              return (tournament.teams || []).includes(team.id) && isCaptainOrOwner;
+                            })
+                            .map(team => (
+                              <button
+                                key={`leave-${team.id}`}
+                                onClick={() => handleWithdraw(team.id)}
+                                className="bg-transparent hover:bg-white/5 text-white px-5 py-2.5 rounded font-mono text-xs uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500"
+                              >
+                                Leave Tournament
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {tournament.status === 'registration-closed' && matches.length === 0 && (
+                    <div className="bg-[#050505] border border-gray-800 p-6 rounded-lg">
+                      <div className="text-red-500 font-bodax text-sm uppercase tracking-wider mb-2">
+                        Registration Closed
+                      </div>
+                      <div className="text-gray-300 font-mono text-sm">
+                        Teams are locked in. Bracket generation / stage start will happen soon.
+                        {isAdmin && (
+                          <span>
+                            {' '}
+                            You can start it now or manage details in the{' '}
+                            <button onClick={() => setActiveView('admin')} className="text-red-400 hover:text-red-300 underline">
+                              Admin Control Room
+                            </button>
+                            .
+                          </span>
+                        )}
+                      </div>
+                      {isAdmin && (
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          {(() => {
+                            const configuredTeamCount = tournament.format?.teamCount || 0;
+                            const teamCountNow = tournament.teams?.length || 0;
+                            const isFull = configuredTeamCount > 0 && teamCountNow >= configuredTeamCount;
+                            const approvalProcess = tournament.requirements?.approvalProcess;
+                            const needsApproval = approvalProcess === 'manual';
+                            const approvedTeams = tournament.approvedTeams || [];
+                            const allApproved = !needsApproval || (tournament.teams || []).every(tid => approvedTeams.includes(tid));
+                            const canStart = isFull && allApproved;
+
+                            const onStart = async () => {
+                              if (!canStart) return;
+                              if (tournament.format?.type === 'swiss-system') {
+                                await handleStartSwissStage();
+                              } else if ((tournament.format?.type || '').startsWith('group-stage')) {
+                                await handleStartGroupStage();
+                              } else {
+                                await handleStartSingleElimination();
+                              }
+                            };
+
+                            const startLabel =
+                              tournament.format?.type === 'swiss-system'
+                                ? 'Start Swiss Stage'
+                                : (tournament.format?.type || '').startsWith('group-stage')
+                                  ? 'Start Group Stage'
+                                  : 'Start Tournament';
+
+                            const disabledReason = !isFull
+                              ? `Need ${configuredTeamCount} teams to start`
+                              : !allApproved
+                                ? 'Approve all teams to start'
+                                : null;
+
+                            return (
+                              <div className="flex flex-col items-start gap-1">
+                                <button
+                                  onClick={onStart}
+                                  disabled={!canStart || starting}
+                                  title={disabledReason || ''}
+                                  className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded font-mono text-xs uppercase tracking-wider transition-all duration-300 border border-red-800 hover:border-red-500 disabled:bg-gray-700 disabled:cursor-not-allowed disabled:border-gray-700"
+                                >
+                                  {starting ? 'Starting…' : startLabel}
+                                </button>
+                                {disabledReason && (
+                                  <div className="text-[10px] text-gray-500 font-mono uppercase tracking-[0.25em]">
+                                    {disabledReason}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+              {/* Tournament Progress - Enhanced Design */}
               {matches.length > 0 && (
-                <Card variant="glass" padding="lg">
-                  <SectionHeader title="Tournament Progress" icon={TrendingUp} />
-                  <div className="grid grid-cols-3 gap-6 mt-4">
-                    <div className="text-center">
-                      <div className="text-4xl font-bold text-white mb-2">{matches.length}</div>
-                      <div className="text-gray-400 text-sm uppercase tracking-wider">Total Matches</div>
+                <div className="bg-[#050505] border border-gray-800 p-8 rounded-lg">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-red-600/20 border border-red-800 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="w-5 h-5 text-red-500" />
                     </div>
-                    <div className="text-center">
-                      <div className="text-4xl font-bold text-green-400 mb-2">{matches.filter(m => m.isComplete).length}</div>
-                      <div className="text-gray-400 text-sm uppercase tracking-wider">Completed</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-4xl font-bold text-cyan-400 mb-2">{matches.filter(m => !m.isComplete).length}</div>
-                      <div className="text-gray-400 text-sm uppercase tracking-wider">Remaining</div>
+                    <div>
+                      <h3 className="text-xl font-bodax text-white uppercase tracking-wider">Tournament Progress</h3>
+                      <p className="text-gray-400 font-mono text-xs mt-1">Real-time match statistics</p>
                     </div>
                   </div>
-                </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-6 text-center">
+                      <div className="text-5xl font-bold font-bodax text-white mb-2">{matches.length}</div>
+                      <div className="text-gray-400 font-mono text-sm uppercase tracking-wider">Total Matches</div>
+                    </div>
+                    <div className="bg-[#0a0a0a] border border-red-800 rounded-lg p-6 text-center">
+                      <div className="text-5xl font-bold font-bodax text-red-500 mb-2">{matches.filter(m => m.isComplete).length}</div>
+                      <div className="text-gray-400 font-mono text-sm uppercase tracking-wider">Completed</div>
+                    </div>
+                    <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-6 text-center">
+                      <div className="text-5xl font-bold font-bodax text-gray-400 mb-2">{matches.filter(m => !m.isComplete).length}</div>
+                      <div className="text-gray-400 font-mono text-sm uppercase tracking-wider">Remaining</div>
+                    </div>
+                  </div>
+                </div>
               )}
 
-              {/* Current Round Recap */}
+              {/* Current Round Recap - Enhanced Layout */}
               {matches.length > 0 && (() => {
                 // Get current round (highest round with active/completed matches)
                 const currentRound = Math.max(...matches.map(m => m.matchday || m.swissRound || m.round || 1));
@@ -1474,23 +1545,28 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                 const upcomingMatches = roundMatches.filter(m => !m.isComplete && ['scheduled', 'ready_up', 'pending_scheduling'].includes(m.matchState)).slice(0, 6);
                 
                 return (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Recent Results */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Recent Results - Enhanced Card */}
                     {recentResults.length > 0 && (
-                      <Card variant="glass" padding="md">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-2">
-                            <CheckCircle className="w-4 h-4 text-green-400" />
-                            <span className="text-white font-bold text-sm">Recent Results - Round {currentRound}</span>
+                      <div className="bg-[#050505] border border-gray-800 p-6 rounded-lg">
+                        <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-800">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-red-600/20 border border-red-800 rounded-lg flex items-center justify-center">
+                              <CheckCircle className="w-4 h-4 text-red-500" />
+                            </div>
+                            <div>
+                              <h4 className="text-white font-bodax text-base uppercase tracking-wider">Recent Results</h4>
+                              <p className="text-gray-400 font-mono text-xs mt-0.5">Round {currentRound}</p>
+                            </div>
                           </div>
                           <button 
-                            onClick={() => setActiveView('schedule')}
-                            className="text-cyan-400 hover:text-cyan-300 text-xs"
+                            onClick={() => setActiveView(tournament.format?.type === 'swiss-system' ? 'schedule' : 'bracket')}
+                            className="text-red-500 hover:text-red-400 font-mono text-xs transition-colors hover:underline"
                           >
                             View All →
                           </button>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {recentResults.map(match => {
                             const team1 = teams.find(t => t.id === match.team1Id);
                             const team2 = teams.find(t => t.id === match.team2Id);
@@ -1500,18 +1576,18 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                               <div 
                                 key={match.id}
                                 onClick={() => navigate(`/match/${match.id}`)}
-                                className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3 hover:border-green-500/50 transition-all cursor-pointer"
+                                className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-4 hover:border-red-800 transition-all cursor-pointer group"
                               >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className={`text-sm font-medium truncate ${team1Won ? 'text-green-400' : 'text-gray-400'}`}>
+                                <div className="flex items-center justify-between gap-4">
+                                  <div className="flex-1 min-w-0 space-y-1">
+                                    <div className={`text-sm font-mono truncate ${team1Won ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
                                       {team1?.name || 'TBD'}
                                     </div>
-                                    <div className={`text-sm font-medium truncate ${team2Won ? 'text-green-400' : 'text-gray-400'}`}>
+                                    <div className={`text-sm font-mono truncate ${team2Won ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
                                       {team2?.name || 'TBD'}
                                     </div>
                                   </div>
-                                  <div className="text-white font-bold text-lg ml-3">
+                                  <div className="text-white font-bold font-bodax text-xl ml-3">
                                     {match.team1Score} - {match.team2Score}
                                   </div>
                                 </div>
@@ -1519,25 +1595,30 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                             );
                           })}
                         </div>
-                      </Card>
+                      </div>
                     )}
 
-                    {/* Upcoming Matches */}
+                    {/* Upcoming Matches - Enhanced Card */}
                     {upcomingMatches.length > 0 && (
-                      <Card variant="glass" padding="md">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-2">
-                            <Clock className="w-4 h-4 text-blue-400" />
-                            <span className="text-white font-bold text-sm">Upcoming - Round {currentRound}</span>
+                      <div className="bg-[#050505] border border-gray-800 p-6 rounded-lg">
+                        <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-800">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-red-600/20 border border-red-800 rounded-lg flex items-center justify-center">
+                              <Clock className="w-4 h-4 text-red-500" />
+                            </div>
+                            <div>
+                              <h4 className="text-white font-bodax text-base uppercase tracking-wider">Upcoming Matches</h4>
+                              <p className="text-gray-400 font-mono text-xs mt-0.5">Round {currentRound}</p>
+                            </div>
                           </div>
                           <button 
-                            onClick={() => setActiveView('schedule')}
-                            className="text-cyan-400 hover:text-cyan-300 text-xs"
+                            onClick={() => setActiveView(tournament.format?.type === 'swiss-system' ? 'schedule' : 'bracket')}
+                            className="text-red-500 hover:text-red-400 font-mono text-xs transition-colors hover:underline"
                           >
                             View All →
                           </button>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {upcomingMatches.map(match => {
                             const team1 = teams.find(t => t.id === match.team1Id);
                             const team2 = teams.find(t => t.id === match.team2Id);
@@ -1545,25 +1626,25 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                               <div 
                                 key={match.id}
                                 onClick={() => navigate(`/match/${match.id}`)}
-                                className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3 hover:border-blue-500/50 transition-all cursor-pointer"
+                                className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-4 hover:border-red-800 transition-all cursor-pointer group"
                               >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium text-white truncate">
+                                <div className="flex items-center justify-between gap-4">
+                                  <div className="flex-1 min-w-0 space-y-1">
+                                    <div className="text-sm font-mono text-white truncate font-medium">
                                       {team1?.name || 'TBD'}
                                     </div>
-                                    <div className="text-xs text-gray-400 my-0.5">vs</div>
-                                    <div className="text-sm font-medium text-white truncate">
+                                    <div className="text-xs text-gray-500 font-mono">vs</div>
+                                    <div className="text-sm font-mono text-white truncate font-medium">
                                       {team2?.name || 'TBD'}
                                     </div>
                                   </div>
-                                  <div className="text-xs text-gray-400 ml-3">
+                                  <div className="text-xs text-gray-400 font-mono text-right">
                                     {match.scheduledTime ? (
-                                      formatDate(match.scheduledTime)
+                                      <div className="text-red-500">{formatDate(match.scheduledTime)}</div>
                                     ) : match.matchState === 'scheduled' ? (
-                                      <span className="text-blue-400">Scheduled</span>
+                                      <span className="text-red-500">Scheduled</span>
                                     ) : (
-                                      <span className="italic">Pending</span>
+                                      <span className="text-gray-500 italic">Pending</span>
                                     )}
                                   </div>
                                 </div>
@@ -1571,16 +1652,24 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                             );
                           })}
                         </div>
-                      </Card>
+                      </div>
                     )}
                   </div>
                 );
               })()}
 
-              {/* User's Active Matches */}
+              {/* User's Active Matches - Enhanced */}
               {userActiveMatches && userActiveMatches.length > 0 && (
-                <Card variant="bordered" padding="lg">
-                  <SectionHeader title="Your Active Matches" icon={Gamepad2} />
+                <div className="bg-[#050505] border border-gray-800 p-6 rounded-lg">
+                  <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-800">
+                    <div className="w-10 h-10 bg-red-600/20 border border-red-800 rounded-lg flex items-center justify-center">
+                      <Gamepad2 className="w-5 h-5 text-red-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bodax text-white uppercase tracking-wider">Your Active Matches</h3>
+                      <p className="text-gray-400 font-mono text-xs mt-1">Matches you need to play</p>
+                    </div>
+                  </div>
                   <div className="mt-4">
                     <UserMatches 
                       userId={authUser?.id || ''}
@@ -1588,94 +1677,101 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                       teams={teams}
                     />
                   </div>
-                </Card>
+                </div>
               )}
-            </>
+            </div>
           )}
 
           {activeView === 'teams' && (
-            <>
-                        {/* Registered Teams */}
-              <Card variant="glass" padding="lg">
-                <SectionHeader 
-                  title="REGISTERED TEAMS" 
-                  icon={Users}
-                  subtitle={`${tournament.teams?.length || 0} / ${tournament.format?.teamCount || 8} teams`}
-                />
-                <div className="mt-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {tournament.teams?.filter((teamId, index, array) => array.indexOf(teamId) === index) // Remove duplicates
-                    .map(teamId => {
-                    const team = teams.find(t => t.id === teamId);
-                    const isApproved = tournament.approvedTeams?.includes(teamId);
-                    const isRejected = tournament.rejectedTeams?.includes(teamId);
-                    const isPending = false; // pendingTeams doesn't exist in Tournament type
-                    
-                    return team ? (
-                      <div 
-                        key={`team-${teamId}-${team.name}`} 
-                        className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 hover:border-pink-400/50 transition-all duration-200 cursor-pointer group"
-                        onClick={() => navigate(`/teams/${team.id}`)}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-bold text-base group-hover:text-pink-300 transition-colors truncate">
-                          {team.name}
-                        </div>
-                            <div className="text-gray-400 text-xs mt-0.5">{team.members?.length || 0} members</div>
-                          </div>
-                          <div className="ml-2 flex-shrink-0">
-                            {isApproved && <StatusBadge status="approved" />}
-                            {isRejected && <StatusBadge status="rejected" />}
-                            {isPending && <StatusBadge status="pending" />}
-                            {!isApproved && !isRejected && !isPending && <StatusBadge status="registered" />}
-                          </div>
-                        </div>
-                        
-                        {/* Admin Actions */}
-                        {isAdmin && (
-                          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-gray-700/50" onClick={(e) => e.stopPropagation()}>
-                            {isApproved && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleRevertTeamApproval(teamId); }}
-                                className="bg-yellow-600/80 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs font-medium transition-colors"
-                              >
-                                Revert Approval
-                              </button>
-                            )}
-                            {isRejected && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleRevertTeamRejection(teamId); }}
-                                className="bg-blue-600/80 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium transition-colors"
-                              >
-                                Revert Rejection
-                              </button>
-                            )}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleRevertTeamRegistration(teamId); }}
-                              className="bg-red-600/80 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-medium transition-colors"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ) : null;
-                  })}
+            <div className="space-y-6">
+              {/* Registered Teams */}
+              <div className="bg-[#050505] border border-gray-800 p-6 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="w-5 h-5 text-red-500" />
+                  <h3 className="text-red-500 font-bodax text-lg uppercase tracking-wider">REGISTERED TEAMS</h3>
                 </div>
-                {(!tournament.teams || tournament.teams.length === 0) && (
-                    <div className="text-center text-gray-400 py-8">No teams registered yet</div>
-                )}
+                <p className="text-gray-400 font-mono text-xs mb-4">{tournament.teams?.length || 0} / {tournament.format?.teamCount || 8} teams</p>
+                <div className="mt-4">
+                  {(tournament.teams && tournament.teams.length > 0) ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {(tournament.teams || [])
+                        .filter((teamId, index, array) => array.indexOf(teamId) === index) // Remove duplicates
+                        .map((teamId) => {
+                          const team = teams.find(t => t.id === teamId);
+                          const isApproved = tournament.approvedTeams?.includes(teamId);
+                          const isRejected = tournament.rejectedTeams?.includes(teamId);
+                          const isPending = false; // pendingTeams doesn't exist in Tournament type
+
+                          if (!team) return null;
+
+                          return (
+                            <div
+                              key={`team-${teamId}-${team.name}`}
+                              className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-4 hover:border-red-800 transition-all duration-200 cursor-pointer group"
+                              onClick={() => navigate(`/teams/${team.id}`)}
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-white font-bodax text-base group-hover:text-red-500 transition-colors truncate">
+                                    {team.name}
+                                  </div>
+                                  <div className="text-gray-400 font-mono text-xs mt-0.5">{team.members?.length || 0} members</div>
+                                </div>
+                                <div className="ml-2 flex-shrink-0">
+                                  {isApproved && <StatusBadge status="approved" />}
+                                  {isRejected && <StatusBadge status="rejected" />}
+                                  {isPending && <StatusBadge status="pending" />}
+                                  {!isApproved && !isRejected && !isPending && <StatusBadge status="registered" />}
+                                </div>
+                              </div>
+
+                              {/* Admin Actions */}
+                              {isAdmin && (
+                                <div
+                                  className="flex flex-wrap gap-1.5 pt-2 border-t border-gray-800"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {isApproved && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleRevertTeamApproval(teamId); }}
+                                      className="bg-[#0a0a0a] hover:bg-[#0f0f0f] text-white px-2 py-1 rounded text-xs font-mono transition-colors border border-gray-700"
+                                    >
+                                      Revert Approval
+                                    </button>
+                                  )}
+                                  {isRejected && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleRevertTeamRejection(teamId); }}
+                                      className="bg-[#0a0a0a] hover:bg-[#0f0f0f] text-white px-2 py-1 rounded text-xs font-mono transition-colors border border-gray-700"
+                                    >
+                                      Revert Rejection
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleRevertTeamRegistration(teamId); }}
+                                    className="bg-[#0a0a0a] hover:bg-[#0f0f0f] text-white px-2 py-1 rounded text-xs font-mono transition-colors border border-red-800"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-400 font-mono py-8">No teams registered yet</div>
+                  )}
+                </div>
               </div>
-              </Card>
               
               {/* Approved Teams */}
               {tournament.approvedTeams && tournament.approvedTeams.length > 0 && (
-                <Card variant="glass" padding="md" className="border-l-4 border-l-green-500">
+                <div className="bg-[#050505] border-l-4 border-l-red-500 border-r border-t border-b border-gray-800 p-4 rounded-lg">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4 text-green-400" />
-                      <span className="text-white font-bold text-sm">APPROVED TEAMS</span>
+                      <CheckCircle className="w-4 h-4 text-red-500" />
+                      <span className="text-white font-bodax text-sm uppercase tracking-wider">APPROVED TEAMS</span>
                     </div>
                     <Badge variant="success">{tournament.approvedTeams.length}</Badge>
                   </div>
@@ -1685,82 +1781,52 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                       return team ? (
                         <div 
                           key={teamId} 
-                          className="bg-green-900/10 border border-green-600/30 rounded-lg p-2.5 hover:border-green-500/50 transition-all cursor-pointer group"
+                          className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-2.5 hover:border-red-800 transition-all cursor-pointer group"
                           onClick={() => navigate(`/teams/${team.id}`)}
                         >
-                          <div className="text-white font-semibold text-sm group-hover:text-green-300 transition-colors truncate">
+                          <div className="text-white font-bodax text-sm group-hover:text-red-500 transition-colors truncate">
                             {team.name}
                           </div>
-                          <div className="text-gray-400 text-xs mt-0.5">{team.members?.length || 0} members</div>
+                          <div className="text-gray-400 font-mono text-xs mt-0.5">{team.members?.length || 0} members</div>
                         </div>
                       ) : null;
                     })}
                   </div>
-                </Card>
+                </div>
               )}
               
               {/* Rejected Teams (Admin Only) */}
               {tournament.rejectedTeams && tournament.rejectedTeams.length > 0 && isAdmin && (
-                <Card variant="glass" padding="md" className="border-l-4 border-l-red-500">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-2">
-                      <XCircle className="w-4 h-4 text-red-400" />
-                      <span className="text-white font-bold text-sm">REJECTED TEAMS</span>
-                    </div>
-                    <Badge variant="error">{tournament.rejectedTeams.length}</Badge>
+                <div className="bg-[#050505] border-l-4 border-l-red-800 border-r border-t border-b border-gray-800 p-6 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <XCircle className="w-5 h-5 text-red-500" />
+                    <h3 className="text-red-500 font-bodax text-lg uppercase tracking-wider">REJECTED TEAMS</h3>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-                    {tournament.rejectedTeams.map(teamId => {
-                      const team = teams.find(t => t.id === teamId);
-                      return team ? (
-                        <div 
-                          key={teamId} 
-                          className="bg-red-900/10 border border-red-600/30 rounded-lg p-2.5 hover:border-red-500/50 transition-all cursor-pointer group"
-                          onClick={() => navigate(`/teams/${team.id}`)}
-                        >
-                          <div className="text-white font-semibold text-sm group-hover:text-red-300 transition-colors truncate">
-                            {team.name}
-                            </div>
-                          <div className="text-gray-400 text-xs mt-0.5">{team.members?.length || 0} members</div>
-                        </div>
-                      ) : null;
-                    })}
-                  </div>
-                </Card>
-              )}
-              
-              {/* Rejected Teams (Admin Only) */}
-              {tournament.rejectedTeams && tournament.rejectedTeams.length > 0 && isAdmin && (
-                <Card variant="glass" padding="lg" className="border-l-4 border-l-red-500">
-                  <SectionHeader 
-                    title="REJECTED TEAMS" 
-                    icon={XCircle}
-                    subtitle={`${tournament.rejectedTeams.length} teams rejected`}
-                  />
+                  <p className="text-gray-400 font-mono text-xs mb-4">{tournament.rejectedTeams.length} teams rejected</p>
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                     {tournament.rejectedTeams.map(teamId => {
                       const team = teams.find(t => t.id === teamId);
                       return team ? (
-                        <div key={teamId} className="bg-black/40 border border-red-600 rounded-lg p-3">
-                          <div className="text-gray-200 font-bold cursor-pointer hover:text-red-300 transition-colors" onClick={() => navigate(`/teams/${team.id}`)}>
+                        <div key={teamId} className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-3">
+                          <div className="text-white font-bodax cursor-pointer hover:text-red-500 transition-colors" onClick={() => navigate(`/teams/${team.id}`)}>
                             {team.name}
                           </div>
-                          <div className="text-gray-400 text-xs mb-2">{team.members?.length || 0} members</div>
-                          <span className="bg-red-900/50 text-red-400 px-2 py-1 rounded text-xs">Rejected</span>
+                          <div className="text-gray-400 font-mono text-xs mb-2">{team.members?.length || 0} members</div>
+                          <span className="bg-red-900/30 text-red-500 px-2 py-1 rounded text-xs font-mono border border-red-800">Rejected</span>
                           
                           {/* Revert Actions */}
                           {isAdmin && (
                             <div className="flex flex-wrap gap-1 mt-2">
                               <button
                                 onClick={() => handleRevertTeamRejection(teamId)}
-                                className="bg-blue-700 hover:bg-blue-800 text-white px-2 py-1 rounded text-xs border border-blue-900 transition-all duration-200"
+                                className="bg-[#0a0a0a] hover:bg-[#0f0f0f] text-white px-2 py-1 rounded text-xs font-mono border border-gray-700 transition-all duration-200"
                                 title="Revert Rejection"
                               >
                                 Revert Rejection
                               </button>
                               <button
                                 onClick={() => handleRevertTeamRegistration(teamId)}
-                                className="bg-red-700 hover:bg-red-800 text-white px-2 py-1 rounded text-xs border border-red-900 transition-all duration-200"
+                                className="bg-[#0a0a0a] hover:bg-[#0f0f0f] text-white px-2 py-1 rounded text-xs font-mono border border-red-800 transition-all duration-200"
                                 title="Remove Team"
                               >
                                 Remove Team
@@ -1771,57 +1837,63 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                       ) : null;
                     })}
                   </div>
-                </Card>
+                </div>
               )}
-            </>
+            </div>
           )}
 
           {activeView === 'bracket' && (
-            <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="text-red-400 font-bold text-sm">TOURNAMENT BRACKET</div>
+            <div className="space-y-6">
+              {/* Bracket Header - Cleaner Design */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-gray-800">
+                <div>
+                  <h2 className="text-3xl font-bodax text-white uppercase tracking-wider mb-2">Tournament Bracket</h2>
+                  <p className="text-gray-400 font-mono text-sm">Complete tournament progression and match results</p>
+                </div>
                 <button
                   type="button"
                   onClick={() => navigate(`/tournaments/${tournament.id}/bracket`)}
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 transition-colors font-mono uppercase tracking-widest text-xs"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-700 hover:border-red-800 text-white transition-all font-mono uppercase tracking-wider text-xs bg-[#0a0a0a] hover:bg-[#0f0f0f] rounded"
                 >
                   <Maximize2 className="w-4 h-4" />
-                  Open Full Page
+                  Full Screen View
                 </button>
-              </div>
-              {tournament.type === 'group-stage-single-elim' ? (
-                <GroupStageBracket tournament={tournament} matches={matches} teams={teams} />
-              ) : tournament.format?.type === 'double-elimination' ? (
-                <DoubleEliminationBracket 
-                  tournament={tournament} 
-                  matches={matches} 
-                  teams={teams}
-                  isAdmin={isAdmin}
-                  currentUser={authUser}
-                  onUpdate={reloadTournamentData}
-                />
-              ) : (
-                <TournamentBracket
-                  tournament={tournament}
-                  matches={matches} 
-                  teams={teams} 
-                  currentUser={authUser}
-                  isAdmin={isAdmin}
-                  onCompleteMatch={handleCompleteSingleMatch}
-                  onRefresh={reloadTournamentData}
-                  onRevertMatchResult={handleRevertMatchResult}
-                  onRevertTeamAdvancement={handleRevertTeamAdvancement}
-                  onRevertRound={handleRevertRound}
-                />
-              )}
                 </div>
-              )}
+                
+                {/* Bracket Container - Enhanced for Better Viewing */}
+                <div className="bg-[#050505] border border-gray-800 rounded-lg p-6 sm:p-8 overflow-x-auto">
+                  <div className="min-w-[800px]">
+                    {tournament.type === 'group-stage-single-elim' ? (
+                      <GroupStageBracket tournament={tournament} matches={matches} teams={teams} />
+                    ) : tournament.format?.type === 'double-elimination' ? (
+                      <DoubleEliminationBracket 
+                        tournament={tournament} 
+                        matches={matches} 
+                        teams={teams}
+                        isAdmin={isAdmin}
+                        currentUser={authUser}
+                        onUpdate={reloadTournamentData}
+                      />
+                    ) : (
+                      <SingleEliminationBracket
+                        tournament={tournament}
+                        matches={matches}
+                        teams={teams}
+                        isAdmin={isAdmin}
+                        currentUser={authUser}
+                        onUpdate={reloadTournamentData}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
               
           {activeView === 'schedule' && (
-            <div className="bg-black/60 border border-gray-700 rounded-lg p-4">
-              <div className="text-red-400 font-bold text-sm mb-3">MATCH SCHEDULE</div>
+            <div className="bg-[#050505] border border-gray-800 rounded-lg p-6">
+              <div className="text-red-500 font-bodax text-sm uppercase tracking-wider mb-4">MATCH SCHEDULE</div>
               <TournamentSchedule tournament={tournament} matches={matches} teams={teams} />
-                    </div>
+            </div>
           )}
 
           {/* Swiss System Tabs */}
@@ -1842,9 +1914,9 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                 />
                     </div>
             </Card>
-          )}
+              )}
 
-          {activeView === 'matchday-management' && tournament.format?.type === 'swiss-system' && (
+              {activeView === 'matchday-management' && tournament.format?.type === 'swiss-system' && (
             <Card variant="glass" padding="lg">
               <SectionHeader 
                 title="TOURNAMENT SCHEDULE" 
@@ -2272,6 +2344,22 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   subtitle="Administrative utilities"
                 />
                 <div className="mt-4 space-y-3">
+                  {/* Bracket Reveal */}
+                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="text-white font-semibold text-sm mb-1">Bracket Reveal</h4>
+                        <p className="text-gray-400 text-xs">Open the bracket reveal tool for streaming / announcements</p>
+                      </div>
+                      <button
+                        onClick={() => navigate(`/admin/bracket-reveal/${id}`)}
+                        className="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded text-sm font-medium transition-colors ml-4 border border-gray-700 hover:border-gray-600"
+                      >
+                        Open
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Fix Tournament Dates Button */}
                   <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
                     <div className="flex items-start justify-between">
@@ -2375,6 +2463,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   </div>
                 ) : (
                   matches
+                    .slice()
                     .sort((a, b) => {
                       // Sort by round, then by match number
                       if (a.round !== b.round) return a.round - b.round;
@@ -2384,9 +2473,10 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                       const team1 = teams.find(t => t.id === match.team1Id);
                       const team2 = teams.find(t => t.id === match.team2Id);
                       const matchFormat = match.matchFormat || 'BO1';
+                      const banSequence = match.banSequence ?? [];
                       const hasVetoData = 
                         (match.bannedMaps && (match.bannedMaps.team1?.length > 0 || match.bannedMaps.team2?.length > 0)) ||
-                        match.banSequence?.length > 0 ||
+                        banSequence.length > 0 ||
                         match.selectedMap ||
                         match.map1 ||
                         match.map2 ||
@@ -2404,16 +2494,16 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                               <div className="text-white font-bold text-lg">
                                 {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
                               </div>
-                              <Badge variant="outline" className="text-xs">
+                              <Badge variant="default" className="text-xs">
                                 Round {match.round} • Match {match.matchNumber}
                               </Badge>
                               {match.bracketType && (
-                                <Badge variant="outline" className="text-xs capitalize">
+                                <Badge variant="default" className="text-xs capitalize">
                                   {match.bracketType.replace('_', ' ')}
                                 </Badge>
                               )}
                             </div>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="default" className="text-xs">
                               {matchFormat}
                             </Badge>
                           </div>
@@ -2422,14 +2512,14 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                           {hasVetoData ? (
                             <div className="space-y-4">
                               {/* Ban Sequence */}
-                              {match.banSequence && match.banSequence.length > 0 && (
+                              {banSequence.length > 0 && (
                                 <div>
                                   <div className="text-gray-400 font-semibold text-sm mb-3 flex items-center space-x-2">
                                     <Target className="w-4 h-4" />
                                     <span>BAN SEQUENCE</span>
                                   </div>
                                   <div className="flex flex-wrap gap-2">
-                                    {match.banSequence.map((ban, index) => {
+                                    {banSequence.map((ban, index) => {
                                       const banTeam = ban.teamId === match.team1Id ? team1 : team2;
                                       const banNumber = ban.banNumber || (index + 1);
                                       return (
@@ -2454,7 +2544,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                               {/* BO1 Map Selection */}
                               {matchFormat === 'BO1' && match.selectedMap && (() => {
                                 // The team that made the last ban effectively picked the remaining map
-                                const lastBan = match.banSequence?.[match.banSequence.length - 1];
+                                const banSequence = match.banSequence ?? [];
+                                const lastBan = banSequence.length > 0 ? banSequence[banSequence.length - 1] : undefined;
                                 const mapPickingTeam = lastBan?.teamId === match.team1Id ? team1 : 
                                                       lastBan?.teamId === match.team2Id ? team2 : null;
                                 // Fallback: if no banSequence, check who made the last ban from bannedMaps
@@ -2490,7 +2581,8 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                               {/* BO1 Side Selection */}
                               {matchFormat === 'BO1' && match.selectedMap && (() => {
                                 // The team that picks the side is the OPPOSITE of the team that made the last ban
-                                const lastBan = match.banSequence?.[match.banSequence.length - 1];
+                                const banSequence = match.banSequence ?? [];
+                                const lastBan = banSequence.length > 0 ? banSequence[banSequence.length - 1] : undefined;
                                 let sidePickingTeam = lastBan?.teamId === match.team1Id ? team2 : 
                                                      lastBan?.teamId === match.team2Id ? team1 : null;
                                 // Fallback: if no banSequence, check who made the last ban from bannedMaps
@@ -2711,7 +2803,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                                             const banIndex = match.banSequence?.findIndex(b => b.mapName === map && b.teamId === match.team1Id);
                                             const banNumber = banEntry?.banNumber || (banIndex !== undefined && banIndex !== -1 ? banIndex + 1 : null) || (index + 1);
                                             return (
-                                              <Badge key={index} variant="outline" className="bg-gray-800/50 border-gray-700 text-gray-300 text-xs">
+                                              <Badge key={index} variant="default" className="bg-gray-800/50 border-gray-700 text-gray-300 text-xs">
                                                 {banNumber}. {map}
                                               </Badge>
                                             );
@@ -2729,7 +2821,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                                             const banIndex = match.banSequence?.findIndex(b => b.mapName === map && b.teamId === match.team2Id);
                                             const banNumber = banEntry?.banNumber || (banIndex !== undefined && banIndex !== -1 ? banIndex + 1 : null) || (index + 1);
                                             return (
-                                              <Badge key={index} variant="outline" className="bg-gray-800/50 border-gray-700 text-gray-300 text-xs">
+                                              <Badge key={index} variant="default" className="bg-gray-800/50 border-gray-700 text-gray-300 text-xs">
                                                 {banNumber}. {map}
                                               </Badge>
                                             );
@@ -2755,39 +2847,39 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
               </div>
             </Card>
           )}
-            </div>
+          </div>
           </div>
 
           {/* RIGHT SIDEBAR - Quick Info & Stats */}
-          {activeView !== 'playoff-bracket' && (
-          <div className="lg:col-span-3 space-y-4">
-            {/* Tournament Quick Info */}
-            <Card variant="glass" padding="md">
-              <div className="text-gray-400 font-semibold text-xs uppercase tracking-wider mb-4">Tournament Info</div>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Format</span>
-                  <span className="text-white font-medium text-xs capitalize">{tournament.format?.type?.replace(/-/g, ' ') || 'Single Elim'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Team Size</span>
-                  <span className="text-white font-medium">{tournament.requirements?.teamSize || 5}v{tournament.requirements?.teamSize || 5}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Match Format</span>
-                  <span className="text-white font-medium">{tournament.format?.matchFormat || 'BO1'}</span>
-                </div>
-                <div className="flex justify-between items-start">
-                  <span className="text-gray-400">Start Date</span>
-                  <span className="text-white font-medium text-xs text-right">{formatDate(tournament.schedule?.startDate)}</span>
+          {shouldShowRightSidebar && (
+            <div className="lg:w-80 flex-shrink-0 space-y-4">
+              {/* Tournament Quick Info (skip on Overview to avoid repeating header meta) */}
+              <div className="bg-[#050505] border border-gray-800 p-4 rounded-lg">
+                <div className="text-red-500 font-bodax text-xs uppercase tracking-wider mb-4">Tournament Info</div>
+                <div className="space-y-3 font-mono text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Format</span>
+                    <span className="text-white text-xs capitalize">{tournament.format?.type?.replace(/-/g, ' ') || 'Single Elim'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Team Size</span>
+                    <span className="text-white">{tournament.requirements?.teamSize || 5}v{tournament.requirements?.teamSize || 5}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Match Format</span>
+                    <span className="text-white">{tournament.format?.matchFormat || 'BO1'}</span>
+                  </div>
+                  <div className="flex justify-between items-start">
+                    <span className="text-gray-400">Start Date</span>
+                    <span className="text-white text-xs text-right">{formatDate(tournament.schedule?.startDate)}</span>
+                  </div>
                 </div>
               </div>
-            </Card>
 
             {/* User Active Matches Widget */}
             {userActiveMatches && userActiveMatches.length > 0 && (
-              <Card variant="bordered" padding="md">
-                <div className="text-pink-400 font-semibold text-xs uppercase tracking-wider mb-3">Your Matches</div>
+              <div className="bg-[#050505] border border-gray-800 p-4 rounded-lg">
+                <div className="text-red-500 font-bodax text-xs uppercase tracking-wider mb-3">Your Matches</div>
                 <div className="space-y-2">
                   {userActiveMatches.slice(0, 3).map(match => {
                     const team1 = teams.find(t => t.id === match.team1Id);
@@ -2795,50 +2887,38 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                     return (
                       <div 
                         key={match.id} 
-                        className="p-2 bg-gray-900/50 rounded-lg border border-gray-700/50 hover:border-pink-500/30 transition-colors cursor-pointer text-xs"
+                        className="p-3 bg-[#0a0a0a] rounded-lg border border-gray-800 hover:border-red-800 transition-colors cursor-pointer"
                         onClick={() => navigate(`/match/${match.id}`)}
                       >
-                        <div className="text-white font-medium mb-1 leading-tight">
+                        <div className="text-white font-mono text-sm mb-1 leading-tight">
                           {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
                         </div>
-                        <div className="text-gray-400 text-xs">
+                        <div className="text-gray-400 font-mono text-xs">
                           {formatDate(match.scheduledTime)}
                         </div>
                       </div>
                     );
                   })}
                   {userActiveMatches.length > 3 && (
-                    <div className="text-center text-gray-400 text-xs mt-2">
+                    <div className="text-center text-gray-400 font-mono text-xs mt-2">
                       +{userActiveMatches.length - 3} more matches
                     </div>
                   )}
                 </div>
-              </Card>
+              </div>
             )}
 
-            {/* Discord Status */}
-            {!discordLinked && canSignupForUser && (
-              <Card variant="glass" padding="md" className="border-l-4 border-l-yellow-500">
-                <div className="text-yellow-400 font-semibold text-xs uppercase tracking-wider mb-2">Discord Required</div>
-                <p className="text-gray-300 text-xs mb-3">Link Discord to register for tournaments</p>
-                <button 
-                  onClick={() => navigate('/profile')}
-                  className="w-full bg-yellow-600 hover:bg-yellow-700 text-white text-sm px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Link Discord
-                </button>
-              </Card>
-            )}
+            {/* Discord gating is handled in the Overview registration panel (no duplicate sidebar card). */}
             </div>
           )}
+          </div>
         </div>
-      </div>
 
-      {/* Unity League Footer */}
+      {/* Footer */}
       <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
-        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-gray-500 font-mono tracking-tight gap-1 md:gap-0">
           <span>&gt; TOURNAMENT ID: {tournament.id}</span>
-          <span className="text-cyan-400">// Unity League 2025</span>
+          <span className="text-gray-600">// Bodax Masters</span>
         </div>
       </div>
 
@@ -2860,16 +2940,16 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
       {/* Revert Confirmation Modal */}
       {showRevertConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="text-red-400 font-bold text-lg mb-4">CONFIRM REVERT ACTION</div>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#050505] border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="text-red-500 font-bodax text-lg uppercase tracking-wider mb-4">CONFIRM REVERT ACTION</div>
             
-            <div className="text-gray-300 mb-6">
+            <div className="text-gray-300 font-mono mb-6">
               <p>Are you sure you want to revert the {revertAction?.type} for team:</p>
               <p className="font-bold text-white mt-2">{revertAction?.teamName}?</p>
               
-              <div className="mt-4 p-3 bg-red-900/20 border border-red-500 rounded">
-                <p className="text-red-400 text-sm">
+              <div className="mt-4 p-3 bg-red-900/20 border border-red-800 rounded">
+                <p className="text-red-500 text-sm">
                   {revertAction?.type === 'registration' ? 'This will completely remove the team from the tournament.' : ''}
                   {revertAction?.type === 'approval' ? 'This will move the team back to pending status.' : ''}
                   {revertAction?.type === 'rejection' ? 'This will move the team back to pending status.' : ''}
@@ -2880,13 +2960,13 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={cancelRevertAction}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors"
+                className="bg-transparent hover:bg-white/5 text-white px-6 py-2 rounded font-mono text-sm uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmRevertAction}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors"
+                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded font-bodax text-sm uppercase tracking-wider transition-all duration-300 border border-red-800 hover:border-red-500"
               >
                 Confirm Revert
               </button>
@@ -2897,24 +2977,24 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
       {/* Bracket Revert Confirmation Modal */}
       {showBracketRevertConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="text-red-400 font-bold text-lg mb-4">CONFIRM REVERT ACTION</div>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#050505] border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="text-red-500 font-bodax text-lg uppercase tracking-wider mb-4">CONFIRM REVERT ACTION</div>
             
-            <div className="text-gray-300 mb-6">
+            <div className="text-gray-300 font-mono mb-6">
               <p>{bracketRevertAction?.description}</p>
             </div>
             
             <div className="flex justify-end space-x-3">
               <button
                 onClick={cancelBracketRevertAction}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors"
+                className="bg-transparent hover:bg-white/5 text-white px-6 py-2 rounded font-mono text-sm uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmBracketRevertAction}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors"
+                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded font-bodax text-sm uppercase tracking-wider transition-all duration-300 border border-red-800 hover:border-red-500"
               >
                 Confirm Revert
               </button>
@@ -2925,7 +3005,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
       {/* Manual Seeding Modal */}
       {showManualSeeding && tournament && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
           <div className="relative w-full max-w-3xl mx-auto">
             <ManualSeedingInterface
               tournament={tournament}

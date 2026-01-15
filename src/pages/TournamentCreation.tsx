@@ -146,7 +146,7 @@ const TournamentCreation = () => {
         teamCount: maxTeams,
         matchFormat,
       finalsMatchFormat: finalsBO3 ? 'BO3' : matchFormat,
-      mapPool: DEFAULT_MAP_POOL,
+      mapPool: [...DEFAULT_MAP_POOL],
         sideSelection: 'coin-flip',
         seedingMethod: seedingMethod,
         ...(tournamentType === 'swiss-system' && {

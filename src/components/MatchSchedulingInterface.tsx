@@ -3,7 +3,6 @@ import { toast } from 'react-hot-toast';
 import { MatchSchedulingService } from '../services/swissTournamentService';
 import type { Match, SchedulingProposal, Team, Matchday, User, Tournament } from '../types/tournament';
 import { Send, Clock, Calendar, MessageCircle, CheckCircle, XCircle, AlertCircle, Info, Zap, Users, Trophy } from 'lucide-react';
-import MatchReadyUpInterface from './MatchReadyUpInterface';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { BodaxModal } from './ui';
@@ -68,25 +67,27 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
 
   // Fetch tournament data and current matchday to get the correct scheduling window
   useEffect(() => {
+    const tournamentId = match.tournamentId;
+
     // Reset if tournamentId changed
-    if (lastFetchedTournamentId.current && lastFetchedTournamentId.current !== match.tournamentId) {
+    if (lastFetchedTournamentId.current && lastFetchedTournamentId.current !== tournamentId) {
       lastFetchedTournamentId.current = null;
       setTournament(null);
       setCurrentMatchday(null);
     }
 
     // Skip if we already have the tournament data for this tournamentId
-    if (!match.tournamentId || lastFetchedTournamentId.current === match.tournamentId) {
+    if (!tournamentId || lastFetchedTournamentId.current === tournamentId) {
       return;
     }
 
     const fetchTournamentAndMatchday = async () => {
       try {
         // Mark that we're fetching this tournament
-        lastFetchedTournamentId.current = match.tournamentId;
+        lastFetchedTournamentId.current = tournamentId;
         
         // Fetch tournament data
-        const tournamentRef = doc(db, 'tournaments', match.tournamentId);
+        const tournamentRef = doc(db, 'tournaments', tournamentId);
         const tournamentDoc = await getDoc(tournamentRef);
         if (tournamentDoc.exists()) {
           const tournamentData = tournamentDoc.data() as Tournament;
@@ -100,7 +101,7 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
             
             // Import the SwissTournamentService to get matchday data
             const { SwissTournamentService } = await import('../services/swissTournamentService');
-            const matchday = await SwissTournamentService.getMatchdayByNumber(match.tournamentId, currentRound);
+            const matchday = await SwissTournamentService.getMatchdayByNumber(tournamentId, currentRound);
             
             if (matchday) {
               setCurrentMatchday(matchday);
@@ -584,25 +585,6 @@ const MatchSchedulingInterface: React.FC<MatchSchedulingInterfaceProps> = ({
     p => p.status === 'pending' && p.proposedBy === currentTeamId
   ) : false;
   
-  // Check if match should show ready-up interface
-  let shouldShowReadyUp: boolean = match.matchState === 'ready_up' && !!match.scheduledTime;
-  
-  // Don't show ready-up interface if match is still in 'scheduled' state
-  // Let the MatchPage handle the transition to 'ready_up' first
-
-  if (shouldShowReadyUp) {
-    return (
-      <MatchReadyUpInterface
-        match={match}
-        currentTeamId={currentTeamId}
-        teams={teams}
-        teamPlayers={teamPlayers}
-        onReadyUp={onReadyUp}
-        onStartMatch={onStartMatch}
-      />
-    );
-  }
-
   return (
     <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
       {/* Compact Chat Interface */}

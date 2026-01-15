@@ -102,7 +102,7 @@ const AdminPanel = ({
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   
   // Discord Test State
-  const [discordTestMessage, setDiscordTestMessage] = useState('🎮 Discord Bot Test - This is a test message from Unity League!');
+  const [discordTestMessage, setDiscordTestMessage] = useState('🎮 Discord Bot Test - This is a test message from Bodax Admin!');
   const [discordTestType, setDiscordTestType] = useState<'dm' | 'channel'>('dm');
   const [discordTestTarget, setDiscordTestTarget] = useState<string>('');
   const [testingDiscord, setTestingDiscord] = useState(false);
@@ -248,7 +248,7 @@ const AdminPanel = ({
           }
         ],
         footer: {
-          text: 'Unity League Discord Bot Test'
+          text: 'Bodax Admin Discord Bot Test'
         },
         timestamp: new Date().toISOString()
       };
@@ -348,8 +348,17 @@ const AdminPanel = ({
   // If not admin, show access denied
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 flex items-center justify-center">
-        <div className="bg-black/20 backdrop-blur-sm rounded-xl p-8 border border-white/20 shadow-2xl max-w-md mx-auto">
+      <div className="min-h-screen bg-[#050505] relative flex items-center justify-center">
+        {/* Background Grid Pattern */}
+        <div
+          className="absolute inset-0 z-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="bg-[#050505] border border-gray-800 rounded-lg p-8 shadow-2xl max-w-md mx-auto relative z-10">
           <div className="text-center mb-8">
             <div className="mb-6">
               <img 
@@ -359,8 +368,8 @@ const AdminPanel = ({
               />
             </div>
             <Shield className="w-16 h-16 text-red-400 mx-auto mb-4" />
-            <h1 className="text-3xl font-bold text-white mb-4 font-mono tracking-tight">ACCESS DENIED</h1>
-            <p className="text-white/80 font-mono tracking-tight">You don't have permission to access the admin panel.</p>
+            <h1 className="text-3xl font-bodax text-white mb-3 uppercase tracking-wider">Access Denied</h1>
+            <p className="text-gray-400 font-mono text-sm">You don&apos;t have permission to access the admin panel.</p>
           </div>
         </div>
       </div>
@@ -370,20 +379,26 @@ const AdminPanel = ({
   // Show loading state if data is not yet available
   if (!teams || !matches) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700 flex items-center justify-center">
-        <div className="bg-black/20 backdrop-blur-sm rounded-xl p-8 border border-white/20 shadow-2xl max-w-md mx-auto">
-          <div className="text-center">
-            <div className="mb-6">
-              <img 
-                src="/logos/bodax-pfp.png" 
-                alt="Bodax Masters Logo" 
-                className="w-24 h-24 mx-auto mb-4 rounded-full shadow-lg"
-              />
-            </div>
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-400 mx-auto mb-4"></div>
-            <h2 className="text-2xl font-bold text-white mb-2 font-mono tracking-tight">LOADING ADMIN PANEL</h2>
-            <p className="text-white/80 font-mono tracking-tight">Please wait while we prepare your dashboard...</p>
+      <div className="min-h-screen bg-[#050505] relative flex items-center justify-center">
+        {/* Background Grid Pattern */}
+        <div 
+          className="absolute inset-0 z-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage: 'linear-gradient(rgba(30, 30, 30, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(30, 30, 30, 0.3) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+        <div className="relative z-10 text-center">
+          <div className="mb-6">
+            <img 
+              src="/logos/bodax-pfp.png" 
+              alt="Bodax Masters Logo" 
+              className="w-20 h-20 mx-auto mb-4 rounded-full"
+            />
           </div>
+          <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin mx-auto mb-4"></div>
+          <h2 className="text-lg font-semibold text-white mb-1 font-mono tracking-tight">ADMIN PANEL</h2>
+          <p className="text-white/60 font-mono text-sm">Loading...</p>
         </div>
       </div>
     );
@@ -1368,21 +1383,51 @@ const AdminPanel = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-500 via-magenta-600 to-purple-700">
-      {/* Unity League Header */}
-      <div className="bg-black/20 backdrop-blur-sm border-b border-white/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-white mb-4 font-mono tracking-tight">ADMIN PANEL</h1>
-            <p className="text-xl text-white/80 font-mono tracking-tight">TOURNAMENT MANAGEMENT DASHBOARD</p>
+    <div className="min-h-screen bg-[#050505] relative">
+      {/* Background Grid Pattern */}
+      <div
+        className="absolute inset-0 z-0 pointer-events-none opacity-20"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(50, 50, 50, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(50, 50, 50, 0.5) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }}
+      />
+
+      {/* Bodax Admin Header */}
+      <div className="bg-black/80 backdrop-blur-sm border-b border-gray-800 relative z-10">
+        <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-3xl font-bodax tracking-wider text-white uppercase">
+                <span className="text-red-600">/</span> Admin Control Room
+              </div>
+              <div className="text-gray-400 font-mono text-xs uppercase tracking-widest mt-1">
+                {activeTab.replace(/-/g, ' ')}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/')}
+                className="bg-[#0a0a0a] hover:bg-white/5 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs"
+              >
+                Back to Site
+              </button>
+              <button
+                onClick={() => navigate('/admin/tournaments/create')}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors border border-red-800 font-mono uppercase tracking-widest text-xs"
+              >
+                Create Tournament
+              </button>
+            </div>
           </div>
         </div>
       </div>
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-8 relative z-10">
 
         {/* Navigation Tabs */}
-        <div className="flex space-x-1 bg-black/40 rounded-xl p-1 shadow-lg mb-8 border border-white/20 backdrop-blur-sm overflow-x-auto min-w-0">
+        <div className="flex gap-2 bg-black/30 border border-gray-800 rounded-lg p-2 mb-8 overflow-x-auto min-w-0">
           {[
             { id: 'tournaments', label: 'TOURNAMENTS', icon: Trophy },
             { id: 'teams', label: 'TEAMS', icon: Users },
@@ -1405,67 +1450,77 @@ const AdminPanel = ({
             <button
               key={tab.id}
               onClick={() => navigate(`/admin/${tab.id}`)}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 font-mono tracking-tight whitespace-nowrap text-sm ${
+              className={`flex items-center gap-2 px-3 py-2 rounded transition-colors whitespace-nowrap text-xs font-mono uppercase tracking-widest border ${
                 activeTab === tab.id
-                  ? 'bg-gradient-to-r from-pink-600 to-pink-700 text-white shadow-lg'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
+                  ? 'bg-red-600/15 border-red-800 text-red-200'
+                  : 'bg-[#0a0a0a] border-gray-800 text-gray-300 hover:bg-white/5 hover:border-gray-600'
               }`}
             >
-              <tab.icon className="w-3 h-3" />
-              <span className="font-medium">{tab.label}</span>
+              <tab.icon className="w-4 h-4" />
+              <span className="font-bold">{tab.label}</span>
             </button>
           ))}
         </div>
 
         {/* Teams Tab */}
         {activeTab === 'teams' && (
-          <div className="card">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-white flex items-center">
-                <Users className="w-6 h-6 mr-3 text-primary-400" />
-                Team Management ({safeTeams.length})
-              </h2>
-              <div className="flex items-center space-x-4">
+          <div className="bg-[#050505] border border-gray-800 rounded-lg p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-600/20 border border-red-800 rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bodax text-white uppercase tracking-wider">
+                    Team Management
+                  </h2>
+                  <div className="text-gray-400 font-mono text-xs uppercase tracking-widest mt-1">
+                    {safeTeams.length} teams
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={exportTeamsCSV}
-                  className="btn-secondary"
+                  className="bg-[#0a0a0a] hover:bg-white/5 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export CSV
                 </button>
                 <button
                   onClick={exportTeamsWithTournamentStatusCSV}
-                  className="btn-secondary"
+                  className="bg-[#0a0a0a] hover:bg-white/5 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export with Tournament Status
                 </button>
                 <button
                   onClick={checkTournamentRegistration}
-                  className="btn-secondary"
+                  className="bg-[#0a0a0a] hover:bg-white/5 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs"
                 >
                   <Eye className="w-4 h-4 mr-2" />
                   Check Tournament Registration
                 </button>
                 <button
                   onClick={() => setShowManualPlayerAddition(true)}
-                  className="btn-secondary"
+                  className="bg-[#0a0a0a] hover:bg-white/5 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Player to Team
                 </button>
                 <button
                   onClick={() => setShowResetConfirmation(true)}
-                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+                  className="px-4 py-2 bg-[#0a0a0a] hover:bg-white/5 text-white rounded transition-colors border border-gray-700 hover:border-gray-500 flex items-center space-x-2 font-mono uppercase tracking-widest text-xs"
                 >
-                  <RefreshCw className="w-4 h-4" />
-                  <span>Reset All Roster Changes</span>
+                  <RefreshCw className="w-4 h-4 text-red-400" />
+                  <span>Reset Roster Changes</span>
                 </button>
                 {safeTeams.length > 0 && (
                   <button
                     onClick={handleDeleteAllTeams}
                     disabled={isDeleting}
-                    className="btn-danger"
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white rounded transition-colors border border-red-800 disabled:border-gray-700 font-mono uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
                     {isDeleting ? 'Deleting...' : 'Delete All Teams'}
@@ -1477,24 +1532,24 @@ const AdminPanel = ({
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-700">
-                    <th className="text-left p-3 text-gray-300 font-medium">Team</th>
-                    <th className="text-left p-3 text-gray-300 font-medium">Captain</th>
-                    <th className="text-left p-3 text-gray-300 font-medium">Members</th>
-                    <th className="text-left p-3 text-gray-300 font-medium">Roster Status</th>
-                    <th className="text-left p-3 text-gray-300 font-medium">Status</th>
-                    <th className="text-left p-3 text-gray-300 font-medium">Actions</th>
+                  <tr className="border-b border-gray-800">
+                    <th className="text-left p-3 text-gray-400 font-mono uppercase tracking-widest text-xs">Team</th>
+                    <th className="text-left p-3 text-gray-400 font-mono uppercase tracking-widest text-xs">Captain</th>
+                    <th className="text-left p-3 text-gray-400 font-mono uppercase tracking-widest text-xs">Members</th>
+                    <th className="text-left p-3 text-gray-400 font-mono uppercase tracking-widest text-xs">Roster</th>
+                    <th className="text-left p-3 text-gray-400 font-mono uppercase tracking-widest text-xs">Status</th>
+                    <th className="text-left p-3 text-gray-400 font-mono uppercase tracking-widest text-xs">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {safeTeams.map((team) => (
                     <React.Fragment key={team.id}>
-                      <tr className="border-b border-gray-700 hover:bg-gray-700/50">
+                      <tr className="border-b border-gray-800 hover:bg-white/5">
                         <td className="p-3">
                           <div className="flex items-center space-x-2">
-                            <span className="text-white font-medium">{team.name}</span>
+                            <span className="text-white font-semibold">{team.name}</span>
                             {team.teamTag && (
-                              <span className="text-xs bg-gray-600 text-gray-300 px-2 py-1 rounded">
+                              <span className="text-[10px] bg-[#0a0a0a] border border-gray-800 text-gray-300 px-2 py-1 rounded font-mono uppercase tracking-widest">
                                 {team.teamTag}
                               </span>
                             )}
@@ -1508,7 +1563,7 @@ const AdminPanel = ({
                             <span>{team.members ? team.members.length : 0} members</span>
                             <button
                               onClick={() => setExpandedTeamRoster(expandedTeamRoster === team.id ? null : team.id)}
-                              className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+                              className="text-red-400 hover:text-red-300 text-xs font-mono uppercase tracking-widest"
                             >
                               {expandedTeamRoster === team.id ? 'Hide' : 'View'} Roster
                             </button>
@@ -1534,7 +1589,8 @@ const AdminPanel = ({
                           <div className="flex items-center space-x-2">
                             <button
                               onClick={() => handleDeleteTeam(team.id)}
-                              className="btn-danger btn-sm"
+                              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded border border-red-800 transition-colors"
+                              title="Delete team"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1543,16 +1599,16 @@ const AdminPanel = ({
                       </tr>
                       {/* Roster Dropdown */}
                       {expandedTeamRoster === team.id && (
-                        <tr className="bg-gray-800/50">
+                        <tr className="bg-black/20">
                           <td colSpan={6} className="p-4">
                             <div className="space-y-4">
-                              <h4 className="text-lg font-semibold text-white mb-3">Team Roster</h4>
+                              <h4 className="text-lg font-bodax text-white uppercase tracking-wider">Team Roster</h4>
                               {team.members && team.members.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                   {team.members.map((member) => {
                                     const user = getUserDetails(member.userId);
                                     return (
-                                      <div key={member.userId} className="bg-gray-700 rounded-lg p-3 border border-gray-600">
+                                      <div key={member.userId} className="bg-[#050505] rounded-lg p-3 border border-gray-800">
                                         <div className="flex items-center justify-between">
                                           <div>
                                             <p className="text-white font-medium">
@@ -2083,8 +2139,8 @@ const AdminPanel = ({
         {activeTab === 'tournaments' && (
           <div className="space-y-6">
             {/* Test Tournament Generator */}
-            <div className="bg-gradient-to-r from-purple-900/20 to-pink-900/20 border border-purple-700/50 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-purple-300 mb-3 flex items-center">
+            <div className="bg-[#050505] border border-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-bodax text-white uppercase tracking-wider mb-3 flex items-center">
                 <TestTube className="w-5 h-5 mr-2" />
                 Test Swiss Playoff System
               </h3>
@@ -2103,22 +2159,22 @@ const AdminPanel = ({
                     toast.error(`Failed: ${error.message}`);
                   }
                 }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-colors flex items-center space-x-2"
+                className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded font-mono uppercase tracking-widest text-xs transition-colors border border-red-800 flex items-center space-x-2"
               >
                 <TestTube className="w-4 h-4" />
-                <span>CREATE TEST SWISS TOURNAMENT</span>
+                <span>Create Test Swiss Tournament</span>
               </button>
             </div>
 
-            <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
-              <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                <Trophy className="w-5 h-5 mr-2 text-primary-400" />
+            <div className="bg-[#050505] rounded-lg border border-gray-800 p-6">
+              <h3 className="text-lg font-bodax text-white uppercase tracking-wider mb-4 flex items-center">
+                <Trophy className="w-5 h-5 mr-2 text-red-500" />
                 Live Tournament Management
               </h3>
               
               {loadingTournaments ? (
                 <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto mb-4"></div>
                   <p className="text-gray-400">Loading tournaments...</p>
                 </div>
               ) : (
@@ -2129,7 +2185,7 @@ const AdminPanel = ({
                       <h3 className="text-xl font-semibold text-white mb-2">No Tournaments</h3>
                       <button
                         onClick={() => navigate('/admin/tournaments/create')}
-                        className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-6 py-3 rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200"
+                        className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded font-mono uppercase tracking-widest text-xs transition-colors border border-red-800"
                       >
                         Create Tournament
                       </button>
@@ -2137,7 +2193,7 @@ const AdminPanel = ({
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {tournaments.map((tournament) => (
-                        <div key={tournament.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                        <div key={tournament.id} className="bg-black/30 rounded-lg p-4 border border-gray-800 hover:border-gray-600 transition-colors">
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="font-semibold text-white">{tournament.name}</h4>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -2158,14 +2214,14 @@ const AdminPanel = ({
                             <div className="flex space-x-2">
                               <button
                                 onClick={() => navigate(`/tournaments/${tournament.id}`)}
-                                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 text-sm"
+                                className="flex-1 bg-[#0a0a0a] hover:bg-white/5 text-white px-3 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs"
                               >
                                 <Eye className="w-4 h-4 inline mr-1" />
                                 View
                               </button>
                               <button
                                 onClick={() => navigate(`/admin/tournaments/manage`)}
-                                className="flex-1 bg-gradient-to-r from-gray-600 to-gray-700 text-white px-3 py-2 rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all duration-200 text-sm"
+                                className="flex-1 bg-[#0a0a0a] hover:bg-white/5 text-white px-3 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs"
                               >
                                 <Edit className="w-4 h-4 inline mr-1" />
                                 Manage
@@ -2810,16 +2866,24 @@ const AdminPanel = ({
 
         {/* Users Tab */}
         {activeTab === 'users' && (
-          <div className="card">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-white flex items-center">
-                <Users className="w-6 h-6 mr-3 text-primary-400" />
-                User Management ({filteredUsers.length} users)
-              </h2>
+          <div className="bg-[#050505] border border-gray-800 rounded-lg p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-600/20 border border-red-800 rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bodax text-white uppercase tracking-wider">User Management</h2>
+                  <div className="text-gray-400 font-mono text-xs uppercase tracking-widest mt-1">
+                    {filteredUsers.length} users
+                  </div>
+                </div>
+              </div>
+
               <button
                 onClick={loadUsers}
                 disabled={loadingUsers}
-                className="btn-secondary"
+                className="bg-[#0a0a0a] hover:bg-white/5 disabled:bg-gray-900 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed font-mono uppercase tracking-widest text-xs inline-flex items-center"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${loadingUsers ? 'animate-spin' : ''}`} />
                 Refresh
@@ -2850,40 +2914,40 @@ const AdminPanel = ({
                     
                     setSearchTimeout(timeoutId);
                   }}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full pl-10 pr-4 py-3 bg-[#0a0a0a] border border-gray-800 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-600 font-mono"
                 />
                 {searchingUsers && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500"></div>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-500"></div>
                   </div>
                 )}
               </div>
 
               {/* Match Information Summary */}
               {filteredUsers.length > 0 && (
-                <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
-                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center">
-                    <Trophy className="w-5 h-5 mr-2 text-yellow-400" />
-                    Match Overview
+                <div className="bg-black/30 rounded-lg border border-gray-800 p-4 mb-4">
+                  <h3 className="text-lg font-bodax text-white uppercase tracking-wider mb-3 flex items-center">
+                    <Trophy className="w-5 h-5 mr-2 text-red-500" />
+                    Overview
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center p-3 bg-blue-900/20 border border-blue-700/30 rounded">
-                      <div className="text-2xl font-bold text-blue-400">
+                    <div className="text-center p-3 bg-[#050505] border border-gray-800 rounded">
+                      <div className="text-2xl font-bodax text-white">
                         {filteredUsers.length}
                       </div>
-                      <div className="text-sm text-gray-300">Users Found</div>
+                      <div className="text-[10px] text-gray-400 font-mono uppercase tracking-widest">Users Found</div>
                     </div>
-                    <div className="text-center p-3 bg-green-900/20 border border-green-700/30 rounded">
-                      <div className="text-2xl font-bold text-green-400">
+                    <div className="text-center p-3 bg-[#050505] border border-gray-800 rounded">
+                      <div className="text-2xl font-bodax text-white">
                         {Object.values(userMatches).reduce((total, matches) => total + matches.active.length, 0)}
                       </div>
-                      <div className="text-sm text-gray-300">Active Matches</div>
+                      <div className="text-[10px] text-gray-400 font-mono uppercase tracking-widest">Active Matches</div>
                     </div>
-                    <div className="text-center p-3 bg-purple-900/20 border border-purple-700/30 rounded">
-                      <div className="text-2xl font-bold text-purple-400">
+                    <div className="text-center p-3 bg-[#050505] border border-gray-800 rounded">
+                      <div className="text-2xl font-bodax text-white">
                         {Object.values(userMatches).reduce((total, matches) => total + matches.history.length, 0)}
                       </div>
-                      <div className="text-sm text-gray-300">Match History</div>
+                      <div className="text-[10px] text-gray-400 font-mono uppercase tracking-widest">Match History</div>
                     </div>
                   </div>
                 </div>
@@ -2892,7 +2956,7 @@ const AdminPanel = ({
               {/* Users Table */}
               {loadingUsers ? (
                 <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto mb-4"></div>
                   <p className="text-gray-400">Loading users...</p>
                 </div>
               ) : filteredUsers.length === 0 ? (
@@ -2922,10 +2986,10 @@ const AdminPanel = ({
                     const isExpanded = expandedUserId === user.id;
 
                     return (
-                    <div key={user.id} className="bg-gray-800 rounded-lg border border-gray-700 hover:border-pink-500/30 transition-all">
+                    <div key={user.id} className="bg-black/30 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors">
                       {/* User Header - Clickable to expand */}
                       <div 
-                        className="p-4 border-b border-gray-700 cursor-pointer hover:bg-gray-750 transition-colors"
+                        className="p-4 border-b border-gray-800 cursor-pointer hover:bg-white/5 transition-colors"
                         onClick={() => setExpandedUserId(isExpanded ? null : user.id)}
                       >
                         <div className="flex items-start justify-between mb-3">
@@ -2935,10 +2999,10 @@ const AdminPanel = ({
                                 <img
                                   src={user.discordAvatar}
                                   alt={user.username}
-                                  className="w-12 h-12 rounded-full border-2 border-pink-500/30"
+                                  className="w-12 h-12 rounded-full border-2 border-gray-700"
                                 />
                               ) : (
-                                <div className="w-12 h-12 bg-gradient-to-br from-pink-600 to-purple-600 rounded-full flex items-center justify-center">
+                                <div className="w-12 h-12 bg-red-600/20 border border-red-800 rounded-full flex items-center justify-center">
                                   <UserIcon className="w-6 h-6 text-white" />
                                 </div>
                               )}
@@ -2969,7 +3033,7 @@ const AdminPanel = ({
                       {/* User Info Grid - Always Visible */}
                       <div className="p-4 space-y-3">
                         {/* Riot ID with Edit Button */}
-                        <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3">
+                        <div className="bg-[#050505] border border-gray-800 rounded-lg p-3">
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-gray-400 text-xs font-medium uppercase">Riot ID</span>
                             <button
@@ -2978,7 +3042,7 @@ const AdminPanel = ({
                                 setEditingRiotId(user.id);
                                 setNewRiotId(user.riotId || '');
                               }}
-                              className="flex items-center space-x-1 px-2 py-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-700/30 rounded transition-all text-xs"
+                              className="flex items-center space-x-1 px-2 py-1 bg-[#0a0a0a] text-gray-200 hover:bg-white/5 border border-gray-700 hover:border-gray-500 rounded transition-colors text-xs font-mono uppercase tracking-widest"
                             >
                               <Edit className="w-3 h-3" />
                               <span>Edit</span>
@@ -3028,10 +3092,10 @@ const AdminPanel = ({
                               <div 
                                 key={team.id}
                                 onClick={() => navigate(`/teams/${team.id}`)}
-                                className="flex items-center justify-between p-2 bg-gray-900/50 rounded border border-gray-700/50 hover:border-pink-500/50 transition-all cursor-pointer group"
+                                className="flex items-center justify-between p-2 bg-gray-900/50 rounded border border-gray-700/50 hover:border-red-800/60 transition-colors cursor-pointer group"
                               >
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-white text-sm font-medium truncate group-hover:text-pink-300 transition-colors">
+                                  <div className="text-white text-sm font-medium truncate group-hover:text-red-300 transition-colors">
                                     {team.name}
                                   </div>
                                 </div>
@@ -3234,19 +3298,19 @@ const AdminPanel = ({
                   }}
                 >
                   <div 
-                    className="bg-gray-800 rounded-lg border border-gray-700 p-6 max-w-md w-full mt-20"
+                    className="bg-[#050505] rounded-lg border border-gray-800 p-6 max-w-md w-full mt-20"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <h3 className="text-white font-bold text-lg mb-4">Edit Riot ID</h3>
+                    <h3 className="text-white font-bodax text-2xl uppercase tracking-wider mb-4">Edit Riot ID</h3>
                     <div className="mb-4">
-                      <label className="text-gray-400 text-sm mb-2 block">New Riot ID</label>
+                      <label className="text-gray-400 text-xs font-mono uppercase tracking-widest mb-2 block">New Riot ID</label>
                       <input
                         type="text"
                         value={newRiotId}
                         onChange={(e) => setNewRiotId(e.target.value)}
                         placeholder="Username#TAG"
                         autoFocus
-                        className="w-full px-4 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        className="w-full px-4 py-2 bg-[#0a0a0a] border border-gray-800 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-600 font-mono"
                       />
                     </div>
                     <div className="flex justify-end space-x-3">
@@ -3255,13 +3319,13 @@ const AdminPanel = ({
                           setEditingRiotId(null);
                           setNewRiotId('');
                         }}
-                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                        className="px-4 py-2 bg-[#0a0a0a] hover:bg-white/5 text-white rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleSaveRiotId}
-                        className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors"
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors border border-red-800 font-mono uppercase tracking-widest text-xs"
                       >
                         Save
                       </button>
@@ -3942,16 +4006,6 @@ const AdminPanel = ({
             </div>
           </div>
         )}
-      </div>
-      
-      {/* Unity League Footer */}
-      
-      {/* Unity League Footer */}
-      <div className="absolute bottom-0 left-0 w-full px-4 pb-6 z-10 select-none pointer-events-none">
-        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center text-xs text-pink-300 font-mono tracking-tight gap-1 md:gap-0">
-          <span>&gt; ADMIN PANEL</span>
-          <span className="text-cyan-400">// Unity League 2025</span>
-        </div>
       </div>
     </div>
   );

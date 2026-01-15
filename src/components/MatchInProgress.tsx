@@ -2,14 +2,13 @@ import React, { useState, useEffect } from 'react';
 import type { Match, Team } from '../types/tournament';
 
 import { toast } from 'react-hot-toast';
-import { Gamepad2, Trophy, Target, Flag, Play, AlertTriangle, HelpCircle, Shield, RotateCcw, CheckCircle, X, MapPin, Zap, RefreshCw } from 'lucide-react';
-import { createDispute, resolveDispute, forceSubmitResults, updateMatchState, submitMatchResult, autoDetectAndSubmitMatchResult } from '../services/firebaseService';
+import { Gamepad2, Trophy, Target, Flag, Play, AlertTriangle, HelpCircle, Shield, RotateCcw, CheckCircle, X, MapPin } from 'lucide-react';
+import { createDispute, resolveDispute, forceSubmitResults, updateMatchState, submitMatchResult } from '../services/firebaseService';
 import { useAuth } from '../hooks/useAuth';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import MapResultSubmission from './MapResultSubmission';
 import TwoTeamResultSubmission from './TwoTeamResultSubmission';
-import PostMatchAnalytics from './PostMatchAnalytics';
 
 // Security: Sanitize user input to prevent XSS
 const sanitizeInput = (input: string): string => {
@@ -43,7 +42,6 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
   const [isCreatingDispute, setIsCreatingDispute] = useState(false);
   const [isResolvingDispute, setIsResolvingDispute] = useState(false);
   const [isReturningToPlaying, setIsReturningToPlaying] = useState(false);
-  const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [localMatch, setLocalMatch] = useState(match);
 
   const team1 = teams.find(t => t.id === match.team1Id);
@@ -162,24 +160,7 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
     }
   };
 
-  const handleAutoDetectMatch = async () => {
-    if (!isAdmin) return;
-    
-    setIsAutoDetecting(true);
-    try {
-      const result = await autoDetectAndSubmitMatchResult(currentMatch.id);
-      if (result.success && result.detected) {
-        toast.success(`Match detected! Score: ${result.team1Score} - ${result.team2Score}`);
-      } else {
-        toast.error(result.error || 'No match found. Make sure players have played the match and have Riot IDs set.');
-      }
-    } catch (error: any) {
-      console.error('Error auto-detecting match:', error);
-      toast.error(error.message || 'Failed to auto-detect match result');
-    } finally {
-      setIsAutoDetecting(false);
-    }
-  };
+  // Riot API auto-detect is intentionally disabled on live match page for now.
 
   const handleMapComplete = async (mapNumber: number) => {
     try {
@@ -269,35 +250,149 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
     const finalTeam1Score = isBO3Match ? bo3Status.team1Wins : (currentMatch.team1Score || 0);
     const finalTeam2Score = isBO3Match ? bo3Status.team2Wins : (currentMatch.team2Score || 0);
     const winnerId = isBO3Match ? bo3Status.winnerId : (currentMatch.winnerId || null);
+    const mapResults = currentMatch.mapResults || {};
     
     return (
-      <div className="space-y-6">
-        {/* Post-Match Analytics - Show First */}
-        {(() => {
-          console.log('[MatchInProgress] Checking if PostMatchAnalytics should render:', {
-            matchId: currentMatch.id,
-            matchState: currentMatch.matchState,
-            isComplete: currentMatch.isComplete,
-            hasAutoDetectedResult: !!currentMatch.autoDetectedResult,
-            hasMatchDetails: !!currentMatch.autoDetectedResult?.matchDetails
-          });
-          
-          // Always show for completed matches (component will handle fetching if needed)
-          if (currentMatch.matchState === 'completed' && currentMatch.isComplete) {
-            console.log('[MatchInProgress] Rendering PostMatchAnalytics for completed match');
-            return (
-              <PostMatchAnalytics
-                match={currentMatch}
-                teams={teams}
-                currentUserTeamId={currentUserTeamId}
-              />
-            );
-          }
-          
-          console.log('[MatchInProgress] Not rendering PostMatchAnalytics (match not completed)');
-          return null;
-        })()}
+      <div className="bg-black/30 border border-gray-800 rounded-lg p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-600/20 border border-red-800 rounded-lg flex items-center justify-center">
+              <Trophy className="w-5 h-5 text-red-500" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bodax text-white uppercase tracking-wider">Match Complete</h3>
+              <div className="text-gray-400 font-mono text-xs uppercase tracking-widest mt-1">
+                Score • Maps • Results
+              </div>
+            </div>
+          </div>
 
+          {winnerId && (
+            <div className="inline-flex items-center px-4 py-2 bg-[#050505] border border-gray-800 text-gray-200 font-mono uppercase tracking-widest text-xs">
+              Winner: {winnerId === currentMatch.team1Id ? sanitizedTeam1Name : sanitizedTeam2Name}
+            </div>
+          )}
+        </div>
+
+        {/* Final Score (Series score for BO3, map score for BO1) */}
+        <div className="mt-6 bg-[#050505] border border-gray-800 rounded-lg p-4">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500 mb-3">
+            {isBO3Match ? 'Series score (BO3)' : 'Final score'}
+          </div>
+          <div className="flex items-center justify-center gap-6">
+            <div className="text-center min-w-[120px]">
+              <div className="text-xs text-gray-400 font-mono uppercase tracking-widest truncate">{sanitizedTeam1Name}</div>
+              <div className="text-4xl font-bodax text-white">{finalTeam1Score}</div>
+            </div>
+            <div className="text-gray-700 font-mono text-2xl">-</div>
+            <div className="text-center min-w-[120px]">
+              <div className="text-xs text-gray-400 font-mono uppercase tracking-widest truncate">{sanitizedTeam2Name}</div>
+              <div className="text-4xl font-bodax text-white">{finalTeam2Score}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Map results */}
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">Maps</div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-gray-600">
+              {isBO3Match ? 'Map 1 / Map 2 / Decider' : 'BO1'}
+            </div>
+          </div>
+
+          {isBO3Match ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                {
+                  label: 'Map 1',
+                  mapName: currentMatch.map1,
+                  side: currentMatch.map1Side,
+                  result: mapResults.map1
+                },
+                {
+                  label: 'Map 2',
+                  mapName: currentMatch.map2,
+                  side: currentMatch.map2Side,
+                  result: mapResults.map2
+                },
+                {
+                  label: 'Decider',
+                  mapName: currentMatch.deciderMap,
+                  side: currentMatch.deciderMapSide,
+                  result: mapResults.map3
+                }
+              ].map((m, idx) => {
+                const r = m.result as any | undefined;
+                const winner = r?.winner as string | undefined;
+                const hasResult = !!r;
+                return (
+                  <div
+                    key={idx}
+                    className={`border rounded-lg p-4 ${
+                      hasResult ? 'bg-black/20 border-gray-800' : 'bg-black/10 border-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">{m.label}</div>
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-gray-600 truncate">
+                        {m.mapName || 'TBD'}
+                      </div>
+                    </div>
+
+                    {hasResult ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-400 font-mono truncate">{sanitizedTeam1Name}</span>
+                          <span className="text-white font-bodax">{r.team1Score}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-400 font-mono truncate">{sanitizedTeam2Name}</span>
+                          <span className="text-white font-bodax">{r.team2Score}</span>
+                        </div>
+                        {winner && (
+                          <div className="pt-2 border-t border-gray-800 text-[10px] font-mono uppercase tracking-widest text-gray-500">
+                            Winner: {winner === currentMatch.team1Id ? sanitizedTeam1Name : sanitizedTeam2Name}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs font-mono text-gray-500">No result recorded</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="border border-gray-800 rounded-lg p-4 bg-black/20">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">Selected map</div>
+                  <div className="text-white font-bodax uppercase tracking-wide truncate">
+                    {currentMatch.selectedMap || 'TBD'}
+                  </div>
+                </div>
+                {currentMatch.team1Side && currentMatch.team2Side ? (
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-gray-600">
+                    {sanitizedTeam1Name}: {String(currentMatch.team1Side).toUpperCase()} • {sanitizedTeam2Name}:{' '}
+                    {String(currentMatch.team2Side).toUpperCase()}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-2 gap-3">
+                <div className="bg-[#050505] border border-gray-800 rounded p-3">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500 truncate">{sanitizedTeam1Name}</div>
+                  <div className="text-2xl font-bodax text-white">{currentMatch.team1Score || 0}</div>
+                </div>
+                <div className="bg-[#050505] border border-gray-800 rounded p-3">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500 truncate">{sanitizedTeam2Name}</div>
+                  <div className="text-2xl font-bodax text-white">{currentMatch.team2Score || 0}</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -317,13 +412,13 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
 
         {isAdmin ? (
           <div className="space-y-4">
-            <div className="bg-gray-800/50 rounded-lg p-4">
-              <h4 className="text-lg font-semibold text-white mb-2">Admin Actions</h4>
+            <div className="bg-black/30 border border-gray-800 rounded-lg p-4">
+              <h4 className="text-white font-bodax uppercase tracking-wider mb-2">Admin Actions</h4>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={handleResetMatch}
                   disabled={isResolvingDispute}
-                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="flex items-center space-x-2 bg-[#0a0a0a] hover:bg-white/5 disabled:bg-gray-900 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed font-mono uppercase tracking-widest text-xs"
                 >
                   <RotateCcw className="w-4 h-4" />
                   <span>Reset to Playing</span>
@@ -332,7 +427,7 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
                 <button
                   onClick={() => setShowResultModal(true)}
                   disabled={isResolvingDispute}
-                  className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white px-4 py-2 rounded transition-colors border border-red-800 disabled:border-gray-700 font-mono uppercase tracking-widest text-xs disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="w-4 h-4" />
                   <span>Force Submit Results</span>
@@ -341,19 +436,19 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
             </div>
           </div>
         ) : (
-          <div className="bg-gray-800/50 rounded-lg p-4">
+          <div className="bg-black/30 border border-gray-800 rounded-lg p-4">
             <div className="flex items-center space-x-3">
-              <Shield className="w-5 h-5 text-blue-400" />
-              <p className="text-gray-300">
+              <Shield className="w-5 h-5 text-red-400" />
+              <p className="text-gray-300 font-mono text-sm">
                 This match is under review by an administrator. Please wait for resolution.
               </p>
             </div>
             {/* Return to Playing Button for non-admin users */}
-            <div className="mt-4 pt-4 border-t border-gray-700/50">
+            <div className="mt-4 pt-4 border-t border-gray-800">
               <button
                 onClick={handleReturnToPlaying}
                 disabled={isReturningToPlaying}
-                className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center space-x-2 bg-[#0a0a0a] hover:bg-white/5 disabled:bg-gray-900 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed font-mono uppercase tracking-widest text-xs"
               >
                 <Play className="w-4 h-4" />
                 <span>{isReturningToPlaying ? 'Returning...' : 'No Longer Need Help'}</span>
@@ -365,8 +460,8 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
         {/* Force Submit Results Modal for Admin */}
         {isAdmin && showResultModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-bold text-white mb-4">Force Submit Results</h3>
+            <div className="bg-[#050505] border border-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-2xl font-bodax text-white uppercase tracking-wider mb-4">Force Submit Results</h3>
               <ForceSubmitForm
                 match={currentMatch}
                 teams={teams}
@@ -381,47 +476,44 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
     );
   }
 
+  const canStartResultSubmission =
+    isBO1Match &&
+    currentMatch.matchState === 'playing' &&
+    !!currentUserTeamId &&
+    !!currentMatch.selectedMap &&
+    !!currentMatch.team1Side &&
+    !!currentMatch.team2Side;
+
+  const handleStartResultSubmission = async () => {
+    if (!canStartResultSubmission) return;
+    try {
+      await updateMatchState(currentMatch.id, { matchState: 'waiting_results' });
+      toast.success('Results submission opened');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to open results submission');
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Match Status */}
-      <div className="bg-gray-800/50 rounded-lg p-4">
+      <div className="bg-black/30 border border-gray-800 rounded-lg p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="bg-green-500 p-2 rounded-lg">
-              <Play className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-red-600/20 border border-red-800 rounded-lg flex items-center justify-center">
+              <Play className="w-5 h-5 text-red-500" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">Match in Progress</h3>
-              <p className="text-gray-300">Submit your results when the match is complete</p>
+              <h3 className="text-xl font-bodax text-white uppercase tracking-wider">Match in Progress</h3>
+              <p className="text-gray-400 font-mono text-xs mt-1">Submit your results when the match is complete</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            {/* Admin Auto-Detect Button */}
-            {isAdmin && currentMatch.matchState === 'playing' && (
-              <button
-                onClick={handleAutoDetectMatch}
-                disabled={isAutoDetecting}
-                className="flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
-                title="Check if the game is done and auto-detect the score"
-              >
-                {isAutoDetecting ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Checking...</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4" />
-                    <span>Auto-Detect Score</span>
-                  </>
-                )}
-              </button>
-            )}
             {/* Need Help Button */}
             <button
               onClick={() => setShowHelpConfirmation(true)}
               disabled={isCreatingDispute}
-              className="flex items-center space-x-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-800 text-white px-4 py-2 rounded-lg transition-colors"
+              className="flex items-center space-x-2 bg-[#0a0a0a] hover:bg-white/5 disabled:bg-gray-900 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed font-mono uppercase tracking-widest text-xs"
             >
               <HelpCircle className="w-4 h-4" />
               <span>{isCreatingDispute ? 'Creating...' : 'Need Help?'}</span>
@@ -432,7 +524,7 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
 
 
         {/* BO1 or BO3 Progress & Results Display */}
-        <div className="mt-4 pt-4 border-t border-gray-700/50">
+        <div className="mt-4 pt-4 border-t border-gray-800">
           {isBO3Match ? (
             <>
               {/* BO3 Series Score */}
@@ -448,15 +540,15 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
                 </div>
               </div>
 
-              <h4 className="text-white font-bold mb-3 text-center flex items-center justify-center space-x-2">
-                <MapPin className="w-5 h-5 text-yellow-400" />
-                <span>🗺️ BO3 Maps & Results</span>
+              <h4 className="text-white font-bodax uppercase tracking-wider mb-3 text-center flex items-center justify-center space-x-2">
+                <MapPin className="w-5 h-5 text-red-500" />
+                <span>BO3 Maps & Results</span>
               </h4>
             </>
           ) : (
-            <h4 className="text-white font-bold mb-3 text-center flex items-center justify-center space-x-2">
-              <MapPin className="w-5 h-5 text-yellow-400" />
-              <span>🗺️ Map & Results</span>
+            <h4 className="text-white font-bodax uppercase tracking-wider mb-3 text-center flex items-center justify-center space-x-2">
+              <MapPin className="w-5 h-5 text-red-500" />
+              <span>Map & Results</span>
             </h4>
           )}
           
@@ -666,48 +758,42 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
             </div>
           </div>
           ) : (
-            /* BO1 Single Map Display */
-            <div className="grid grid-cols-1 gap-4 max-w-md mx-auto">
-              <div className={`p-4 rounded-lg border ${
-                currentMatch.resultSubmission?.team1Submitted && currentMatch.resultSubmission?.team2Submitted
-                  ? 'bg-green-600/10 border-green-500/30' 
-                  : currentMatch.selectedMap && currentMatch.team1Side && currentMatch.team2Side
-                  ? 'bg-blue-600/10 border-blue-500/30' 
-                  : 'bg-gray-700/20 border-gray-600/30'
-              }`}>
-                <div className="text-center">
-                  <div className="text-sm text-gray-400 mb-2">Selected Map</div>
-                  <div className="text-white font-bold text-lg mb-2">
-                    {currentMatch.selectedMap || 'Not Selected'}
+            /* BO1 Compact Match HUD */
+            <div className="bg-black/20 border border-gray-800 rounded-lg p-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">Selected map</div>
+                  <div className="text-white font-bodax uppercase tracking-wide truncate">
+                    {currentMatch.selectedMap || 'Not selected'}
                   </div>
-                  {currentMatch.team1Side && currentMatch.team2Side && (
-                    <div className="space-y-2 mb-3">
-                      {currentUserTeamId === currentMatch.team1Id ? (
-                        <div className="space-y-1">
-                          <div className="text-xs text-gray-300">You are playing:</div>
-                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${
-                            currentMatch.team1Side === 'attack' 
-                              ? 'bg-red-500/20 text-red-300' 
-                              : 'bg-blue-500/20 text-blue-300'
-                          }`}>
-                            {currentMatch.team1Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
-                          </div>
-                        </div>
-                      ) : currentUserTeamId === currentMatch.team2Id ? (
-                        <div className="space-y-1">
-                          <div className="text-xs text-gray-300">You are playing:</div>
-                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${
-                            currentMatch.team2Side === 'attack' 
-                              ? 'bg-red-500/20 text-red-300' 
-                              : 'bg-blue-500/20 text-blue-300'
-                          }`}>
-                            {currentMatch.team2Side === 'attack' ? '⚔️ ATTACK' : '🛡️ DEFENSE'}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
                 </div>
+
+                {currentMatch.team1Side && currentMatch.team2Side && currentUserTeamId && (
+                  <div className="flex items-center gap-2">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">You</div>
+                    {(() => {
+                      const side =
+                        currentUserTeamId === currentMatch.team1Id
+                          ? currentMatch.team1Side
+                          : currentUserTeamId === currentMatch.team2Id
+                          ? currentMatch.team2Side
+                          : null;
+                      if (!side) return null;
+                      const isAttack = side === 'attack';
+                      return (
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-[11px] font-mono uppercase tracking-widest border ${
+                            isAttack
+                              ? 'bg-red-600/10 text-red-300 border-red-800'
+                              : 'bg-blue-600/10 text-blue-300 border-blue-800'
+                          }`}
+                        >
+                          {isAttack ? 'Attack' : 'Defense'}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -725,52 +811,34 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
             </div>
           )}
 
-          {/* BO1 Result Submission */}
-          {isBO1Match && currentMatch.selectedMap && currentMatch.team1Side && currentMatch.team2Side && currentUserTeamId && (
-            <div className="mt-4">
-              <TwoTeamResultSubmission
-                match={currentMatch}
-                teams={teams}
-                currentUserTeamId={currentUserTeamId}
-                onClose={() => {}}
-              />
+          {/* BO1: keep the playing view compact; open results submission as its own state */}
+          {canStartResultSubmission && (
+            <div className="mt-4 flex items-center justify-between gap-3 bg-[#050505] border border-gray-800 rounded-lg p-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">When match is done</div>
+                <div className="text-xs font-mono text-gray-300 truncate">
+                  Switch to results submission and enter the final score.
+                </div>
+              </div>
+              <button
+                onClick={handleStartResultSubmission}
+                className="shrink-0 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded border border-red-800 font-mono uppercase tracking-widest text-xs transition-colors"
+              >
+                Submit results
+              </button>
             </div>
           )}
 
-          {/* Team Names Legend */}
-          <div className="mt-4 pt-3 border-t border-gray-700/50">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              <div className={`p-3 rounded-lg text-center ${
-                currentUserTeamId === currentMatch.team1Id 
-                  ? 'bg-blue-600/20 border border-blue-500/30' 
-                  : 'bg-gray-700/40'
-              }`}>
-                <div className="font-semibold text-white mb-1">
-                  {currentUserTeamId === currentMatch.team1Id ? '🎯 Your Team' : 'Team A'}
-                </div>
-                <div className="text-gray-300">{sanitizedTeam1Name}</div>
-              </div>
-              <div className={`p-3 rounded-lg text-center ${
-                currentUserTeamId === currentMatch.team2Id 
-                  ? 'bg-blue-600/20 border border-blue-500/30' 
-                  : 'bg-gray-700/40'
-              }`}>
-                <div className="font-semibold text-white mb-1">
-                  {currentUserTeamId === currentMatch.team2Id ? '🎯 Your Team' : 'Team B'}
-                </div>
-                <div className="text-gray-300">{sanitizedTeam2Name}</div>
-              </div>
-            </div>
-          </div>
+          {/* Team name legend removed: rosters are shown in the right sidebar on MatchPage */}
         </div>
       </div>
 
       {/* Help Confirmation Modal */}
       {showHelpConfirmation && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-[#050505] border border-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-white">Confirm Help Request</h3>
+              <h3 className="text-2xl font-bodax text-white uppercase tracking-wider">Confirm Help Request</h3>
               <button
                 onClick={() => setShowHelpConfirmation(false)}
                 className="text-gray-400 hover:text-white transition-colors"
@@ -780,16 +848,16 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
             </div>
             <div className="mb-6">
               <div className="flex items-center space-x-3 mb-3">
-                <div className="bg-orange-500 p-2 rounded-lg">
-                  <HelpCircle className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 bg-red-600/20 border border-red-800 rounded-lg flex items-center justify-center">
+                  <HelpCircle className="w-5 h-5 text-red-500" />
                 </div>
                 <div>
-                  <p className="text-white font-medium">Request Admin Assistance</p>
-                  <p className="text-gray-300 text-sm">This will pause your match and notify an administrator.</p>
+                  <p className="text-white font-mono uppercase tracking-widest text-xs">Request Admin Assistance</p>
+                  <p className="text-gray-400 font-mono text-sm">This will pause your match and notify an administrator.</p>
                 </div>
               </div>
-              <div className="bg-orange-900/20 border border-orange-500/30 rounded-lg p-3">
-                <p className="text-orange-200 text-sm">
+              <div className="bg-red-900/10 border border-red-800 rounded-lg p-3">
+                <p className="text-red-200 text-sm font-mono">
                   <strong>Note:</strong> Only use this if you're experiencing technical issues, rule violations, or other problems that require admin intervention.
                 </p>
               </div>
@@ -797,14 +865,14 @@ const MatchInProgress: React.FC<MatchInProgressProps> = ({ match, teams, current
             <div className="flex space-x-3">
               <button
                 onClick={() => setShowHelpConfirmation(false)}
-                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="flex-1 bg-[#0a0a0a] hover:bg-white/5 text-white px-4 py-2 rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateDispute}
                 disabled={isCreatingDispute}
-                className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-800 text-white px-4 py-2 rounded-lg transition-colors"
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white px-4 py-2 rounded transition-colors border border-red-800 disabled:border-gray-700 font-mono uppercase tracking-widest text-xs disabled:cursor-not-allowed"
               >
                 {isCreatingDispute ? 'Creating...' : 'Request Help'}
               </button>
@@ -879,7 +947,7 @@ const ForceSubmitForm: React.FC<ForceSubmitFormProps> = ({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-xs font-mono uppercase tracking-widest text-gray-400 mb-2">
             {sanitizedTeam1Name} Score
           </label>
           <input
@@ -888,11 +956,11 @@ const ForceSubmitForm: React.FC<ForceSubmitFormProps> = ({
             value={team1Score}
             onChange={(e) => handleScoreChange(e.target.value, setTeam1Score)}
             placeholder="0"
-            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-[#0a0a0a] border border-gray-800 rounded px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-600 font-bodax text-lg text-center"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-xs font-mono uppercase tracking-widest text-gray-400 mb-2">
             {sanitizedTeam2Name} Score
           </label>
           <input
@@ -901,7 +969,7 @@ const ForceSubmitForm: React.FC<ForceSubmitFormProps> = ({
             value={team2Score}
             onChange={(e) => handleScoreChange(e.target.value, setTeam2Score)}
             placeholder="0"
-            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-[#0a0a0a] border border-gray-800 rounded px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-600 font-bodax text-lg text-center"
           />
         </div>
       </div>
@@ -910,14 +978,14 @@ const ForceSubmitForm: React.FC<ForceSubmitFormProps> = ({
         <button
           onClick={handleSubmit}
           disabled={isSubmitDisabled}
-          className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white py-2 px-4 rounded-lg transition-colors"
+          className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white py-2 px-4 rounded transition-colors border border-red-800 disabled:border-gray-700 font-mono uppercase tracking-widest text-xs disabled:cursor-not-allowed"
         >
           {isSubmitting ? 'Submitting...' : 'Force Submit'}
         </button>
         <button
           onClick={onCancel}
           disabled={isSubmitting}
-          className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-800 text-white py-2 px-4 rounded-lg transition-colors"
+          className="flex-1 bg-[#0a0a0a] hover:bg-white/5 disabled:bg-gray-900 text-white py-2 px-4 rounded transition-colors border border-gray-700 hover:border-gray-500 font-mono uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Cancel
         </button>

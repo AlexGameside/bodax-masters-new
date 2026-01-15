@@ -55,6 +55,9 @@ export interface Team {
   registeredForTournament: boolean;
   tournamentRegistrationDate?: Date;
   maxMembers: number; // Maximum number of members allowed (10 total)
+
+  // Currently selected roster for a match (set during ready-up)
+  activePlayers?: string[]; // 5 main player userIds
   
   // Team composition limits
   maxMainPlayers: number; // 5 main players
@@ -220,6 +223,31 @@ export interface Match {
   deciderMap?: string; // Remaining map for Map 3 (decider)
   deciderMapSide?: 'attack' | 'defense'; // Side selected for Decider Map
   banSequence?: Array<{ teamId: string; mapName: string; banNumber: number }>; // Sequence of map bans
+
+  // Veto / banning order controls (Team A / Team B + optional admin override)
+  veto?: {
+    // Team A starts the veto (first ban, Map 1 pick in BO3, etc.)
+    teamAId?: string | null;
+    teamBId?: string | null;
+    coinflip?: {
+      performed: boolean;
+      winnerTeamId?: string | null;
+      // Winner chooses whether they want to be Team A or Team B
+      winnerChoice?: 'A' | 'B';
+      performedAt?: Date;
+      performedByUserId?: string;
+      chosenAt?: Date;
+      chosenByUserId?: string;
+    };
+    adminOverride?: {
+      enabled: boolean;
+      // Optional: fully define the banning turn order by ban step (allows repeats)
+      banTurnOrderTeamIds?: string[];
+      setByUserId?: string;
+      setAt?: Date;
+      note?: string;
+    };
+  };
   
   mapResults?: {
     map1?: { team1Score: number; team2Score: number; winner?: string };
@@ -266,6 +294,20 @@ export interface Match {
   adminTickbox?: boolean; // Whether match is marked by admin
   adminTickboxAt?: Date; // When it was ticked
   adminTickboxBy?: string; // Who ticked it (admin ID)
+
+  // Riot API auto-detection result (optional, stored for UI display / debugging)
+  autoDetectedResult?: {
+    detected: boolean;
+    matchId?: string;
+    matchDetails?: any;
+    team1Score?: number;
+    team2Score?: number;
+    detectedAt?: Date | any; // Allow Firestore Timestamp/serverTimestamp
+    confidence?: 'low' | 'medium' | 'high';
+    team1PlayersFound?: number;
+    team2PlayersFound?: number;
+    error?: string;
+  };
 }
 
 // Tournament Types and Formats

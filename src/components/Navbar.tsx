@@ -27,6 +27,38 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
 
   const isActive = (path: string) => location.pathname === path;
 
+  const matchIdFromPath = (() => {
+    const m = location.pathname.match(/^\/match\/([^/]+)/);
+    return m?.[1] || null;
+  })();
+
+  const getMatchPriority = (m: Match) => {
+    // Higher number = more urgent
+    switch (m.matchState) {
+      case 'ready_up': return 90;
+      case 'map_banning': return 80;
+      case 'side_selection_map1':
+      case 'side_selection_map2':
+      case 'side_selection_decider': return 70;
+      case 'playing': return 60;
+      case 'waiting_results':
+      case 'disputed': return 50;
+      case 'scheduled': return 40;
+      case 'pending_scheduling': return 30;
+      default: return 10;
+    }
+  };
+
+  const activeMatch: Match | null = (() => {
+    if (!currentUser) return null;
+    if (matchIdFromPath) {
+      return userMatches.find(m => m.id === matchIdFromPath) || null;
+    }
+    const candidates = userMatches.filter(m => !m.isComplete && m.matchState !== 'completed');
+    if (candidates.length === 0) return null;
+    return [...candidates].sort((a, b) => getMatchPriority(b) - getMatchPriority(a))[0] || null;
+  })();
+
   const handleLogout = async () => {
     try {
       setLoading(true);
@@ -60,14 +92,26 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
             >
               TOURNAMENTS
             </Link>
-            <Link
-              to="/my-matches"
-              className={`text-lg font-bodax font-medium tracking-wide transition-colors duration-200 uppercase ${
-                isActive('/my-matches') ? 'text-red-500' : 'text-gray-300 hover:text-white'
-              }`}
-            >
-              MY MATCHES
-            </Link>
+            {activeMatch && (
+              <Link
+                to={`/match/${activeMatch.id}`}
+                className={`inline-flex items-center gap-2 px-4 py-2 border rounded-lg transition-all duration-200 font-mono uppercase tracking-widest text-sm ${
+                  matchIdFromPath
+                    ? 'bg-red-600/20 border-red-800 text-red-300'
+                    : 'bg-[#0a0a0a] border-gray-800 text-gray-200 hover:border-red-700 hover:text-white'
+                }`}
+                title="Jump to your active match"
+              >
+                <Gamepad2 className="w-4 h-4 text-red-500" />
+                <span className="whitespace-nowrap">
+                  Active Match{activeMatch.matchNumber ? ` #${activeMatch.matchNumber}` : ''}
+                </span>
+                <span className="text-gray-600">/</span>
+                <span className="text-red-400">
+                  {(activeMatch.matchState || 'active').replace(/_/g, ' ')}
+                </span>
+              </Link>
+            )}
             {isAdmin && (
               <Link
                 to="/admin"
@@ -160,13 +204,21 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
               >
                 TOURNAMENTS
               </Link>
-               <Link
-                to="/my-matches"
-                className="px-4 py-3 text-lg font-bodax tracking-wide text-gray-300 hover:text-red-500 hover:bg-white/5"
-                onClick={() => setIsOpen(false)}
-              >
-                MY MATCHES
-              </Link>
+              {activeMatch && (
+                <Link
+                  to={`/match/${activeMatch.id}`}
+                  className="px-4 py-3 text-lg font-bodax tracking-wide text-gray-200 hover:text-red-400 hover:bg-white/5 flex items-center gap-3"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <Gamepad2 className="w-5 h-5 text-red-500" />
+                  <span>
+                    ACTIVE MATCH{activeMatch.matchNumber ? ` #${activeMatch.matchNumber}` : ''}
+                    <span className="text-gray-500 font-mono text-xs uppercase tracking-widest ml-2">
+                      {activeMatch.matchState?.replace(/_/g, ' ') || 'active'}
+                    </span>
+                  </span>
+                </Link>
+              )}
               {isAdmin && (
                 <Link
                   to="/admin"

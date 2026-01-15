@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { CheckCircle, XCircle, AlertTriangle, Clock, Zap, RefreshCw } from 'lucide-react';
-import { submitMatchResult, createDispute, getPublicUserData, autoDetectAndSubmitMatchResult } from '../services/firebaseService';
-// Riot API imports disabled - features hidden from users
-// import { suggestMatchOutcome, getTeamStatistics } from '../services/riotApiService';
+import { CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-react';
+import { submitMatchResult, createDispute, getPublicUserData } from '../services/firebaseService';
 import type { Match, Team } from '../types/tournament';
 
 interface TwoTeamResultSubmissionProps {
@@ -23,62 +21,12 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
   const [team2Score, setTeam2Score] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDisputing, setIsDisputing] = useState(false);
-  const [isAutoDetecting, setIsAutoDetecting] = useState(false);
-  const [autoDetectedResult, setAutoDetectedResult] = useState<any>(null);
-  // Riot API state variables disabled (not used, but kept to avoid breaking anything)
-  // const [suggestion, setSuggestion] = useState<any>(null);
-  // const [loadingSuggestion, setLoadingSuggestion] = useState(false);
-  // const [suggestionConfirmed, setSuggestionConfirmed] = useState(false);
-  // const [teamStats, setTeamStats] = useState<any>(null);
-  // const [showAnalytics, setShowAnalytics] = useState(false);
+  // Riot API auto-detect is intentionally disabled on live match page for now.
 
   const team1 = teams.find(t => t.id === match.team1Id);
   const team2 = teams.find(t => t.id === match.team2Id);
   const isTeam1 = currentUserTeamId === match.team1Id;
   const isTeam2 = currentUserTeamId === match.team2Id;
-
-  // Check for auto-detected results
-  useEffect(() => {
-    if (match.autoDetectedResult) {
-      setAutoDetectedResult(match.autoDetectedResult);
-      // Pre-fill scores if auto-detected
-      if (match.autoDetectedResult.team1Score !== undefined && match.autoDetectedResult.team2Score !== undefined) {
-        setTeam1Score(match.autoDetectedResult.team1Score.toString());
-        setTeam2Score(match.autoDetectedResult.team2Score.toString());
-      }
-    }
-  }, [match.autoDetectedResult]);
-
-  // Auto-detect match result
-  const handleAutoDetect = async () => {
-    setIsAutoDetecting(true);
-    try {
-      const result = await autoDetectAndSubmitMatchResult(match.id);
-      if (result.success && result.detected) {
-        toast.success(`Match detected! Score: ${result.team1Score} - ${result.team2Score}`);
-        setAutoDetectedResult({
-          detected: true,
-          team1Score: result.team1Score,
-          team2Score: result.team2Score,
-          detectedAt: new Date(),
-          confidence: result.matchDetails?.confidence || 'medium'
-        });
-        setTeam1Score(result.team1Score?.toString() || '');
-        setTeam2Score(result.team2Score?.toString() || '');
-        // Close modal after successful auto-detection
-        setTimeout(() => {
-          onClose();
-        }, 2000);
-      } else {
-        toast.error(result.error || 'No match found. Make sure players have played the match and have Riot IDs set.');
-      }
-    } catch (error: any) {
-      console.error('Error auto-detecting match:', error);
-      toast.error(error.message || 'Failed to auto-detect match result');
-    } finally {
-      setIsAutoDetecting(false);
-    }
-  };
 
   // Check if this team has already submitted
   const hasSubmitted = isTeam1 
@@ -397,56 +345,10 @@ const TwoTeamResultSubmission: React.FC<TwoTeamResultSubmissionProps> = ({
         }}
       />
       <div className="relative border-l-4 border-green-600 pl-4">
-        {/* Auto-Detection Section */}
-        {(autoDetectedResult || match.autoDetectedResult) && (
-          <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-5 h-5 text-green-400" />
-              <h4 className="text-green-400 font-bold font-mono uppercase tracking-widest text-sm">Auto-Detected Match</h4>
-            </div>
-            <div className="text-white font-mono text-sm">
-              Score: <span className="font-bold text-lg">{autoDetectedResult?.team1Score || match.autoDetectedResult?.team1Score} - {autoDetectedResult?.team2Score || match.autoDetectedResult?.team2Score}</span>
-              {autoDetectedResult?.confidence && (
-                <span className="ml-2 text-green-300">({autoDetectedResult.confidence} confidence)</span>
-              )}
-            </div>
-          </div>
-        )}
-        
-        {/* Auto-Detect Button */}
-        <div className="mb-6">
-          <button
-            onClick={handleAutoDetect}
-            disabled={isAutoDetecting}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 text-white rounded-lg font-bold font-mono uppercase tracking-widest transition-all"
-          >
-            {isAutoDetecting ? (
-              <>
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                Detecting Match...
-              </>
-            ) : (
-              <>
-                <Zap className="w-5 h-5" />
-                Auto-Detect Match Result
-              </>
-            )}
-          </button>
-          <p className="text-gray-400 text-xs font-mono mt-2 text-center">
-            Automatically detect match result from Riot API (requires players to have Riot IDs set)
-          </p>
-        </div>
-        
         <div className="text-center mb-6">
           <h3 className="text-3xl font-bold text-white font-bodax uppercase tracking-wide mb-2">Submit Match Results</h3>
           <p className="text-gray-400 font-mono uppercase tracking-widest text-sm">Enter the final score for both teams</p>
         </div>
-      <div className="text-center mb-6">
-        <h3 className="text-3xl font-bold text-white font-bodax uppercase tracking-wide mb-2">Submit Match Results</h3>
-        <p className="text-green-400 font-mono uppercase tracking-widest text-sm">Enter the final score for this match</p>
-      </div>
-
-      {/* Riot API features DISABLED - all suggestion and analytics UI removed */}
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div>

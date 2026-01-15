@@ -363,6 +363,7 @@ export const autoDetectMatchResult = async (
   confidence?: 'high' | 'medium' | 'low';
   team1PlayersFound?: number;
   team2PlayersFound?: number;
+  error?: string;
 } | null> => {
   try {
     console.log('Auto-detecting match result for teams:', { team1RiotIds, team2RiotIds });

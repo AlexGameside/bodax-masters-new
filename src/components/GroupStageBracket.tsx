@@ -147,7 +147,9 @@ const GroupStageBracket: React.FC<GroupStageBracketProps> = ({ tournament, match
         return 'border-yellow-500 bg-yellow-900/20';
       case 'map_banning':
         return 'border-blue-500 bg-blue-900/20';
-      case 'ready_up':
+      case 'side_selection_map1':
+      case 'side_selection_map2':
+      case 'side_selection_decider':
         return 'border-purple-500 bg-purple-900/20';
       case 'playing':
         return 'border-green-500 bg-green-900/20';
@@ -164,7 +166,9 @@ const GroupStageBracket: React.FC<GroupStageBracketProps> = ({ tournament, match
         return 'Ready Up';
       case 'map_banning':
         return 'Map Banning';
-      case 'ready_up':
+      case 'side_selection_map1':
+      case 'side_selection_map2':
+      case 'side_selection_decider':
         return 'Side Selection';
       case 'playing':
         return 'In Progress';

@@ -122,13 +122,13 @@ const RiotApiTesting = () => {
         return hasScores && isComplete && hasTeams;
       }).sort((a, b) => {
         // Sort by most recent first
-        const aTime = a.resolvedAt || a.scheduledTime;
-        const bTime = b.resolvedAt || b.scheduledTime;
+        const aTime: any = a.resolvedAt || a.scheduledTime;
+        const bTime: any = b.resolvedAt || b.scheduledTime;
         if (!aTime && !bTime) return 0;
         if (!aTime) return 1;
         if (!bTime) return -1;
-        const aDate = aTime instanceof Date ? aTime : (aTime.toDate ? aTime.toDate() : new Date(aTime));
-        const bDate = bTime instanceof Date ? bTime : (bTime.toDate ? bTime.toDate() : new Date(bTime));
+        const aDate = aTime instanceof Date ? aTime : (aTime?.toDate ? aTime.toDate() : new Date(aTime));
+        const bDate = bTime instanceof Date ? bTime : (bTime?.toDate ? bTime.toDate() : new Date(bTime));
         return bDate.getTime() - aDate.getTime();
       });
       
@@ -359,14 +359,16 @@ const RiotApiTesting = () => {
       // Get match scheduled time or resolved time (for old matches)
       let matchStartTime: number | undefined;
       if (selectedTestMatch.scheduledTime) {
-        matchStartTime = selectedTestMatch.scheduledTime instanceof Date 
-          ? selectedTestMatch.scheduledTime.getTime() 
-          : selectedTestMatch.scheduledTime.toMillis?.() || selectedTestMatch.scheduledTime;
+        const scheduledTime: any = selectedTestMatch.scheduledTime;
+        matchStartTime = scheduledTime instanceof Date
+          ? scheduledTime.getTime()
+          : scheduledTime?.toMillis?.() || scheduledTime;
       } else if (selectedTestMatch.resolvedAt) {
         // Use resolved time if scheduled time not available
-        const resolvedTime = selectedTestMatch.resolvedAt instanceof Date 
-          ? selectedTestMatch.resolvedAt.getTime() 
-          : selectedTestMatch.resolvedAt.toMillis?.() || selectedTestMatch.resolvedAt;
+        const resolvedAt: any = selectedTestMatch.resolvedAt;
+        const resolvedTime = resolvedAt instanceof Date
+          ? resolvedAt.getTime()
+          : resolvedAt?.toMillis?.() || resolvedAt;
         matchStartTime = resolvedTime;
       }
       
@@ -857,7 +859,7 @@ const RiotApiTesting = () => {
                               <Calendar className="w-3 h-3" />
                               {match.resolvedAt instanceof Date 
                                 ? match.resolvedAt.toLocaleString()
-                                : match.resolvedAt.toDate?.().toLocaleString() || 'N/A'}
+                                : (match.resolvedAt as any)?.toDate?.().toLocaleString() || 'N/A'}
                             </div>
                           )}
                           {match.tournamentId && (
@@ -918,7 +920,7 @@ const RiotApiTesting = () => {
                       <div className="text-gray-400 text-xs font-mono mt-1">
                         {selectedTestMatch.resolvedAt instanceof Date 
                           ? selectedTestMatch.resolvedAt.toLocaleString()
-                          : selectedTestMatch.resolvedAt?.toDate?.().toLocaleString() || 'N/A'}
+                          : (selectedTestMatch.resolvedAt as any)?.toDate?.().toLocaleString() || 'N/A'}
                       </div>
                     </div>
                   </div>

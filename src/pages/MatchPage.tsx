@@ -14,7 +14,6 @@ import SideSelection from '../components/SideSelection';
 import MatchInProgress from '../components/MatchInProgress';
 import MatchChat from '../components/MatchChat';
 import TicketCreationModal from '../components/TicketCreationModal';
-import PostMatchAnalytics from '../components/PostMatchAnalytics';
 import { ArrowLeft, Trophy, Clock, CheckCircle, User as UserIcon, BarChart3, Target, AlertTriangle, MessageSquare } from 'lucide-react';
 import { DEFAULT_MAP_POOL } from '../constants/mapPool';
 
@@ -36,6 +35,10 @@ const MatchPage = () => {
   const [showTeamSelectionModal, setShowTeamSelectionModal] = useState(false);
   const [team1Players, setTeam1Players] = useState<User[]>([]);
   const [team2Players, setTeam2Players] = useState<User[]>([]);
+  const [team1Coach, setTeam1Coach] = useState<User | null>(null);
+  const [team2Coach, setTeam2Coach] = useState<User | null>(null);
+  const [team1AssistantCoach, setTeam1AssistantCoach] = useState<User | null>(null);
+  const [team2AssistantCoach, setTeam2AssistantCoach] = useState<User | null>(null);
   const [countdownTime, setCountdownTime] = useState<string>('');
   const [showDisputeTicketModal, setShowDisputeTicketModal] = useState(false);
 
@@ -427,58 +430,121 @@ const MatchPage = () => {
     ((userTeam.id === match?.team1Id && match?.team1Ready) || 
      (userTeam.id === match?.team2Id && match?.team2Ready));
 
+  const getUserDisplayName = (user: User) => {
+    const riot = (user as any)?.riotId;
+    if (typeof riot === 'string' && riot.trim() && riot !== 'No Riot ID') return riot;
+    // If Riot ID is missing, still show something (but this should be rare after getUsersByIds fallback)
+    return user?.username || 'Unknown';
+  };
+
   useEffect(() => {
     const loadTeamPlayers = async () => {
       try {
-        // Load Team 1 players from roster if available, otherwise fallback to all team members
+        const team1Id = match?.team1Id;
+        const team2Id = match?.team2Id;
+        const liveTeam1 = team1Id ? await getTeamById(team1Id) : null;
+        const liveTeam2 = team2Id ? await getTeamById(team2Id) : null;
+
+        // IMPORTANT: Only display the selected ready-up roster (not full team members).
+        // If a team hasn't submitted a roster yet, keep roster list empty.
         if (team1) {
-          if (match?.team1Roster?.mainPlayers && match.team1Roster.mainPlayers.length > 0) {
-            // Use selected roster players
-            const rosterPlayers = await getUsersByIds(match.team1Roster.mainPlayers);
-            setTeam1Players(rosterPlayers);
+          const mainIds: string[] =
+            (match?.team1Roster?.mainPlayers && match.team1Roster.mainPlayers.length > 0)
+              ? match.team1Roster.mainPlayers
+              : (Array.isArray((liveTeam1 as any)?.activePlayers) ? (((liveTeam1 as any).activePlayers as string[])) : []);
+          const coachId = match?.team1Roster?.coach;
+          const assistantCoachId = match?.team1Roster?.assistantCoach;
+          const allIds = [
+            ...mainIds,
+            ...(coachId ? [coachId] : []),
+            ...(assistantCoachId ? [assistantCoachId] : []),
+          ];
+
+          if (allIds.length > 0) {
+            const uniqueIds = Array.from(new Set(allIds));
+            const rosterUsers = await getUsersByIds(uniqueIds);
+            const byId = new Map(rosterUsers.map(u => [u.id, u]));
+
+            setTeam1Players(mainIds.map((id: string) => byId.get(id)).filter(Boolean) as User[]);
+            setTeam1Coach(coachId ? (byId.get(coachId) as User) || null : null);
+            setTeam1AssistantCoach(assistantCoachId ? (byId.get(assistantCoachId) as User) || null : null);
           } else {
-            // Fallback to all team members if no roster data
-            const players = await getTeamPlayers(team1.id);
-            setTeam1Players(players);
+            setTeam1Players([]);
+            setTeam1Coach(null);
+            setTeam1AssistantCoach(null);
           }
         }
-        
-        // Load Team 2 players from roster if available, otherwise fallback to all team members
+
         if (team2) {
-          if (match?.team2Roster?.mainPlayers && match.team2Roster.mainPlayers.length > 0) {
-            // Use selected roster players
-            const rosterPlayers = await getUsersByIds(match.team2Roster.mainPlayers);
-            setTeam2Players(rosterPlayers);
+          const mainIds: string[] =
+            (match?.team2Roster?.mainPlayers && match.team2Roster.mainPlayers.length > 0)
+              ? match.team2Roster.mainPlayers
+              : (Array.isArray((liveTeam2 as any)?.activePlayers) ? (((liveTeam2 as any).activePlayers as string[])) : []);
+          const coachId = match?.team2Roster?.coach;
+          const assistantCoachId = match?.team2Roster?.assistantCoach;
+          const allIds = [
+            ...mainIds,
+            ...(coachId ? [coachId] : []),
+            ...(assistantCoachId ? [assistantCoachId] : []),
+          ];
+
+          if (allIds.length > 0) {
+            const uniqueIds = Array.from(new Set(allIds));
+            const rosterUsers = await getUsersByIds(uniqueIds);
+            const byId = new Map(rosterUsers.map(u => [u.id, u]));
+
+            setTeam2Players(mainIds.map((id: string) => byId.get(id)).filter(Boolean) as User[]);
+            setTeam2Coach(coachId ? (byId.get(coachId) as User) || null : null);
+            setTeam2AssistantCoach(assistantCoachId ? (byId.get(assistantCoachId) as User) || null : null);
           } else {
-            // Fallback to all team members if no roster data
-            const players = await getTeamPlayers(team2.id);
-            setTeam2Players(players);
+            setTeam2Players([]);
+            setTeam2Coach(null);
+            setTeam2AssistantCoach(null);
           }
         }
       } catch (error) {
         console.error('Error loading team players:', error);
-        // Fallback to original behavior on error
-        if (team1) {
-          const players = await getTeamPlayers(team1.id);
-          setTeam1Players(players);
-        }
-        if (team2) {
-          const players = await getTeamPlayers(team2.id);
-          setTeam2Players(players);
-        }
+        // Keep empty on error to avoid showing full team rosters by accident
+        setTeam1Players([]);
+        setTeam2Players([]);
+        setTeam1Coach(null);
+        setTeam2Coach(null);
+        setTeam1AssistantCoach(null);
+        setTeam2AssistantCoach(null);
       }
     };
 
     if (team1 || team2) {
       loadTeamPlayers();
     }
-  }, [team1, team2, match?.team1Roster?.mainPlayers, match?.team2Roster?.mainPlayers]);
+  }, [
+    team1,
+    team2,
+    match?.team1Id,
+    match?.team2Id,
+    match?.matchState,
+    match?.team1Roster?.mainPlayers,
+    match?.team1Roster?.coach,
+    match?.team1Roster?.assistantCoach,
+    match?.team2Roster?.mainPlayers,
+    match?.team2Roster?.coach,
+    match?.team2Roster?.assistantCoach
+  ]);
 
   const bothTeamsReady = match?.team1Ready && match?.team2Ready;
+  const shouldShowSelectedRosters =
+    match?.matchState !== 'ready_up' &&
+    match?.matchState !== 'pending_scheduling' &&
+    match?.matchState !== 'scheduled';
+
+  const isLiveMatchView =
+    match?.matchState === 'playing' ||
+    match?.matchState === 'waiting_results' ||
+    match?.matchState === 'disputed';
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
           <p className="text-gray-300">Loading match...</p>
@@ -489,7 +555,7 @@ const MatchPage = () => {
 
   if (!match) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-300">Match not found</p>
         </div>
@@ -589,14 +655,14 @@ const MatchPage = () => {
   
   if (!isUserInMatch && !isAdmin) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-400 text-xl mb-4">Access Denied</div>
-          <div className="text-gray-400 mb-4">You are not authorized to view this match</div>
+          <div className="text-red-400 text-2xl mb-3 font-bodax uppercase tracking-wider">Access Denied</div>
+          <div className="text-gray-400 mb-4 font-mono">You are not authorized to view this match</div>
           <div className="text-sm text-gray-500 mb-6">Only match participants and administrators can access this page</div>
           <button
             onClick={() => navigate('/tournaments')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+            className="bg-[#0a0a0a] hover:bg-white/5 text-white px-6 py-2 rounded font-mono uppercase tracking-widest text-xs transition-colors border border-gray-700 hover:border-gray-500"
           >
             Back to Tournaments
           </button>
@@ -669,8 +735,8 @@ const MatchPage = () => {
                   onStartMatch={handleSchedulingStartMatch}
                 />
               </div>
-              {/* Hide chat when match is completed (PostMatchAnalytics is shown) */}
-              {!(match.matchState === 'completed' && match.isComplete) && (
+          {/* Hide chat when match is completed */}
+              {!match.isComplete && (
                 <div>
                   <MatchChat 
                     matchId={match.id} 
@@ -685,16 +751,16 @@ const MatchPage = () => {
         )}
 
         {/* Match Progress */}
-        <div className="bg-[#0a0a0a] border border-gray-800 p-6 mb-8 relative group overflow-hidden">
+        <div className={`bg-[#0a0a0a] border border-gray-800 ${isLiveMatchView ? 'p-4 mb-6' : 'p-6 mb-8'} relative group overflow-hidden`}>
           {/* Corner accents */}
           <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-red-600"></div>
           <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-red-600"></div>
           <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-red-600"></div>
           <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-red-600"></div>
 
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-white font-bodax tracking-wide uppercase flex items-center">
-              <BarChart3 className="w-6 h-6 mr-3 text-red-500" />
+          <div className={`flex items-center justify-between ${isLiveMatchView ? 'mb-4' : 'mb-6'}`}>
+            <h2 className={`${isLiveMatchView ? 'text-xl' : 'text-2xl'} font-bold text-white font-bodax tracking-wide uppercase flex items-center`}>
+              <BarChart3 className={`${isLiveMatchView ? 'w-5 h-5' : 'w-6 h-6'} mr-3 text-red-500`} />
               Match Progress
             </h2>
             <span className="text-sm text-red-400 font-mono tracking-widest uppercase">{progress.label}</span>
@@ -707,7 +773,7 @@ const MatchPage = () => {
             ></div>
           </div>
           
-          <div className="flex justify-between text-[10px] text-gray-600 font-mono uppercase tracking-widest mt-3">
+          <div className={`flex justify-between text-[10px] text-gray-600 font-mono uppercase tracking-widest mt-3 ${isLiveMatchView ? 'hidden sm:flex' : ''}`}>
             <span>Scheduling</span>
             <span>Scheduled</span>
             <span>Ready Up</span>
@@ -757,7 +823,7 @@ const MatchPage = () => {
               {currentUser?.isAdmin && (
                 <button
                   onClick={handleManualTransition}
-                  className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
+                  className="mt-4 px-4 py-2 bg-[#0a0a0a] hover:bg-white/5 text-white rounded font-mono uppercase tracking-widest text-xs transition-colors border border-gray-700 hover:border-gray-500"
                 >
                   <Clock className="w-4 h-4 mr-2 inline" />
                   Admin: Start Ready Up Now
@@ -767,7 +833,43 @@ const MatchPage = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        {/* Compact "Now Playing" header + sidebar rosters handle the live layout */}
+        {isLiveMatchView ? (
+          <div className="bg-[#0a0a0a] border border-gray-800 p-4 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">Team 1</div>
+                <div className="text-lg font-bodax text-white uppercase tracking-wide truncate">
+                  {team1?.name || 'Team 1'}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <span className="inline-flex items-center px-3 py-1 bg-[#050505] border border-gray-800 text-gray-200 font-mono uppercase tracking-widest text-[10px]">
+                  {match.matchState.replace(/_/g, ' ')}
+                </span>
+                {(match.selectedMap || match.map1 || match.map2 || (match as any).deciderMap) && (
+                  <span className="inline-flex items-center px-3 py-1 bg-[#050505] border border-gray-800 text-gray-300 font-mono uppercase tracking-widest text-[10px]">
+                    Map: {match.selectedMap || match.map1 || match.map2 || (match as any).deciderMap}
+                  </span>
+                )}
+                {match.team1Side && match.team2Side && (
+                  <span className="inline-flex items-center px-3 py-1 bg-[#050505] border border-gray-800 text-gray-300 font-mono uppercase tracking-widest text-[10px]">
+                    Sides set
+                  </span>
+                )}
+              </div>
+
+              <div className="min-w-0 lg:text-right">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">Team 2</div>
+                <div className="text-lg font-bodax text-white uppercase tracking-wide truncate">
+                  {team2?.name || 'Team 2'}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Team 1 Card */}
           <div className="bg-[#0a0a0a] border border-gray-800 p-8 flex flex-col items-center relative hover:border-red-900/50 transition-colors group">
             <div className="text-center w-full">
@@ -791,7 +893,7 @@ const MatchPage = () => {
                 </div>
               </div>
 
-              {currentUser?.isAdmin && team1 && team1Players.length > 0 && (
+              {currentUser?.isAdmin && team1 && (
                 <button
                   className="mb-4 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-700 font-mono text-xs uppercase tracking-wider transition-colors w-full"
                   onClick={() => {
@@ -803,16 +905,16 @@ const MatchPage = () => {
                 </button>
               )}
               
-              {bothTeamsReady && team1Players.length > 0 && (
+              {shouldShowSelectedRosters && team1Players.length > 0 && (
                 <div className="mt-6 w-full text-left">
                   <h4 className="text-xs font-bold text-red-500 mb-3 font-mono uppercase tracking-widest flex items-center border-b border-gray-900 pb-2">
                     <UserIcon className="w-3 h-3 mr-2" />
-                    Active Roster
+                    Selected Roster
                   </h4>
                   <div className="space-y-2">
                     {team1Players.map((player, index) => (
                       <div key={index} className="text-sm text-gray-400 font-mono bg-gray-900/30 px-3 py-2 border-l-2 border-gray-800 hover:border-red-900 hover:text-white transition-colors">
-                        {player.riotId || player.username}
+                        {getUserDisplayName(player)}
                       </div>
                     ))}
                   </div>
@@ -935,7 +1037,7 @@ const MatchPage = () => {
                 </div>
               </div>
 
-              {currentUser?.isAdmin && team2 && team2Players.length > 0 && (
+              {currentUser?.isAdmin && team2 && (
                 <button
                   className="mb-4 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-700 font-mono text-xs uppercase tracking-wider transition-colors w-full"
                   onClick={() => {
@@ -947,16 +1049,16 @@ const MatchPage = () => {
                 </button>
               )}
               
-              {bothTeamsReady && team2Players.length > 0 && (
+              {shouldShowSelectedRosters && team2Players.length > 0 && (
                 <div className="mt-6 w-full text-left">
                   <h4 className="text-xs font-bold text-red-500 mb-3 font-mono uppercase tracking-widest flex items-center border-b border-gray-900 pb-2">
                     <UserIcon className="w-3 h-3 mr-2" />
-                    Active Roster
+                    Selected Roster
                   </h4>
                   <div className="space-y-2">
                     {team2Players.map((player, index) => (
                       <div key={index} className="text-sm text-gray-400 font-mono bg-gray-900/30 px-3 py-2 border-l-2 border-gray-800 hover:border-red-900 hover:text-white transition-colors">
-                        {player.riotId || player.username}
+                        {getUserDisplayName(player)}
                       </div>
                     ))}
                   </div>
@@ -965,12 +1067,13 @@ const MatchPage = () => {
             </div>
           </div>
         </div>
+        )}
 
         {match.matchState === 'ready_up' && (
-          <div className="bg-gray-800 rounded-lg shadow-sm p-6 mb-6 border border-gray-700">
+          <div className="bg-[#050505] border border-gray-800 rounded-lg p-8 mb-6">
             <div className="text-center">
-              <h2 className="text-xl font-semibold text-white mb-4">Ready Up</h2>
-              <p className="text-gray-300 mb-6">
+              <h2 className="text-3xl font-bodax text-white uppercase tracking-wider mb-3">Ready Up</h2>
+              <p className="text-gray-400 font-mono text-sm mb-6">
                 Both teams need to ready up before the match can begin. 
                 Select your 5 active players and ready up to start the match.
               </p>
@@ -979,7 +1082,7 @@ const MatchPage = () => {
                 <button
                   onClick={handleReadyUp}
                   disabled={readyingUp}
-                  className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 px-8 py-3 rounded-lg text-white font-semibold transition-colors flex items-center mx-auto"
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-700 px-8 py-3 rounded text-white font-mono uppercase tracking-widest text-xs transition-colors inline-flex items-center justify-center border border-green-900 disabled:border-gray-700"
                 >
                   {readyingUp ? (
                     <>
@@ -1014,7 +1117,7 @@ const MatchPage = () => {
                             toast.error('Failed to load team players');
                           }
                         }}
-                        className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg transition-colors text-sm"
+                        className="px-4 py-2 bg-[#0a0a0a] hover:bg-white/5 text-white rounded font-mono uppercase tracking-widest text-xs transition-colors border border-gray-700 hover:border-gray-500"
                       >
                         Admin: Ready Up {team1.name}
                       </button>
@@ -1029,7 +1132,7 @@ const MatchPage = () => {
                             toast.error('Failed to load team players');
                           }
                         }}
-                        className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg transition-colors text-sm"
+                        className="px-4 py-2 bg-[#0a0a0a] hover:bg-white/5 text-white rounded font-mono uppercase tracking-widest text-xs transition-colors border border-gray-700 hover:border-gray-500"
                       >
                         Admin: Ready Up {team2.name}
                       </button>
@@ -1048,107 +1151,191 @@ const MatchPage = () => {
 
         {/* Main Grid - Show for all states except pending_scheduling */}
         {!(match.tournamentType === 'swiss-round' && match.matchState === 'pending_scheduling') && (
-          <div className={`grid grid-cols-1 gap-6 mb-6 ${match.matchState === 'completed' && match.isComplete ? 'lg:grid-cols-1' : 'lg:grid-cols-4'}`}>
-            <div className={match.matchState === 'completed' && match.isComplete ? 'lg:col-span-1' : 'lg:col-span-3'}>
-              {match.matchState === 'map_banning' && (
-              <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
-                <MapBanning
-                  match={match}
-                  userTeam={userTeam}
-                  team1={team1}
-                  team2={team2}
-                  onMapBanningComplete={handleMapBanningComplete}
-                />
-              </div>
+          <div
+            className={`grid grid-cols-1 gap-6 mb-6 ${
+              match.matchState === 'completed' && match.isComplete
+                ? 'lg:grid-cols-1'
+                : isLiveMatchView
+                ? 'lg:grid-cols-12'
+                : 'lg:grid-cols-4'
+            }`}
+          >
+            {isLiveMatchView ? (
+              <>
+                {/* Live match: main actions + chat on the left */}
+                <div className="lg:col-span-8 space-y-6">
+                  {(match.matchState === 'playing' || match.matchState === 'waiting_results' || match.matchState === 'disputed') && (
+                    <div className="bg-[#050505] border border-gray-800 rounded-lg p-4">
+                      <MatchInProgress
+                        match={match}
+                        teams={teams}
+                        currentUserTeamId={userTeam?.id}
+                      />
+                    </div>
+                  )}
+
+                  {/* Chat belongs to the live match flow */}
+                  {!(match.matchState === 'completed' && match.isComplete) && (
+                    <div className="bg-[#050505] border border-gray-800 rounded-lg p-4">
+                      <MatchChat 
+                        matchId={match.id} 
+                        userTeam={userTeam} 
+                        teams={teams} 
+                        isAdmin={currentUser?.isAdmin}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Live match: rosters on the right */}
+                {!(match.matchState === 'completed' && match.isComplete) && (
+                  <div className="lg:col-span-4">
+                    <div className="bg-[#050505] border border-gray-800 rounded-lg overflow-hidden">
+                      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-gray-400">Match Rosters</div>
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-gray-600">5 + Coach</div>
+                      </div>
+
+                      <div className="p-3 space-y-3">
+                        {[
+                          {
+                            teamName: team1?.name || 'Team 1',
+                            players: team1Players.slice(0, 5),
+                            coach: team1Coach,
+                            assistant: team1AssistantCoach
+                          },
+                          {
+                            teamName: team2?.name || 'Team 2',
+                            players: team2Players.slice(0, 5),
+                            coach: team2Coach,
+                            assistant: team2AssistantCoach
+                          }
+                        ].map((block, blockIdx) => (
+                          <div key={blockIdx} className="bg-black/20 border border-gray-800 rounded-lg overflow-hidden">
+                            <div className="px-3 py-2 border-b border-gray-800">
+                              <div className="text-white font-bodax uppercase tracking-wide text-sm truncate">
+                                {block.teamName}
+                              </div>
+                            </div>
+
+                            <div className="p-3">
+                              {block.players.length > 0 ? (
+                                <div className="space-y-1">
+                                  {block.players.map((p, idx) => (
+                                    <div
+                                      key={p.id || idx}
+                                      className="grid grid-cols-[18px,1fr] items-center gap-2 px-2 py-1 rounded bg-[#0a0a0a]/60 border border-gray-900 hover:border-gray-700 transition-colors"
+                                    >
+                                      <div className="text-gray-600 font-mono text-xs">{idx + 1}</div>
+                                      <div className="min-w-0 text-gray-200 font-mono text-xs truncate">
+                                        {getUserDisplayName(p)}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-xs font-mono text-gray-500">No roster submitted yet</div>
+                              )}
+
+                              {(block.coach || block.assistant) && (
+                                <div className="mt-3 pt-3 border-t border-gray-800 space-y-1">
+                                  {block.coach && (
+                                    <div className="grid grid-cols-[52px,1fr] items-center gap-2">
+                                      <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">Coach</div>
+                                      <div className="min-w-0 text-gray-300 font-mono text-xs truncate">
+                                        {getUserDisplayName(block.coach)}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {block.assistant && (
+                                    <div className="grid grid-cols-[52px,1fr] items-center gap-2">
+                                      <div className="text-[10px] font-mono uppercase tracking-widest text-gray-500">Asst</div>
+                                      <div className="min-w-0 text-gray-300 font-mono text-xs truncate">
+                                        {getUserDisplayName(block.assistant)}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Non-live match states: keep existing layout with chat on the right */}
+                <div
+                  className={
+                    match.matchState === 'completed' && match.isComplete
+                      ? 'lg:col-span-1'
+                      : 'lg:col-span-3'
+                  }
+                >
+                  {(match.matchState === 'completed' && match.isComplete) && (
+                    <div className="bg-[#050505] border border-gray-800 rounded-lg p-4">
+                      <MatchInProgress
+                        match={match}
+                        teams={teams}
+                        currentUserTeamId={userTeam?.id}
+                      />
+                    </div>
+                  )}
+
+                  {match.matchState === 'map_banning' && (
+                    <div className="bg-[#050505] border border-gray-800 rounded-lg p-6">
+                      <MapBanning
+                        match={match}
+                        userTeam={userTeam}
+                        team1={team1}
+                        team2={team2}
+                        isAdmin={!!currentUser?.isAdmin}
+                        currentUserId={currentUser?.id}
+                        onMapBanningComplete={handleMapBanningComplete}
+                      />
+                    </div>
+                  )}
+
+                  {(match.matchState === 'side_selection_map1' || match.matchState === 'side_selection_map2' || match.matchState === 'side_selection_decider') && (
+                    <div className="bg-[#050505] border border-gray-800 rounded-lg p-6">
+                      <SideSelection
+                        match={match}
+                        teams={teams}
+                        currentUserTeamId={userTeam?.id}
+                        onSideSelectionComplete={async () => {
+                          try {
+                            const updatedMatch = await getMatch(match.id);
+                            if (updatedMatch) {
+                              setMatch(updatedMatch);
+                              toast.success('Match is now starting!');
+                            }
+                          } catch (error) {}
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Post-match analytics removed (Riot API testing disabled) */}
+                </div>
+
+                {!(match.matchState === 'completed' && match.isComplete) && (
+                  <div className="lg:col-span-1">
+                    <MatchChat 
+                      matchId={match.id} 
+                      userTeam={userTeam} 
+                      teams={teams} 
+                      isAdmin={currentUser?.isAdmin}
+                    />
+                  </div>
+                )}
+              </>
             )}
-
-            {(match.matchState === 'side_selection_map1' || match.matchState === 'side_selection_map2' || match.matchState === 'side_selection_decider') && (
-              <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
-                <SideSelection
-                  match={match}
-                  teams={teams}
-                  currentUserTeamId={userTeam?.id}
-                  onSideSelectionComplete={async () => {
-                    // Refresh match data after side selection completes
-                    try {
-                      const updatedMatch = await getMatch(match.id);
-                      if (updatedMatch) {
-                        setMatch(updatedMatch);
-                        toast.success('Match is now starting!');
-                      }
-                    } catch (error) {
-
-                    }
-                  }}
-                />
-              </div>
-            )}
-
-
-
-            {(match.matchState === 'playing' || match.matchState === 'waiting_results' || match.matchState === 'disputed') && (
-              <div className="bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-700">
-                <MatchInProgress
-                  match={match}
-                  teams={teams}
-                  currentUserTeamId={userTeam?.id}
-                />
-              </div>
-            )}
-
-
-
-            {/* Post-Match Analytics - Show First */}
-            {(() => {
-              console.log('[MatchPage] Checking if PostMatchAnalytics should render:', {
-                matchId: match.id,
-                matchState: match.matchState,
-                isComplete: match.isComplete,
-                hasAutoDetectedResult: !!match.autoDetectedResult,
-                hasMatchDetails: !!match.autoDetectedResult?.matchDetails
-              });
-              
-              // Always show for completed matches (component will handle fetching if needed)
-              if (match.matchState === 'completed' && match.isComplete) {
-                console.log('[MatchPage] Rendering PostMatchAnalytics for completed match');
-                return (
-                  <PostMatchAnalytics
-                    match={match}
-                    teams={teams}
-                    currentUserTeamId={userTeam?.id}
-                  />
-                );
-              }
-              
-              console.log('[MatchPage] Not rendering PostMatchAnalytics (match not completed)');
-              return null;
-            })()}
-
           </div>
-
-          {/* Hide chat when match is completed (PostMatchAnalytics is shown) */}
-          {!(match.matchState === 'completed' && match.isComplete) && (
-            <div className="lg:col-span-1">
-              <MatchChat 
-                matchId={match.id} 
-                userTeam={userTeam} 
-                teams={teams} 
-                isAdmin={currentUser?.isAdmin}
-              />
-            </div>
-          )}
-        </div>
         )}
 
-        {/* Match Header */}
-        <div className="bg-gray-800 rounded-lg shadow-sm p-6 mb-6 border border-gray-700">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">Match #{match.matchNumber}</h2>
-            <span className="text-sm text-gray-300">
-              Round {match.round} • {match.tournamentType === 'qualifier' ? 'Qualifier' : 'Final Event'}
-            </span>
-          </div>
-        </div>
       </div>
 
       {showReadyUpModal && (adminReadyUpTeam || userTeam) && (
@@ -1164,6 +1351,17 @@ const MatchPage = () => {
           onReadyUp={async (roster) => {
             try {
               setReadyingUp(true);
+              console.log('[MatchPage][ReadyUp] start', {
+                matchId: match?.id,
+                matchState: match?.matchState,
+                userId: currentUser?.id,
+                isAdmin: !!currentUser?.isAdmin,
+                roster: {
+                  mainPlayersCount: roster?.mainPlayers?.length,
+                  coach: roster?.coach,
+                  assistantCoach: roster?.assistantCoach
+                }
+              });
               
               let targetTeam: Team | null = userTeam;
               
@@ -1176,16 +1374,57 @@ const MatchPage = () => {
                 return;
               }
               
+              // Persist the exact selected roster (5 mains + optional coach/assistant coach) onto the match.
+              // This is what the live match page uses to display rosters.
+              try {
+                const rosterPatch: any = {
+                  mainPlayers: roster.mainPlayers
+                };
+                rosterPatch.coach = roster.coach ? roster.coach : deleteField();
+                rosterPatch.assistantCoach = roster.assistantCoach ? roster.assistantCoach : deleteField();
+
+                if (match!.team1Id === targetTeam.id) {
+                  console.log('[MatchPage][ReadyUp] writing team1Roster', rosterPatch);
+                  await updateMatchState(match!.id, { team1Roster: rosterPatch } as any);
+                } else if (match!.team2Id === targetTeam.id) {
+                  console.log('[MatchPage][ReadyUp] writing team2Roster', rosterPatch);
+                  await updateMatchState(match!.id, { team2Roster: rosterPatch } as any);
+                } else {
+                  console.warn('[MatchPage][ReadyUp] targetTeam is not team1/team2 for this match', {
+                    targetTeamId: targetTeam.id,
+                    team1Id: match?.team1Id,
+                    team2Id: match?.team2Id
+                  });
+                }
+              } catch (e: any) {
+                // Don't block ready-up if roster write is blocked by rules; we can still display via team.activePlayers fallback.
+                console.warn('[MatchPage][ReadyUp] roster write failed (continuing)', e);
+              }
+
+              console.log('[MatchPage][ReadyUp] updateTeamActivePlayers', { teamId: targetTeam.id, mains: roster.mainPlayers });
               await updateTeamActivePlayers(targetTeam.id, roster.mainPlayers);
+
+              console.log('[MatchPage][ReadyUp] handleTeamReadyUp', { matchId: match!.id, teamId: targetTeam.id });
               await handleTeamReadyUp(match!.id, targetTeam.id);
+
+              // Optimistic local update so roster sidebar populates immediately without waiting for a refetch.
+              setTeams(prev =>
+                prev.map(t => (t.id === targetTeam!.id ? ({ ...t, activePlayers: roster.mainPlayers } as any) : t))
+              );
               
               setActivePlayers(roster.mainPlayers);
               setShowReadyUpModal(false);
               setAdminReadyUpTeam(null);
               toast.success('Team is ready!');
               
-            } catch (error) {
-              toast.error('Failed to ready up');
+            } catch (error: any) {
+              console.error('[MatchPage][ReadyUp] failed', error);
+              const msg =
+                error?.message ||
+                error?.code ||
+                (typeof error === 'string' ? error : null) ||
+                'Failed to ready up';
+              toast.error(msg);
             } finally {
               setReadyingUp(false);
             }
@@ -1195,10 +1434,10 @@ const MatchPage = () => {
 
       {showTeamSelectionModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-700">
+          <div className="bg-[#050505] border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="text-center">
-              <h3 className="text-lg font-semibold text-white mb-4">Select Team to Ready Up</h3>
-              <p className="text-gray-300 mb-6">Choose which team you want to ready up as an admin:</p>
+              <h3 className="text-2xl font-bodax text-white uppercase tracking-wider mb-2">Select Team</h3>
+              <p className="text-gray-400 font-mono text-sm mb-6">Choose which team you want to ready up as admin.</p>
               
               <div className="space-y-3">
                 {team1 && !match.team1Ready && (
@@ -1212,7 +1451,7 @@ const MatchPage = () => {
                         toast.error('Failed to load team players');
                       }
                     }}
-                    className="w-full px-4 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg transition-colors"
+                    className="w-full px-4 py-3 bg-[#0a0a0a] hover:bg-white/5 text-white rounded font-mono uppercase tracking-widest text-xs transition-colors border border-gray-700 hover:border-gray-500"
                   >
                     Ready Up {team1.name}
                   </button>
@@ -1229,7 +1468,7 @@ const MatchPage = () => {
                         toast.error('Failed to load team players');
                       }
                     }}
-                    className="w-full px-4 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg transition-colors"
+                    className="w-full px-4 py-3 bg-[#0a0a0a] hover:bg-white/5 text-white rounded font-mono uppercase tracking-widest text-xs transition-colors border border-gray-700 hover:border-gray-500"
                   >
                     Ready Up {team2.name}
                   </button>
@@ -1278,7 +1517,7 @@ const MatchPage = () => {
               onClick={() => adminSetState('scheduled')}
               className={`px-3 py-2 rounded text-xs transition-colors ${
                 match.matchState === 'scheduled' 
-                  ? 'bg-blue-600 text-white' 
+                  ? 'bg-gray-600 text-white' 
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
@@ -1406,12 +1645,12 @@ const MatchPage = () => {
                 🔄 Reset Match Data
               </button>
               
-                             <button
-                 onClick={handleClearMapData}
-                 className="px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded text-xs transition-colors"
-               >
-                 🗺️ Clear Map Data
-               </button>
+              <button
+                onClick={handleClearMapData}
+                className="px-3 py-1 bg-[#0a0a0a] hover:bg-white/5 text-white rounded text-xs transition-colors border border-red-700/40 hover:border-red-600"
+              >
+                🗺️ Clear Map Data
+              </button>
 
               <button
                 onClick={handleResetToMapBanning}
