@@ -3,8 +3,7 @@ import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import LandingPage from './pages/LandingPage';
-import UserRegistration from './pages/UserRegistration';
-import UserLogin from './pages/UserLogin';
+import RiotLogin from './pages/RiotLogin';
 import UserDashboard from './pages/UserDashboard';
 import Profile from './pages/Profile';
 import TeamRegistration from './pages/TeamRegistration';
@@ -75,8 +74,6 @@ import {
   onTeamPlayersChange
 } from './services/firebaseService';
 import { 
-  registerUser, 
-  loginUser, 
   logoutUser 
 } from './services/authService';
 
@@ -208,12 +205,13 @@ function App() {
     };
   }, [currentUser, userTeam]);
 
+  // Riot-only authentication - registration and login handled via Riot OAuth
   const handleUserRegister = async (userData: Omit<User, 'id' | 'createdAt'> & { password: string }) => {
-    return await registerUser(userData);
+    throw new Error('Registration is only available through Riot Sign-On. Please use the Riot login.');
   };
 
   const handleUserLogin = async (username: string, password: string) => {
-    return await loginUser(username, password);
+    throw new Error('Email/password login is no longer supported. Please use Riot Sign-On.');
   };
 
   const handleUserLogout = async () => {
@@ -471,8 +469,8 @@ function AppContent({
           {/* Public routes - always accessible */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/landing" element={<LandingPage />} />
-          <Route path="/register" element={<UserRegistration onRegister={onUserRegister} />} />
-          <Route path="/login" element={<UserLogin onLogin={onUserLogin} />} />
+          <Route path="/login" element={<RiotLogin />} />
+          <Route path="/register" element={<RiotLogin />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/cookie-policy" element={<CookiePolicy />} />

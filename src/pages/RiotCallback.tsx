@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
 import { exchangeCodeForToken, getRiotAccount } from '../services/riotOAuthService';
-import { updateUserRiotId } from '../services/firebaseService';
+import { createUserFromRiot, getUserByRiotId, updateUserRiotId } from '../services/firebaseService';
+import { signInWithRiot } from '../services/authService';
 import { CheckCircle, XCircle, Loader, AlertTriangle } from 'lucide-react';
 
 const RiotCallback = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { currentUser, loading: authLoading } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
 
@@ -29,58 +28,54 @@ const RiotCallback = () => {
         return;
       }
 
-      if (!currentUser) {
-        setStatus('error');
-        setMessage('You must be logged in to link your Riot account.');
-        return;
-      }
-
       try {
-        // Exchange code for access token (redirect_uri must match what's configured in Riot Developer Portal)
+        // Exchange code for access token
         const { access_token } = await exchangeCodeForToken(code);
         
         // Get Riot account information
         const riotAccount = await getRiotAccount(access_token);
         
-        // Update user profile with Riot ID
-        await updateUserRiotId(currentUser.id, riotAccount.riotId);
-
-        // Show success and redirect
-        setStatus('success');
-        setMessage(`Successfully linked Riot account: ${riotAccount.riotId}`);
+        // Check if user exists with this Riot ID
+        const existingUser = await getUserByRiotId(riotAccount.riotId);
         
-        // Redirect to profile page after 2 seconds
-        setTimeout(() => {
-          navigate('/profile');
-        }, 2000);
+        if (existingUser) {
+          // User exists - sign them in
+          await signInWithRiot(existingUser.id);
+          setStatus('success');
+          setMessage(`Welcome back! Signed in as ${riotAccount.riotId}`);
+          
+          // Redirect to profile page after 2 seconds
+          setTimeout(() => {
+            navigate('/profile');
+          }, 2000);
+        } else {
+          // New user - create account
+          const userId = await createUserFromRiot(riotAccount);
+          await signInWithRiot(userId);
+          
+          setStatus('success');
+          setMessage(`Account created! Welcome, ${riotAccount.riotId}`);
+          
+          // Redirect to profile page after 2 seconds
+          setTimeout(() => {
+            navigate('/profile');
+          }, 2000);
+        }
         
       } catch (error) {
         console.error('Riot callback error:', error);
         setStatus('error');
-        setMessage(`Failed to link Riot account: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setMessage(`Failed to sign in: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     };
 
-    // Only start the process if we have a code and currentUser
-    if (searchParams.get('code') && currentUser) {
+    // Start the process if we have a code
+    if (searchParams.get('code')) {
       handleRiotCallback();
     }
-  }, [searchParams, currentUser, navigate]);
+  }, [searchParams, navigate]);
 
-  // Show loading while auth is loading
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-        <div className="max-w-md mx-auto px-6 py-8 bg-black/60 border border-gray-700 rounded-xl shadow-lg text-center">
-          <Loader className="w-12 h-12 text-blue-400 animate-spin mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">Loading...</h2>
-          <p className="text-gray-300">Please wait while we verify your login status...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If no code, show error
+  // If no code and no error, show error
   if (!searchParams.get('code') && !searchParams.get('error')) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
@@ -105,15 +100,15 @@ const RiotCallback = () => {
         {status === 'loading' && (
           <>
             <Loader className="w-12 h-12 text-blue-400 animate-spin mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Linking Riot Account</h2>
-            <p className="text-gray-300">Please wait while we link your Riot account...</p>
+            <h2 className="text-xl font-bold text-white mb-2">Signing In</h2>
+            <p className="text-gray-300">Please wait while we sign you in with Riot...</p>
           </>
         )}
         
         {status === 'success' && (
           <>
             <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Riot Account Linked!</h2>
+            <h2 className="text-xl font-bold text-white mb-2">Success!</h2>
             <p className="text-gray-300 mb-4">{message}</p>
             <p className="text-sm text-gray-400">Redirecting to profile page...</p>
           </>
@@ -122,22 +117,22 @@ const RiotCallback = () => {
         {status === 'error' && (
           <>
             <XCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Link Failed</h2>
+            <h2 className="text-xl font-bold text-white mb-2">Sign In Failed</h2>
             <p className="text-gray-300 mb-4">{message}</p>
             
             <div className="space-y-3">
               <button
-                onClick={() => navigate('/profile')}
+                onClick={() => navigate('/login')}
                 className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
               >
-                Go to Profile
+                Try Again
               </button>
               
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => navigate('/')}
                 className="block w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
               >
-                Try Again
+                Go to Home
               </button>
             </div>
           </>

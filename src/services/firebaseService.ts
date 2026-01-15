@@ -6230,9 +6230,116 @@ export const getIPAnalysis = async (): Promise<any[]> => {
 export const updateUserRiotId = async (userId: string, riotId: string): Promise<void> => {
   try {
     const userRef = doc(db, 'users', userId);
+    const publicUserRef = doc(db, 'public_users', userId);
+    
     await updateDoc(userRef, { riotId });
+    await updateDoc(publicUserRef, { riotId });
   } catch (error) {
     console.error('Error updating user Riot ID:', error);
+    throw error;
+  }
+};
+
+// Get user by Riot ID
+export const getUserByRiotId = async (riotId: string): Promise<User | null> => {
+  try {
+    const userQuery = query(collection(db, 'users'), where('riotId', '==', riotId));
+    const userSnapshot = await getDocs(userQuery);
+    
+    if (userSnapshot.empty) {
+      return null;
+    }
+    
+    const userDoc = userSnapshot.docs[0];
+    const userData = userDoc.data();
+    
+    return {
+      id: userDoc.id,
+      username: userData.username,
+      email: userData.email || '',
+      riotId: userData.riotId,
+      discordUsername: userData.discordUsername || '',
+      discordId: userData.discordId || '',
+      discordAvatar: userData.discordAvatar || '',
+      discordLinked: userData.discordLinked || false,
+      createdAt: userData.createdAt?.toDate() || new Date(),
+      teamIds: userData.teamIds || [],
+      isAdmin: userData.isAdmin || false
+    };
+  } catch (error) {
+    console.error('Error getting user by Riot ID:', error);
+    return null;
+  }
+};
+
+// Create user from Riot account
+export const createUserFromRiot = async (riotAccount: {
+  puuid: string;
+  gameName: string;
+  tagLine: string;
+  riotId: string;
+}): Promise<string> => {
+  try {
+    // Check if user already exists
+    const existingUser = await getUserByRiotId(riotAccount.riotId);
+    if (existingUser) {
+      return existingUser.id;
+    }
+    
+    // Generate a unique username from Riot ID (remove # and spaces)
+    const baseUsername = `${riotAccount.gameName}_${riotAccount.tagLine}`.replace(/[^a-zA-Z0-9_]/g, '');
+    let username = baseUsername;
+    let counter = 1;
+    
+    // Check for username conflicts
+    while (true) {
+      const usernameQuery = query(collection(db, 'public_users'), where('username', '==', username));
+      const usernameSnapshot = await getDocs(usernameQuery);
+      
+      if (usernameSnapshot.empty) {
+        break; // Username is available
+      }
+      
+      username = `${baseUsername}${counter}`;
+      counter++;
+    }
+    
+    // Create user document
+    const userDocRef = doc(collection(db, 'users'));
+    const userId = userDocRef.id;
+    
+    const userData = {
+      username,
+      email: '', // No email for Riot-only auth
+      riotId: riotAccount.riotId,
+      discordUsername: '',
+      discordId: '',
+      discordAvatar: '',
+      discordLinked: false,
+      createdAt: Timestamp.now(),
+      teamIds: [],
+      isAdmin: false,
+      riotIdSet: true,
+      riotIdSetAt: Timestamp.now(),
+      puuid: riotAccount.puuid,
+      gameName: riotAccount.gameName,
+      tagLine: riotAccount.tagLine
+    };
+    
+    await setDoc(userDocRef, userData);
+    
+    // Create public user document
+    const publicUserDocRef = doc(db, 'public_users', userId);
+    await setDoc(publicUserDocRef, {
+      username,
+      riotId: riotAccount.riotId,
+      discordUsername: '',
+      createdAt: Timestamp.now()
+    });
+    
+    return userId;
+  } catch (error) {
+    console.error('Error creating user from Riot:', error);
     throw error;
   }
 };
