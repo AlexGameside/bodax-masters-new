@@ -6243,29 +6243,53 @@ export const updateUserRiotId = async (userId: string, riotId: string): Promise<
 // Get user by Riot ID
 export const getUserByRiotId = async (riotId: string): Promise<User | null> => {
   try {
-    const userQuery = query(collection(db, 'users'), where('riotId', '==', riotId));
-    const userSnapshot = await getDocs(userQuery);
+    // First try public_users collection (allows public read)
+    const publicUserQuery = query(collection(db, 'public_users'), where('riotId', '==', riotId));
+    const publicUserSnapshot = await getDocs(publicUserQuery);
     
-    if (userSnapshot.empty) {
-      return null;
+    if (!publicUserSnapshot.empty) {
+      const publicUserDoc = publicUserSnapshot.docs[0];
+      const userId = publicUserDoc.id;
+      
+      // Try to get full user data from users collection
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          return {
+            id: userDoc.id,
+            username: userData.username,
+            email: userData.email || '',
+            riotId: userData.riotId,
+            discordUsername: userData.discordUsername || '',
+            discordId: userData.discordId || '',
+            discordAvatar: userData.discordAvatar || '',
+            discordLinked: userData.discordLinked || false,
+            createdAt: userData.createdAt?.toDate() || new Date(),
+            teamIds: userData.teamIds || [],
+            isAdmin: userData.isAdmin || false
+          };
+        }
+      } catch (e) {
+        // If we can't read from users collection, return basic data from public_users
+        const publicUserData = publicUserDoc.data();
+        return {
+          id: userId,
+          username: publicUserData.username || '',
+          email: '',
+          riotId: publicUserData.riotId || '',
+          discordUsername: publicUserData.discordUsername || '',
+          discordId: '',
+          discordAvatar: '',
+          discordLinked: false,
+          createdAt: publicUserData.createdAt?.toDate() || new Date(),
+          teamIds: [],
+          isAdmin: false
+        };
+      }
     }
     
-    const userDoc = userSnapshot.docs[0];
-    const userData = userDoc.data();
-    
-    return {
-      id: userDoc.id,
-      username: userData.username,
-      email: userData.email || '',
-      riotId: userData.riotId,
-      discordUsername: userData.discordUsername || '',
-      discordId: userData.discordId || '',
-      discordAvatar: userData.discordAvatar || '',
-      discordLinked: userData.discordLinked || false,
-      createdAt: userData.createdAt?.toDate() || new Date(),
-      teamIds: userData.teamIds || [],
-      isAdmin: userData.isAdmin || false
-    };
+    return null;
   } catch (error) {
     console.error('Error getting user by Riot ID:', error);
     return null;

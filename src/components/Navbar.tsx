@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { useRealtimeUserMatches } from '../hooks/useRealtimeData';
 import type { User as UserType, Match } from '../types/tournament';
 import NotificationBell from './NotificationBell';
+import RiotLoginModal from './RiotLoginModal';
 
 interface NavbarProps {
   currentUser: UserType | null;
@@ -15,6 +16,7 @@ interface NavbarProps {
 
 const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarProps) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -173,12 +175,13 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
               </div>
             ) : (
               <div className="flex items-center space-x-3">
-                <Link
-                  to="/login"
+                <button
+                  onClick={() => setShowLoginModal(true)}
                   className="text-white hover:text-red-500 font-bodax text-xl tracking-wide transition-colors duration-150 flex items-center space-x-2 px-4 py-1"
                 >
-                  <span>LOGIN</span>
-                </Link>
+                  <LogIn className="w-5 h-5" />
+                  <span>LOGIN / REGISTER</span>
+                </button>
               </div>
             )}
           </div>
@@ -228,10 +231,28 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
                   ADMIN
                 </Link>
               )}
+              {!currentUser && (
+                <button
+                  onClick={() => {
+                    setShowLoginModal(true);
+                    setIsOpen(false);
+                  }}
+                  className="px-4 py-3 text-lg font-bodax tracking-wide text-white hover:text-red-500 hover:bg-white/5 flex items-center space-x-2"
+                >
+                  <LogIn className="w-5 h-5" />
+                  <span>LOGIN / REGISTER</span>
+                </button>
+              )}
             </div>
           </div>
         )}
       </div>
+      
+      {/* Riot Login Modal */}
+      <RiotLoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+      />
     </nav>
   );
 };

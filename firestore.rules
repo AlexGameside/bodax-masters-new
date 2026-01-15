@@ -19,7 +19,10 @@ service cloud.firestore {
     // Users collection - Private collection for sensitive data (emails, etc.)
     match /users/{userId} {
       allow read: if isAuthenticated(); // Only authenticated users can read user data
-      allow create: if isAuthenticated() && (request.auth.uid == userId || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)); // Allow authenticated users to create their own document OR admins to create for any user
+      // Allow unauthenticated creation for Riot sign-up (user creates their own document)
+      // Also allow authenticated users to create their own document OR admins to create for any user
+      allow create: if !isAuthenticated() || 
+        (isAuthenticated() && (request.auth.uid == userId || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)));
       allow update: if isOwner(userId) || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true); // Only owner or admin can update user data
       allow delete: if isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true; // Only admins can delete user documents
     }
@@ -99,7 +102,10 @@ service cloud.firestore {
     // Public users collection - for streaming overlay and public data (no emails)
     match /public_users/{userId} {
       allow read: if true; // Allow public read for streaming overlay
-      allow create: if isAuthenticated() && (request.auth.uid == userId || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)); // Allow users to create their own public profile OR admins to create for any user
+      // Allow unauthenticated creation for Riot sign-up (user creates their own document)
+      // Also allow authenticated users to create their own public profile OR admins to create for any user
+      allow create: if !isAuthenticated() || 
+        (isAuthenticated() && (request.auth.uid == userId || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)));
       allow update: if isOwner(userId) || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true); // Only owner or admin can update public user data
       allow delete: if isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true; // Only admins can delete public user documents
     }
