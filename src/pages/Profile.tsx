@@ -4,6 +4,7 @@ import {
   updateUserProfile, 
   updateUserDiscordInfo, 
   unlinkDiscordAccount,
+  unlinkRiotAccount,
   leaveTeam, 
   deleteTeam, 
   inviteTeamMember, 
@@ -18,6 +19,7 @@ import type { User, Match, Team } from '../types/tournament';
 import { Shield, Users, Trophy, Settings, UserPlus, LogOut, Edit3, Save, X, Trash2, ExternalLink, MessageCircle, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getDiscordAuthUrl } from '../services/discordService';
+import { getRiotAuthUrl } from '../services/riotOAuthService';
 import TicketCreationModal from '../components/TicketCreationModal';
 
 const Profile = () => {
@@ -43,6 +45,7 @@ const Profile = () => {
   const [error, setError] = useState('');
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+  const [showUnlinkRiotConfirm, setShowUnlinkRiotConfirm] = useState(false);
   const [showTicketModal, setShowTicketModal] = useState(false);
 
   useEffect(() => {
@@ -165,6 +168,25 @@ const Profile = () => {
       setError('Failed to unlink Discord account');
       setTimeout(() => setError(''), 5000);
       setShowUnlinkConfirm(false);
+    }
+  };
+
+  const handleUnlinkRiot = async () => {
+    if (!currentUser) return;
+    
+    try {
+      await unlinkRiotAccount(currentUser.id);
+      
+      // Refresh user data to reflect the unlink
+      await refreshUser();
+      
+      setMessage('Riot account unlinked successfully!');
+      setTimeout(() => setMessage(''), 3000);
+      setShowUnlinkRiotConfirm(false);
+    } catch (error) {
+      setError('Failed to unlink Riot account');
+      setTimeout(() => setError(''), 5000);
+      setShowUnlinkRiotConfirm(false);
     }
   };
 
@@ -456,34 +478,80 @@ const Profile = () => {
                     <p className="text-xs text-gray-500 mt-1">
                       Link your Discord account to receive tournament notifications and match reminders.
                     </p>
-                    
-                    {/* Support Tickets Section */}
-                    {/* Support Tickets Section - Available for all users */}
-                    <div className="mt-4 pt-4 border-t border-gray-700">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Support Tickets
-                          </label>
-                          <p className="text-xs text-gray-500">
-                            Create support tickets and report match disputes
-                          </p>
+                  </div>
+
+                  {/* Riot Account Linking */}
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-gray-400 mb-2 font-mono uppercase tracking-widest">
+                      Riot Account
+                    </label>
+                    {currentUser.riotId && currentUser.riotId.trim() !== '' ? (
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2">
+                          <Shield className="w-5 h-5 text-green-400" />
+                          <span className="text-green-400 font-medium">Linked</span>
                         </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => navigate('/tickets')}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-blue-800"
-                          >
-                            View Tickets
-                          </button>
-                          <button
-                            onClick={() => setShowTicketModal(true)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-green-800"
-                          >
-                            Create Ticket
-                          </button>
-                        </div>
+                        <span className="text-white">
+                          {currentUser.riotId}
+                        </span>
+                        <button
+                          onClick={() => setShowUnlinkRiotConfirm(true)}
+                          className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                        >
+                          Unlink
+                        </button>
                       </div>
+                    ) : (
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2">
+                          <Shield className="w-5 h-5 text-gray-400" />
+                          <span className="text-gray-400">Not Linked</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            try {
+                              window.location.href = getRiotAuthUrl();
+                            } catch (error: any) {
+                              setError(error.message || 'Failed to initiate Riot authentication. Please check your configuration.');
+                            }
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-red-800"
+                        >
+                          Link Riot Account
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Link your Riot account to automatically verify your Riot ID and enable match result detection.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Support Tickets Section */}
+                {/* Support Tickets Section - Available for all users */}
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Support Tickets
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        Create support tickets and report match disputes
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => navigate('/tickets')}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-blue-800"
+                      >
+                        View Tickets
+                      </button>
+                      <button
+                        onClick={() => setShowTicketModal(true)}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm transition-colors border border-green-800"
+                      >
+                        Create Ticket
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -706,6 +774,35 @@ const Profile = () => {
                 </button>
                 <button
                   onClick={() => setShowUnlinkConfirm(false)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors border border-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Riot Unlink Confirmation Modal */}
+        {showUnlinkRiotConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-black/90 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-medium text-white mb-4">
+                Unlink Riot Account
+              </h3>
+              <p className="text-gray-400 mb-6">
+                Are you sure you want to unlink your Riot account? 
+                Your Riot ID will be removed and you'll need to link it again to enable match result detection.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleUnlinkRiot}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors border border-red-800"
+                >
+                  Unlink Riot
+                </button>
+                <button
+                  onClick={() => setShowUnlinkRiotConfirm(false)}
                   className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors border border-gray-700"
                 >
                   Cancel

@@ -6258,6 +6258,24 @@ export const unlinkDiscordAccount = async (userId: string): Promise<void> => {
   }
 };
 
+// Unlink Riot account (clears Riot ID but keeps riotIdSet flag if it was set)
+export const unlinkRiotAccount = async (userId: string): Promise<void> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    
+    // Update user document to remove Riot ID
+    // Note: We don't clear riotIdSet flag to prevent users from changing it after unlinking
+    await updateDoc(userRef, {
+      riotId: null,
+    });
+    
+    console.log(`Riot account unlinked for user: ${userId}`);
+  } catch (error) {
+    console.error('Error unlinking Riot account:', error);
+    throw new Error('Failed to unlink Riot account');
+  }
+};
+
 // --- Double Elimination Bracket Generator ---
 export const generateDoubleEliminationBracket = async (tournamentId: string, teamIds: string[]): Promise<void> => {
   if (!teamIds || teamIds.length < 2) throw new Error('At least 2 teams required');

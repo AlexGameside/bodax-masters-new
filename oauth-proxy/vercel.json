@@ -9,6 +9,12 @@
     },
     "api/discord/send-notification.js": {
       "maxDuration": 10
+    },
+    "api/riot/token.js": {
+      "maxDuration": 10
+    },
+    "api/riot/user.js": {
+      "maxDuration": 10
     }
   }
 } 

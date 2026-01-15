@@ -37,6 +37,7 @@ import Impressum from './pages/Impressum';
 
 import TournamentRules from './pages/TournamentRules';
 import DiscordCallback from './pages/DiscordCallback';
+import RiotCallback from './pages/RiotCallback';
 import AdminStats from './pages/AdminStats';
 import StreamOverlayManager from './pages/StreamOverlayManager';
 import StreamerControl from './pages/StreamerControl';
@@ -480,6 +481,8 @@ function AppContent({
           <Route path="/impressum" element={<Impressum />} />
           <Route path="/discord/callback" element={<DiscordCallback />} />
           <Route path="/discord-callback" element={<DiscordCallback />} />
+          <Route path="/riot/callback" element={<RiotCallback />} />
+          <Route path="/riot-callback" element={<RiotCallback />} />
 
           {/* User routes - require authentication */}
           <Route path="/profile" element={currentUser ? <Profile /> : <Navigate to="/login" />} />
