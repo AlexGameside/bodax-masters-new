@@ -1,22 +1,5 @@
 // Riot OAuth Service for RSO (Riot Sign-On) authentication
-// Riot RSO uses PKCE (Proof Key for Code Exchange) flow - no client_secret needed
-
-// Generate PKCE code verifier and challenge
-const generatePKCE = () => {
-  // Generate a random code verifier (43-128 characters, URL-safe base64)
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  const codeVerifier = btoa(String.fromCharCode(...array))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-  
-  // For Riot, we'll use 'plain' code_challenge_method (code_challenge = code_verifier)
-  // Some implementations use S256 (SHA256 hash), but 'plain' is simpler and often accepted
-  const codeChallenge = codeVerifier;
-  
-  return { codeVerifier, codeChallenge };
-};
+// Based on official Riot RSO documentation: https://docs.google.com/document/d/1_8i2PvPA3edFHIh1IwfO5vs5rcl04O62Xfj0o7zCP3c
 
 export const getRiotAuthUrl = (): string => {
   const clientId = import.meta.env.VITE_RIOT_CLIENT_ID;
@@ -33,27 +16,19 @@ export const getRiotAuthUrl = (): string => {
   if (!clientId) {
     throw new Error('Riot Client ID not configured');
   }
-
-  // Generate PKCE parameters
-  const { codeVerifier, codeChallenge } = generatePKCE();
   
-  // Store code_verifier in sessionStorage for later use in token exchange
-  sessionStorage.setItem('riot_code_verifier', codeVerifier);
-  
-  console.log('Generating Riot auth URL with PKCE:', {
+  console.log('Generating Riot auth URL:', {
     redirectUri,
     origin: window.location.origin,
-    hostname: window.location.hostname,
-    hasCodeChallenge: true
+    hostname: window.location.hostname
   });
 
+  // According to official docs: redirect_uri, client_id, response_type=code, scope=openid
   const params = new URLSearchParams({
-    client_id: clientId,
     redirect_uri: redirectUri,
+    client_id: clientId,
     response_type: 'code',
-    scope: 'openid offline_access',
-    code_challenge: codeChallenge,
-    code_challenge_method: 'plain', // Riot RSO uses 'plain' method
+    scope: 'openid offline_access', // openid is required, offline_access for refresh tokens
   });
   
   return `https://auth.riotgames.com/authorize?${params.toString()}`;
@@ -72,15 +47,11 @@ export const exchangeCodeForToken = async (code: string): Promise<{ access_token
     redirectUri = redirectUri.replace('localhost', '127.0.0.1');
   }
   
-  // Get PKCE code_verifier from sessionStorage
-  const codeVerifier = sessionStorage.getItem('riot_code_verifier');
-  
   console.log('Exchanging Riot code for token:', {
     redirectUri,
     origin: window.location.origin,
     hostname: window.location.hostname,
-    codeLength: code?.length,
-    hasCodeVerifier: !!codeVerifier
+    codeLength: code?.length
   });
     
   const response = await fetch(`${proxyUrl}/api/riot/token`, {
@@ -91,7 +62,6 @@ export const exchangeCodeForToken = async (code: string): Promise<{ access_token
     body: JSON.stringify({
       code,
       redirect_uri: redirectUri,
-      code_verifier: codeVerifier, // Include PKCE code_verifier if available
     }),
   });
 
