@@ -6273,12 +6273,15 @@ export const getUserByRiotId = async (riotId: string): Promise<User | null> => {
 };
 
 // Create user from Riot account
-export const createUserFromRiot = async (riotAccount: {
-  puuid: string;
-  gameName: string;
-  tagLine: string;
-  riotId: string;
-}): Promise<string> => {
+export const createUserFromRiot = async (
+  riotAccount: {
+    puuid: string;
+    gameName: string;
+    tagLine: string;
+    riotId: string;
+  },
+  username?: string
+): Promise<string> => {
   try {
     // Check if user already exists
     const existingUser = await getUserByRiotId(riotAccount.riotId);
@@ -6286,22 +6289,41 @@ export const createUserFromRiot = async (riotAccount: {
       return existingUser.id;
     }
     
-    // Generate a unique username from Riot ID (remove # and spaces)
-    const baseUsername = `${riotAccount.gameName}_${riotAccount.tagLine}`.replace(/[^a-zA-Z0-9_]/g, '');
-    let username = baseUsername;
-    let counter = 1;
-    
-    // Check for username conflicts
-    while (true) {
-      const usernameQuery = query(collection(db, 'public_users'), where('username', '==', username));
+    // Use provided username or generate one from Riot ID
+    let finalUsername: string;
+    if (username && username.trim()) {
+      // Validate provided username
+      const trimmedUsername = username.trim();
+      
+      // Check for username conflicts
+      const usernameQuery = query(collection(db, 'public_users'), where('username', '==', trimmedUsername));
       const usernameSnapshot = await getDocs(usernameQuery);
       
-      if (usernameSnapshot.empty) {
-        break; // Username is available
+      if (!usernameSnapshot.empty) {
+        throw new Error('Username is already taken');
       }
       
-      username = `${baseUsername}${counter}`;
-      counter++;
+      finalUsername = trimmedUsername;
+    } else {
+      // Generate a unique username from Riot ID (remove # and spaces)
+      const baseUsername = `${riotAccount.gameName}_${riotAccount.tagLine}`.replace(/[^a-zA-Z0-9_]/g, '');
+      let generatedUsername = baseUsername;
+      let counter = 1;
+      
+      // Check for username conflicts
+      while (true) {
+        const usernameQuery = query(collection(db, 'public_users'), where('username', '==', generatedUsername));
+        const usernameSnapshot = await getDocs(usernameQuery);
+        
+        if (usernameSnapshot.empty) {
+          break; // Username is available
+        }
+        
+        generatedUsername = `${baseUsername}${counter}`;
+        counter++;
+      }
+      
+      finalUsername = generatedUsername;
     }
     
     // Create user document
@@ -6309,7 +6331,7 @@ export const createUserFromRiot = async (riotAccount: {
     const userId = userDocRef.id;
     
     const userData = {
-      username,
+      username: finalUsername,
       email: '', // No email for Riot-only auth
       riotId: riotAccount.riotId,
       discordUsername: '',
@@ -6331,7 +6353,7 @@ export const createUserFromRiot = async (riotAccount: {
     // Create public user document
     const publicUserDocRef = doc(db, 'public_users', userId);
     await setDoc(publicUserDocRef, {
-      username,
+      username: finalUsername,
       riotId: riotAccount.riotId,
       discordUsername: '',
       createdAt: Timestamp.now()

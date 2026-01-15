@@ -1,15 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { exchangeCodeForToken, getRiotAccount } from '../services/riotOAuthService';
-import { createUserFromRiot, getUserByRiotId, updateUserRiotId } from '../services/firebaseService';
+import { getUserByRiotId } from '../services/firebaseService';
 import { signInWithRiot } from '../services/authService';
+import RiotUsernameSelection from './RiotUsernameSelection';
 import { CheckCircle, XCircle, Loader, AlertTriangle } from 'lucide-react';
 
 const RiotCallback = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'username-selection'>('loading');
   const [message, setMessage] = useState('');
+  const [riotAccount, setRiotAccount] = useState<{
+    puuid: string;
+    gameName: string;
+    tagLine: string;
+    riotId: string;
+  } | null>(null);
 
   useEffect(() => {
     const handleRiotCallback = async () => {
@@ -33,33 +40,25 @@ const RiotCallback = () => {
         const { access_token } = await exchangeCodeForToken(code);
         
         // Get Riot account information
-        const riotAccount = await getRiotAccount(access_token);
+        const account = await getRiotAccount(access_token);
+        setRiotAccount(account);
         
         // Check if user exists with this Riot ID
-        const existingUser = await getUserByRiotId(riotAccount.riotId);
+        const existingUser = await getUserByRiotId(account.riotId);
         
         if (existingUser) {
           // User exists - sign them in
           await signInWithRiot(existingUser.id);
           setStatus('success');
-          setMessage(`Welcome back! Signed in as ${riotAccount.riotId}`);
+          setMessage(`Welcome back! Signed in as ${account.riotId}`);
           
           // Redirect to profile page after 2 seconds
           setTimeout(() => {
             navigate('/profile');
           }, 2000);
         } else {
-          // New user - create account
-          const userId = await createUserFromRiot(riotAccount);
-          await signInWithRiot(userId);
-          
-          setStatus('success');
-          setMessage(`Account created! Welcome, ${riotAccount.riotId}`);
-          
-          // Redirect to profile page after 2 seconds
-          setTimeout(() => {
-            navigate('/profile');
-          }, 2000);
+          // New user - show username selection
+          setStatus('username-selection');
         }
         
       } catch (error) {
@@ -92,6 +91,11 @@ const RiotCallback = () => {
         </div>
       </div>
     );
+  }
+
+  // Show username selection for new users
+  if (status === 'username-selection' && riotAccount) {
+    return <RiotUsernameSelection riotAccount={riotAccount} />;
   }
 
   return (
