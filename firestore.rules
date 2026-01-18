@@ -128,9 +128,24 @@ service cloud.firestore {
     
     // Tournament registrations collection
     match /tournamentRegistrations/{registrationId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      // Users can read their own team's registrations
+      allow read: if isAuthenticated() && (
+        resource.data.teamId != null && 
+        exists(/databases/$(database)/documents/teams/$(resource.data.teamId)) &&
+        (get(/databases/$(database)/documents/teams/$(resource.data.teamId)).data.ownerId == request.auth.uid ||
+         get(/databases/$(database)/documents/teams/$(resource.data.teamId)).data.captainId == request.auth.uid)
+      ) || isAdmin();
+      // Users can create registrations for their teams
+      allow create: if isAuthenticated() && 
+        request.resource.data.teamId != null &&
+        exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId)) &&
+        (get(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerId == request.auth.uid ||
+         get(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.captainId == request.auth.uid);
+      // Only admins and organizers can update payment status
+      allow update: if isAdmin() || 
+        (isAuthenticated() && 
+         exists(/databases/$(database)/documents/tournaments/$(resource.data.tournamentId)) &&
+         get(/databases/$(database)/documents/tournaments/$(resource.data.tournamentId)).data.organizerId == request.auth.uid);
       allow delete: if isAdmin();
     }
     

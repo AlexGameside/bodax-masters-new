@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Card, Badge, StatusBadge, SectionHeader } from '../components/ui';
 import { 
   Trophy, 
@@ -123,6 +123,7 @@ type TournamentView = 'overview' | 'teams' | 'bracket' | 'group-stage' | 'schedu
 const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser: authUser } = useAuth();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -270,6 +271,20 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
         // Load tournament data
         const foundTournament = await getTournament(id);
         
+        // Check if organizer can access this tournament (prioritize organizer status)
+        // If user is verified organizer, they can only access their own tournaments
+        // Admins who are NOT organizers can access all tournaments
+        if (foundTournament && authUser?.isVerifiedOrganizer) {
+          if (foundTournament.organizerId !== authUser.id) {
+            // If they're also admin, allow access; otherwise deny
+            if (!authUser?.isAdmin) {
+              setError('You do not have permission to access this tournament');
+              setLoading(false);
+              return;
+            }
+          }
+        }
+        
         if (foundTournament) {
           setTournament(foundTournament);
           
@@ -317,6 +332,51 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
     loadTournamentData();
   }, [id]); // Remove authUser from dependencies to prevent infinite loops
 
+  // Handle payment success callback
+  useEffect(() => {
+    const paymentSuccess = searchParams.get('payment');
+    const sessionId = searchParams.get('session_id');
+    
+    if (paymentSuccess === 'success' && sessionId) {
+      const handlePaymentSuccess = async () => {
+        try {
+          const { verifyPaymentAndRegister } = await import('../services/paymentService');
+          const result = await verifyPaymentAndRegister(sessionId);
+          
+          if (result.success) {
+            toast.success(result.message || 'Payment verified and team registered!');
+            // Reload tournament data
+            if (id) {
+              const foundTournament = await getTournament(id);
+              if (foundTournament) {
+                setTournament(foundTournament);
+                const teamsData = await getTeamsByIds(foundTournament.teams);
+                setTeams(teamsData);
+              }
+            }
+          }
+        } catch (error: any) {
+          console.error('Error handling payment success:', error);
+          toast.error(error.message || 'Failed to verify payment');
+        } finally {
+          // Remove query parameters
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete('payment');
+          newParams.delete('session_id');
+          setSearchParams(newParams, { replace: true });
+        }
+      };
+
+      handlePaymentSuccess();
+    } else if (paymentSuccess === 'cancelled') {
+      toast.error('Payment was cancelled');
+      // Remove query parameter
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('payment');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, id]);
+
   // Separate pending and approved teams - MUST be called before any early returns
   useEffect(() => {
     if (tournament && teams && teams.length > 0) {
@@ -356,6 +416,10 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
 
   // Check if user is admin - use authUser from useAuth() instead of currentUser prop
   const isAdmin = authUser?.isAdmin || false;
+  const isOrganizer = authUser?.isVerifiedOrganizer || false;
+  const isTournamentOrganizer = tournament?.organizerId === authUser?.id;
+  // Organizers can manage their own tournaments, admins can manage any tournament
+  const canManageTournament = (isOrganizer && isTournamentOrganizer) || isAdmin;
   
   const handleStartTournament = async () => {
     if (!tournament || starting) return;
@@ -1096,7 +1160,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                 <Badge variant={tournament.status === 'in-progress' ? 'warning' : tournament.status === 'completed' ? 'success' : 'default'} className="font-mono text-xs uppercase tracking-wider">
                   {tournament.status.replace(/-/g, ' ')}
                 </Badge>
-                {isAdmin && (
+                {(canManageTournament) && (
                   <Badge variant="error" className="font-mono text-xs uppercase tracking-wider">
                     Admin
                   </Badge>
@@ -1169,7 +1233,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                   }
 
                   const adminTabs: Array<{ key: TournamentView; label: string; icon: any }> = [];
-                  if (isAdmin) {
+                  if (canManageTournament) {
                     adminTabs.push({ key: 'admin', label: 'Admin Control Room', icon: Shield });
                   }
 
@@ -1233,7 +1297,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                           </div>
                         </div>
 
-                        {isAdmin && (
+                        {(canManageTournament) && (
                           <div className="flex-shrink-0 flex flex-col items-end gap-2">
                             {(() => {
                               const configuredTeamCount = tournament.format?.teamCount || 0;
@@ -1288,6 +1352,14 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                                 </>
                               );
                             })()}
+                            {isOrganizer && isTournamentOrganizer && (
+                              <Link
+                                to={`/organizer/tournaments/${id}/manage`}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-mono text-xs uppercase tracking-wider transition-all duration-300 border border-blue-800 hover:border-blue-500"
+                              >
+                                Manage Tournament →
+                              </Link>
+                            )}
                             <button
                               onClick={() => setActiveView('admin')}
                               className="bg-transparent hover:bg-white/5 text-white px-4 py-2 rounded font-mono text-xs uppercase tracking-wider transition-all duration-300 border border-gray-700 hover:border-gray-500"
@@ -1437,7 +1509,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                       </div>
                       <div className="text-gray-300 font-mono text-sm">
                         Teams are locked in. Bracket generation / stage start will happen soon.
-                        {isAdmin && (
+                        {(canManageTournament) && (
                           <span>
                             {' '}
                             You can start it now or manage details in the{' '}
@@ -1448,7 +1520,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                           </span>
                         )}
                       </div>
-                      {isAdmin && (
+                      {(canManageTournament) && (
                         <div className="mt-4 flex flex-wrap items-center gap-3">
                           {(() => {
                             const configuredTeamCount = tournament.format?.teamCount || 0;
@@ -1726,7 +1798,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                               </div>
 
                               {/* Admin Actions */}
-                              {isAdmin && (
+                              {(canManageTournament) && (
                                 <div
                                   className="flex flex-wrap gap-1.5 pt-2 border-t border-gray-800"
                                   onClick={(e) => e.stopPropagation()}
@@ -1815,7 +1887,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                           <span className="bg-red-900/30 text-red-500 px-2 py-1 rounded text-xs font-mono border border-red-800">Rejected</span>
                           
                           {/* Revert Actions */}
-                          {isAdmin && (
+                          {(canManageTournament) && (
                             <div className="flex flex-wrap gap-1 mt-2">
                               <button
                                 onClick={() => handleRevertTeamRejection(teamId)}
@@ -1870,7 +1942,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                         tournament={tournament} 
                         matches={matches} 
                         teams={teams}
-                        isAdmin={isAdmin}
+                        isAdmin={canManageTournament}
                         currentUser={authUser}
                         onUpdate={reloadTournamentData}
                       />
@@ -1879,7 +1951,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
                         tournament={tournament}
                         matches={matches}
                         teams={teams}
-                        isAdmin={isAdmin}
+                        isAdmin={canManageTournament}
                         currentUser={authUser}
                         onUpdate={reloadTournamentData}
                       />
@@ -2253,7 +2325,7 @@ const TournamentDetail: React.FC<TournamentDetailProps> = ({ currentUser }) => {
           )}
 
           {/* ADMIN TAB - Admin-Only Features */}
-          {activeView === 'admin' && isAdmin && (
+          {activeView === 'admin' && canManageTournament && (
             <>
               {/* Swiss Round Management */}
               {tournament.format?.type === 'swiss-system' && (

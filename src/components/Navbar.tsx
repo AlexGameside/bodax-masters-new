@@ -162,6 +162,33 @@ const Navbar = ({ currentUser, isAdmin = false, onNavigate, onLogout }: NavbarPr
                       >
                         PROFILE
                       </Link>
+                      {currentUser?.isVerifiedOrganizer && (
+                        <Link
+                          to="/organizer/dashboard"
+                          className="block px-4 py-3 text-gray-300 hover:bg-red-900/20 hover:text-white font-bodax tracking-wide text-lg transition-colors duration-150 border-t border-red-900/30"
+                          onClick={() => setProfileDropdownOpen(false)}
+                        >
+                          ORGANIZER DASHBOARD
+                        </Link>
+                      )}
+                      {!currentUser?.isVerifiedOrganizer && !currentUser?.isOrganizer && (
+                        <Link
+                          to="/organizer/apply"
+                          className="block px-4 py-3 text-gray-300 hover:bg-red-900/20 hover:text-white font-bodax tracking-wide text-lg transition-colors duration-150 border-t border-red-900/30"
+                          onClick={() => setProfileDropdownOpen(false)}
+                        >
+                          BECOME ORGANIZER
+                        </Link>
+                      )}
+                      {isAdmin && (
+                        <Link
+                          to="/admin/tournaments"
+                          className="block px-4 py-3 text-gray-300 hover:bg-red-900/20 hover:text-white font-bodax tracking-wide text-lg transition-colors duration-150 border-t border-red-900/30"
+                          onClick={() => setProfileDropdownOpen(false)}
+                        >
+                          ADMIN PANEL
+                        </Link>
+                      )}
                       <button
                         onClick={handleLogout}
                         disabled={loading}

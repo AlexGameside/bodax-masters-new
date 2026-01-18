@@ -237,7 +237,7 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
 
           {/* Additional Links (only show when not in reset mode) */}
           {!isResetMode && (
-            <div className="mt-6 text-center">
+            <div className="mt-6 space-y-3 text-center">
               <p className="text-gray-400 text-sm font-mono uppercase tracking-widest">
                 Don't have an account?{' '}
                 <button
@@ -247,6 +247,17 @@ const UserLogin = ({ onLogin }: UserLoginProps) => {
                   Sign up here
                 </button>
               </p>
+              <div className="border-t border-gray-800 pt-4">
+                <p className="text-gray-500 text-xs font-mono uppercase tracking-widest mb-2">
+                  Or sign in with
+                </p>
+                <button
+                  onClick={() => navigate('/riot-login')}
+                  className="text-blue-400 hover:text-blue-300 transition-colors text-sm font-mono uppercase tracking-widest"
+                >
+                  Riot Sign-On
+                </button>
+              </div>
             </div>
           )}
         </div>

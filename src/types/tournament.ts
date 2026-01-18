@@ -1,3 +1,9 @@
+import type {
+  TournamentStageStateMapV2,
+  TournamentStageType,
+  TournamentStructureV2,
+} from './tournamentStructure';
+
 export interface User {
   id: string;
   uid?: string; // Firebase Auth UID
@@ -16,6 +22,26 @@ export interface User {
   createdAt: Date;
   teamIds: string[]; // Array of team IDs the user is part of
   isAdmin: boolean;
+  // Organizer fields
+  isOrganizer?: boolean; // Whether user has applied to be an organizer
+  isVerifiedOrganizer?: boolean; // Whether organizer has been verified by admin
+  organizerInfo?: OrganizerInfo;
+}
+
+// Organizer Information
+export interface OrganizerInfo {
+  businessName: string;
+  businessEmail: string;
+  businessAddress?: string;
+  taxId?: string;
+  bankAccountDetails?: string; // IBAN or account details
+  stripeConnectAccountId?: string; // Stripe Connect account ID
+  stripeConnectOnboardingComplete?: boolean;
+  applicationStatus: 'pending' | 'approved' | 'rejected';
+  appliedAt: Date | any;
+  verifiedAt?: Date | any;
+  verifiedBy?: string; // Admin ID who verified
+  rejectionReason?: string;
 }
 
 export interface TeamMember {
@@ -146,6 +172,11 @@ export interface Match {
   tournamentId?: string; // ID of the tournament this match belongs to
   tournamentType: 'qualifier' | 'final' | 'single-elim' | 'double-elim' | 'group-stage' | 'knockout-stage' | 'swiss-round' | 'playoff';
   bracketType?: 'winners' | 'losers' | 'grand_final';
+  // ---- Stage-based tournaments (structureV2) ----
+  stageId?: string; // e.g. "groups", "playoffs"
+  stageType?: TournamentStageType; // e.g. "groups_round_robin"
+  groupId?: string; // e.g. "group-A"
+  stageRound?: number; // round within stage (do not confuse with Match.round)
   createdAt: Date;
   // Map banning system
   matchState: 'ready_up' | 'map_banning' | 'side_selection_map1' | 'side_selection_map2' | 'side_selection_decider' | 'playing' | 'waiting_results' | 'disputed' | 'completed' | 'scheduled' | 'pending_scheduling' | 'forfeited';
@@ -595,6 +626,15 @@ export interface Tournament {
   status: TournamentStatus;
   type?: TournamentType;
   stageManagement: TournamentStageManagement;
+  /**
+   * Stage-based tournament structure (v2). Optional for backward compatibility.
+   * When present, UI/services should prefer this over legacy `format.groupStage/knockoutStage` flows.
+   */
+  structureV2?: TournamentStructureV2;
+  /**
+   * Runtime state for structureV2 stages (stored on the tournament doc).
+   */
+  stageStateV2?: TournamentStageStateMapV2;
   createdBy: string; // Admin ID
   adminIds: string[]; // Additional admin IDs
   createdAt: Date | any; // Allow Firestore Timestamp
@@ -643,6 +683,24 @@ export interface Tournament {
   wildcardSpots?: number;
   invitedTeams?: string[]; // Pre-invited team IDs
   customFields?: Record<string, any>; // For extensibility
+  
+  // Payment and Organizer fields
+  organizerId?: string; // ID of verified organizer who created this tournament
+  paymentInfo?: TournamentPaymentInfo;
+}
+
+// Tournament Payment Information
+export interface TournamentPaymentInfo {
+  entryFee: number; // Entry fee per team in EUR
+  currency: 'EUR'; // Only EUR supported for now
+  platformFeePercentage: number; // 5% platform fee
+  totalCollected: number; // Total amount collected from teams
+  platformFeeAmount: number; // Amount going to platform
+  organizerPayoutAmount: number; // Amount going to organizer
+  payoutStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  payoutCompletedAt?: Date | any;
+  refundDeadline?: Date | any; // 14 days before tournament start
+  refundsIssued: number; // Total refunds issued
 }
 
 // Prediction System Types
@@ -677,4 +735,31 @@ export interface PredictionStats {
   correctScorePredictions: number;
   totalPoints: number;
   averagePointsPerMatch: number;
+}
+
+// Payment and Registration Types
+export interface TournamentRegistration {
+  id: string;
+  tournamentId: string;
+  teamId: string;
+  registeredAt: Date | any;
+  paymentStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded';
+  paymentIntentId?: string; // Stripe Payment Intent ID
+  paymentAmount: number; // Amount paid in EUR
+  paymentCompletedAt?: Date | any;
+  refundedAt?: Date | any;
+  refundAmount?: number;
+  refundReason?: string;
+  entryFeePaid: boolean;
+  verificationStatus?: 'pending' | 'approved' | 'rejected';
+}
+
+// Stripe Payment Intent Metadata
+export interface PaymentIntentMetadata {
+  tournamentId: string;
+  teamId: string;
+  organizerId: string;
+  entryFee: number;
+  platformFee: number;
+  type: 'tournament_entry_fee';
 } 

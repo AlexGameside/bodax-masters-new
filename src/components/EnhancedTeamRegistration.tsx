@@ -227,7 +227,24 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
     setSuccess('');
 
     try {
-      // Actually register the team for the tournament
+      // Check if tournament requires payment
+      if (tournament.paymentInfo && tournament.paymentInfo.entryFee > 0) {
+        // Redirect to payment checkout
+        const { createCheckoutSession } = await import('../services/paymentService');
+        const checkoutUrl = await createCheckoutSession(
+          tournament.id,
+          team.id,
+          tournament.paymentInfo.entryFee,
+          tournament.paymentInfo.currency || 'EUR',
+          tournament.organizerId || ''
+        );
+        
+        // Redirect to Stripe Checkout
+        window.location.href = checkoutUrl;
+        return;
+      }
+
+      // No payment required, proceed with registration
       await signupTeamForTournament(tournament.id, team.id);
       
       setSuccess('Team registered successfully for tournament!');
@@ -237,7 +254,6 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
       
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to register team');
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -281,13 +297,40 @@ const EnhancedTeamRegistration: React.FC<EnhancedTeamRegistrationProps> = ({
                 : 'bg-red-600 hover:bg-red-700 text-white border-red-800'
             }`}
           >
-            {isSubmitting ? 'Registering...' : 'Submit Registration'}
+            {isSubmitting 
+              ? 'Processing...' 
+              : tournament.paymentInfo && tournament.paymentInfo.entryFee > 0
+                ? `Pay €${tournament.paymentInfo.entryFee.toFixed(2)} & Register`
+                : 'Submit Registration'
+            }
           </button>
         </div>
       }
     >
       {/* RegisterV2: stable roster builder (no jumpy layout) */}
       <div className="max-h-[72vh] overflow-y-auto pr-2">
+        {/* Payment Info Banner */}
+        {tournament.paymentInfo && tournament.paymentInfo.entryFee > 0 && (
+          <div className="bg-blue-900/20 border border-blue-800 p-4 mb-6 rounded">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-blue-200 font-bodax text-lg uppercase tracking-wider mb-1">
+                  Entry Fee Required
+                </div>
+                <div className="text-blue-300 font-mono text-sm">
+                  €{tournament.paymentInfo.entryFee.toFixed(2)} per team
+                </div>
+                <div className="text-blue-400 font-mono text-xs mt-1">
+                  Payment required to complete registration
+                </div>
+              </div>
+              <div className="text-2xl font-bodax text-blue-400">
+                €{tournament.paymentInfo.entryFee.toFixed(2)}
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="bg-black/30 border border-gray-800 p-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>

@@ -205,6 +205,20 @@ export const createTournament = async (tournamentData: Partial<Tournament>, admi
 };
 
 // Tournament Management
+// Update tournament status
+export const updateTournamentStatus = async (tournamentId: string, status: TournamentStatus): Promise<void> => {
+  try {
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    await updateDoc(tournamentRef, {
+      status,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error updating tournament status:', error);
+    throw new Error('Failed to update tournament status');
+  }
+};
+
 export const updateTournament = async (tournamentId: string, updates: Partial<Tournament>): Promise<void> => {
   try {
     const tournamentRef = doc(db, 'tournaments', tournamentId);
@@ -654,6 +668,8 @@ export const registerTeamForTournament = async (
     captainId: string;
     entryFeePaid?: boolean;
     verificationStatus?: 'pending' | 'approved' | 'rejected';
+    paymentIntentId?: string;
+    paymentAmount?: number;
   }
 ): Promise<void> => {
   try {
@@ -666,6 +682,13 @@ export const registerTeamForTournament = async (
 
     if (tournament.status !== 'registration-open') {
       throw new Error('Tournament registration is not open');
+    }
+
+    // Check if tournament requires payment
+    if (tournament.paymentInfo && tournament.paymentInfo.entryFee > 0) {
+      if (!registrationData.entryFeePaid || !registrationData.paymentIntentId) {
+        throw new Error('Payment required to register for this tournament');
+      }
     }
 
     if (tournament.teams.length >= tournament.format.teamCount) {

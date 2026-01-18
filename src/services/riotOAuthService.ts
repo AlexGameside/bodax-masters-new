@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from '../config/api';
+
 // Riot OAuth Service for RSO (Riot Sign-On) authentication
 // Based on official Riot RSO documentation: https://docs.google.com/document/d/1_8i2PvPA3edFHIh1IwfO5vs5rcl04O62Xfj0o7zCP3c
 
@@ -35,10 +37,8 @@ export const getRiotAuthUrl = (): string => {
 };
 
 export const exchangeCodeForToken = async (code: string): Promise<{ access_token: string; refresh_token?: string }> => {
-  const envProxyUrl = import.meta.env.VITE_OAUTH_PROXY_URL;
-  const proxyUrl = envProxyUrl && !envProxyUrl.includes('5t15g09rb') 
-    ? envProxyUrl 
-    : 'https://oauth-proxy-gilt.vercel.app';
+  // Use centralized API config
+  const endpoint = API_ENDPOINTS.riot.token();
   
   // CRITICAL: redirect_uri must match EXACTLY what was used in the authorization request
   // Use the exact same logic as getRiotAuthUrl()
@@ -54,7 +54,7 @@ export const exchangeCodeForToken = async (code: string): Promise<{ access_token
     codeLength: code?.length
   });
     
-  const response = await fetch(`${proxyUrl}/api/riot/token`, {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -92,12 +92,10 @@ export const getRiotAccount = async (accessToken: string): Promise<{
   tagLine: string;
   riotId: string;
 }> => {
-  const envProxyUrl = import.meta.env.VITE_OAUTH_PROXY_URL;
-  const proxyUrl = envProxyUrl && !envProxyUrl.includes('5t15g09rb') 
-    ? envProxyUrl 
-    : 'https://oauth-proxy-gilt.vercel.app';
+  // Use centralized API config
+  const endpoint = API_ENDPOINTS.riot.user();
 
-  const response = await fetch(`${proxyUrl}/api/riot/user`, {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

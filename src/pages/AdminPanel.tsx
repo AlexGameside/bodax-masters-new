@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Team, Match, User, Tournament } from '../types/tournament';
-import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink, MessageCircle, FileText, Activity, RefreshCw, User as UserIcon, BarChart3, Link, Database, Globe, Lock, Save, Tv, Bug, Video, UserPlus } from 'lucide-react';
+import { Shield, Users, Calendar, Download, Plus, Play, Trash2, AlertTriangle, Info, Search, UserCheck, UserX, Crown, TestTube, Clock, Trophy, Edit, Eye, CheckCircle, XCircle, MessageSquare, ExternalLink, MessageCircle, FileText, Activity, RefreshCw, User as UserIcon, BarChart3, Link, Database, Globe, Lock, Save, Tv, Bug, Video, UserPlus, Building2 } from 'lucide-react';
 import { getAllUsers, updateUserAdminStatus, createTestScenario, clearTestData, createTestUsersWithAuth, getTestUsers, migrateAllTeams, updateAllInvitationsExpiration, sendDiscordNotificationToUser, getUsersWithDiscord, getSignupLogs, getGeneralLogs, logAdminAction, migrateExistingUsersToPublic, getIPAnalysis, updateUserRiotId, adminEditMatchScores, adminResetMatch, adminForceCompleteMatch, adminForceScheduleMatch, adminChangeMatchTeams, adminAddTeamMember, getTeams, signupTeamForTournament, resetAllRosterChanges, adminRevertSwissToRound1, adminRevertSwissToRound2, adminFixRound2MatchdayDates, type AdminLog } from '../services/firebaseService';
 import { notifyCustomMessage, getTeamDiscordIds } from '../services/discordService';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
@@ -15,6 +15,7 @@ import StreamerManagement from '../components/StreamerManagement';
 import StreamingManagement from '../components/StreamingManagement';
 import Map3IssuesTab from '../components/Map3IssuesTab';
 import StreamerStatisticsTab from '../components/StreamerStatisticsTab';
+import OrganizerManagement from '../components/OrganizerManagement';
 import { exportTeamsWithTournamentStatus, getTournamentTeamsData } from '../scripts/enhancedTeamExport';
 
 interface AdminPanelProps {
@@ -48,7 +49,7 @@ const AdminPanel = ({
 }: AdminPanelProps) => {
   const navigate = useNavigate();
   const { tab } = useParams<{ tab: string }>();
-  const activeTab = (forceTab || tab || 'tournaments') as 'tournaments' | 'teams' | 'matches' | 'all-matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs' | 'users' | 'stats' | 'stream-overlays' | 'streaming' | 'streamer-management' | 'migration' | 'map3-issues' | 'streamer-stats' | 'swiss-analysis';
+  const activeTab = (forceTab || tab || 'tournaments') as 'tournaments' | 'teams' | 'matches' | 'all-matches' | 'disputes' | 'notifications' | 'signup-logs' | 'general-logs' | 'users' | 'stats' | 'stream-overlays' | 'streaming' | 'streamer-management' | 'migration' | 'map3-issues' | 'streamer-stats' | 'swiss-analysis' | 'organizers';
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [swissAnalysis, setSwissAnalysis] = useState<any>(null);
@@ -336,8 +337,16 @@ const AdminPanel = ({
     setLoadingTournaments(true);
     try {
       const { getTournaments } = await import('../services/firebaseService');
-      const tournamentsData = await getTournaments(undefined, true); // Admins can see all tournaments
-      setTournaments(tournamentsData);
+      // Prioritize organizer status: if user is verified organizer, show only their tournaments
+      // Even if they're also admin, prioritize organizer view
+      if (currentUser?.isVerifiedOrganizer) {
+        const allTournaments = await getTournaments();
+        const tournamentsData = allTournaments.filter(t => t.organizerId === currentUser.id);
+        setTournaments(tournamentsData);
+      } else {
+        const tournamentsData = await getTournaments(undefined, true); // Admins can see all tournaments
+        setTournaments(tournamentsData);
+      }
     } catch (error) {
 
     } finally {
@@ -1445,7 +1454,8 @@ const AdminPanel = ({
             { id: 'streamer-stats', label: 'STREAMER STATS', icon: Video },
             { id: 'map3-issues', label: 'MAP 3 ISSUES', icon: Bug },
             { id: 'swiss-analysis', label: 'SWISS ANALYSIS', icon: BarChart3 },
-            { id: 'migration', label: 'MIGRATION', icon: Database }
+            { id: 'migration', label: 'MIGRATION', icon: Database },
+            { id: 'organizers', label: 'ORGANIZERS', icon: Building2 }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -4004,6 +4014,18 @@ const AdminPanel = ({
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'organizers' && currentUser && (
+          <div className="card">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white flex items-center">
+                <Building2 className="w-6 h-6 mr-3 text-primary-400" />
+                Organizer Management
+              </h2>
+            </div>
+            <OrganizerManagement currentUser={currentUser} />
           </div>
         )}
       </div>

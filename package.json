@@ -13,9 +13,11 @@
     "deploy": "npm run build:deploy && firebase deploy",
     "deploy:vercel": "vercel --prod --yes",
     "fix-map3": "tsx src/scripts/fixMap3DataSimple.ts",
-    "analyze-map3": "tsx src/scripts/analyzeMap3Issues.ts"
+    "analyze-map3": "tsx src/scripts/analyzeMap3Issues.ts",
+    "create-user-lookups": "tsx src/scripts/createUserLookups.ts"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^4.8.0",
     "@types/react-router-dom": "^5.3.3",
     "firebase": "^11.9.1",
     "firebase-admin": "^13.5.0",
@@ -25,7 +27,8 @@
     "react-dom": "^19.1.0",
     "react-helmet": "^6.1.0",
     "react-hot-toast": "^2.5.2",
-    "react-router-dom": "^7.6.2"
+    "react-router-dom": "^7.6.2",
+    "stripe": "^17.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",

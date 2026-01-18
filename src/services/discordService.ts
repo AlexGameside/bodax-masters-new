@@ -1,3 +1,5 @@
+import { getApiUrl, API_ENDPOINTS } from '../config/api';
+
 // Discord notification service for Unity League
 export interface DiscordNotificationData {
   type: 'ticket' | 'match' | 'team' | 'tournament' | 'dispute' | 'admin';
@@ -40,9 +42,9 @@ const sendDiscordNotification = async (data: DiscordNotificationData): Promise<b
       hasBotToken: !!botToken 
     });
 
-    // Use production domain which automatically points to latest deployment
-    const proxyUrl = 'https://oauth-proxy-gilt.vercel.app';
-    const response = await fetch(`${proxyUrl}/api/discord/send-notification`, {
+    // Use centralized API config
+    const endpoint = API_ENDPOINTS.discord.sendNotification();
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -532,14 +534,11 @@ export const getDiscordAuthUrl = (): string => {
 };
 
 export const exchangeCodeForToken = async (code: string): Promise<string> => {
-  // Use production domain as fallback if env var not set or is old URL
-  const envProxyUrl = import.meta.env.VITE_OAUTH_PROXY_URL;
-  const proxyUrl = envProxyUrl && !envProxyUrl.includes('5t15g09rb') 
-    ? envProxyUrl 
-    : 'https://oauth-proxy-gilt.vercel.app';
+  // Use centralized API config
+  const endpoint = API_ENDPOINTS.discord.token();
   const redirectUri = `${window.location.origin}/discord-callback`;
     
-  const response = await fetch(`${proxyUrl}/api/discord/token`, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -560,13 +559,10 @@ export const exchangeCodeForToken = async (code: string): Promise<string> => {
 };
 
 export const getDiscordUser = async (accessToken: string): Promise<any> => {
-  // Use production domain as fallback if env var not set or is old URL
-  const envProxyUrl = import.meta.env.VITE_OAUTH_PROXY_URL;
-  const proxyUrl = envProxyUrl && !envProxyUrl.includes('5t15g09rb') 
-    ? envProxyUrl 
-    : 'https://oauth-proxy-gilt.vercel.app';
+  // Use centralized API config
+  const endpoint = API_ENDPOINTS.discord.user();
 
-  const response = await fetch(`${proxyUrl}/api/discord/user`, {
+  const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

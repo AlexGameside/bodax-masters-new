@@ -28,107 +28,63 @@ const RiotLoginModal = ({ isOpen, onClose }: RiotLoginModalProps) => {
       />
       
       {/* Modal */}
-      <div className="relative bg-[#0a0a0a] border-2 border-[#C89B3C] rounded-lg shadow-2xl max-w-md w-full p-8 z-10">
+      <div className="relative bg-[#0a0a0a] border border-gray-800 rounded-lg shadow-2xl max-w-md w-full p-8 z-10">
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+          className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors z-20"
         >
           <X className="w-6 h-6" />
         </button>
 
-        {/* Riot Games Logo/Branding */}
+        {/* Header */}
         <div className="text-center mb-8">
-          <div className="mb-6">
-            {/* Riot Games Logo - Using their official brand colors */}
-            <div className="flex items-center justify-center mb-3">
-              <div 
-                className="text-5xl font-bold tracking-tight"
-                style={{ 
-                  color: '#C89B3C',
-                  fontFamily: 'system-ui, -apple-system, sans-serif',
-                  letterSpacing: '0.05em'
-                }}
-              >
-                RIOT
-              </div>
-              <div 
-                className="text-5xl font-bold ml-3 tracking-tight"
-                style={{ 
-                  color: '#F0E6D2',
-                  fontFamily: 'system-ui, -apple-system, sans-serif',
-                  letterSpacing: '0.05em'
-                }}
-              >
-                GAMES
-              </div>
-            </div>
-            <div 
-              className="text-sm font-semibold uppercase tracking-widest mb-1"
-              style={{ color: '#C89B3C' }}
-            >
-              Sign On
-            </div>
-          </div>
-          
-          <h2 className="text-2xl font-bold text-white mb-3 font-bodax uppercase tracking-wide">
-            Welcome to Bodax Masters
+          <h2 className="text-2xl font-bold text-white mb-2 font-bodax uppercase tracking-wide">
+            Sign In / Register
           </h2>
-          <p className="text-gray-400 text-sm leading-relaxed">
-            Sign in or create an account with your Riot Games account.<br />
-            New users will be asked to choose a username after signing in.
+          <p className="text-gray-400 text-sm">
+            Use your Riot Games account to sign in or create an account
           </p>
         </div>
 
-        {/* Riot Sign-On Button - Official Riot styling */}
+        {/* Official Riot Games Sign-In Button - Red with White Fist Logo */}
         <button
           onClick={handleRiotLogin}
-          className="w-full py-4 px-6 rounded-lg font-bold text-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-xl hover:shadow-2xl"
+          className="w-full py-4 px-6 rounded transition-all duration-200 transform hover:opacity-90 active:scale-[0.98] flex items-center justify-center space-x-3 relative overflow-hidden"
           style={{
-            background: 'linear-gradient(135deg, #C89B3C 0%, #D4AF37 50%, #F0E6D2 100%)',
-            color: '#0A1428',
-            border: '2px solid #C89B3C',
-            boxShadow: '0 4px 15px rgba(200, 155, 60, 0.3)'
+            backgroundColor: '#D32F2F', // Riot Games red
+            color: 'white'
           }}
         >
-          <div className="flex items-center justify-center space-x-3">
-            {/* Riot Shield Icon */}
-            <svg 
-              className="w-7 h-7" 
-              viewBox="0 0 24 24" 
-              fill="currentColor"
-              style={{ color: '#0A1428' }}
-            >
-              <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 2.18l8 4v8.64c0 4.3-2.8 8.36-6.8 9.54-4-1.18-6.8-5.24-6.8-9.54V8.18l8-4z"/>
-            </svg>
-            <span className="font-semibold tracking-wide">Sign in with Riot Games</span>
-          </div>
+          {/* Riot Games Fist Logo - White (Official Style) */}
+          <svg 
+            className="w-8 h-8 flex-shrink-0" 
+            viewBox="0 0 24 24" 
+            fill="white"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {/* Riot Fist - Simplified geometric fist matching official logo style */}
+            <g fill="white">
+              {/* Main fist body */}
+              <rect x="9" y="7" width="6" height="7" rx="1" fill="white"/>
+              {/* Thumb */}
+              <rect x="6" y="9" width="3" height="3" rx="0.5" fill="white"/>
+              {/* Knuckles - 4 circles representing fingers */}
+              <circle cx="10.5" cy="8" r="0.8" fill="white"/>
+              <circle cx="12.5" cy="7.5" r="0.8" fill="white"/>
+              <circle cx="14.5" cy="8" r="0.8" fill="white"/>
+              <circle cx="16" cy="9.5" r="0.8" fill="white"/>
+            </g>
+          </svg>
+          
+          <span className="text-white font-semibold text-lg">Sign in with Riot Games</span>
         </button>
 
         {/* Info text */}
         <div className="mt-6 text-center">
-          <p className="text-xs text-gray-500 leading-relaxed">
-            By signing in, you agree to our{' '}
-            <a href="/terms-of-service" className="underline hover:text-gray-400" onClick={(e) => { e.stopPropagation(); onClose(); }}>
-              Terms of Service
-            </a>
-            {' '}and{' '}
-            <a href="/privacy-policy" className="underline hover:text-gray-400" onClick={(e) => { e.stopPropagation(); onClose(); }}>
-              Privacy Policy
-            </a>
+          <p className="text-xs text-gray-500">
+            New users will be asked to choose a username after signing in
           </p>
-        </div>
-
-        {/* Riot Games branding footer */}
-        <div className="mt-6 pt-6 border-t" style={{ borderColor: '#C89B3C', opacity: 0.3 }}>
-          <div className="flex items-center justify-center space-x-2">
-            <div className="text-xs" style={{ color: '#C89B3C' }}>
-              Powered by
-            </div>
-            <div className="text-xs font-bold" style={{ color: '#F0E6D2' }}>
-              Riot Games Sign-On
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -136,4 +92,3 @@ const RiotLoginModal = ({ isOpen, onClose }: RiotLoginModalProps) => {
 };
 
 export default RiotLoginModal;
-

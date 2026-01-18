@@ -293,7 +293,7 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 space-y-3 text-center">
             <p className="text-gray-400 text-sm font-mono uppercase tracking-widest">
               Already have an account?{' '}
               <button
@@ -303,6 +303,17 @@ const UserRegistration = ({ onRegister }: UserRegistrationProps) => {
                 Sign In
               </button>
             </p>
+            <div className="border-t border-gray-800 pt-4">
+              <p className="text-gray-500 text-xs font-mono uppercase tracking-widest mb-2">
+                Or sign up with
+              </p>
+              <button
+                onClick={() => navigate('/riot-login')}
+                className="text-blue-400 hover:text-blue-300 transition-colors text-sm font-mono uppercase tracking-widest"
+              >
+                Riot Sign-On
+              </button>
+            </div>
           </div>
         </div>
       </div>

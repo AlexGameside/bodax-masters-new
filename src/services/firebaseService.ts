@@ -25,9 +25,15 @@ import {
 } from 'firebase/firestore';
 import { notifyTeamInvitation, notifyTeamMemberJoined, notifyMatchCompleted } from './discordService';
 import type { Team, Match, TeamInvitation, User, Tournament, TeamMember, Notification, MatchFormat } from '../types/tournament';
+import type { TournamentStageType } from '../types/tournamentStructure';
 import { ValidationService } from './validationService';
 import { auth, db } from '../config/firebase';
 import { DEFAULT_MAP_POOL } from '../constants/mapPool';
+
+type StageMeta = {
+  stageId?: string;
+  stageType?: TournamentStageType;
+};
 
 // Enhanced Teams collection functions
 export const addTeam = async (team: Omit<Team, 'id'>): Promise<string> => {
@@ -6114,6 +6120,132 @@ export const getUserById = async (userId: string): Promise<User | null> => {
   }
 };
 
+// Get user by email
+export const getUserByEmail = async (email: string): Promise<User | null> => {
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('email', '==', email.toLowerCase().trim()), limit(1));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      return null;
+    }
+    
+    const userDoc = querySnapshot.docs[0];
+    return {
+      id: userDoc.id,
+      ...userDoc.data()
+    } as User;
+  } catch (error) {
+    console.error('Error getting user by email:', error);
+    return null;
+  }
+};
+
+// Get user by username
+export const getUserByUsername = async (username: string): Promise<User | null> => {
+  try {
+    const trimmedUsername = username.trim();
+    
+    // First try user_lookups collection (allows public read for login, contains email)
+    const lookupsRef = collection(db, 'user_lookups');
+    const lookupQuery = query(lookupsRef, where('username', '==', trimmedUsername), limit(1));
+    const lookupSnapshot = await getDocs(lookupQuery);
+    
+    if (!lookupSnapshot.empty) {
+      const lookupDoc = lookupSnapshot.docs[0];
+      const lookupData = lookupDoc.data();
+      const userId = lookupData.userId;
+      
+      // Try to get full user data from users collection (requires auth)
+      // If this fails, return data from lookup (which includes email for login)
+      try {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          return {
+            id: userId,
+            ...userSnap.data()
+          } as User;
+        }
+      } catch (authError) {
+        // If we can't read from users collection (not authenticated), 
+        // return data from lookup which includes email for login purposes
+        const email = lookupData.email || '';
+        if (!email) {
+          console.warn(`User lookup found for username "${trimmedUsername}" but email is missing`);
+        }
+        return {
+          id: userId,
+          username: lookupData.username || '',
+          email: email, // Email available from lookup for login
+          riotId: '',
+          discordUsername: '',
+        } as User;
+      }
+    }
+    
+    // If no lookup found, log for debugging
+    console.log(`No user_lookups entry found for username: "${trimmedUsername}"`);
+    
+    // Fallback: try public_users collection (allows public read, but no email)
+    const publicUsersRef = collection(db, 'public_users');
+    const publicQuery = query(publicUsersRef, where('username', '==', username.trim()), limit(1));
+    const publicSnapshot = await getDocs(publicQuery);
+    
+    if (!publicSnapshot.empty) {
+      const publicUserDoc = publicSnapshot.docs[0];
+      const userId = publicUserDoc.id;
+      
+      // Try to get full user data from users collection (requires auth)
+      try {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          return {
+            id: userId,
+            ...userSnap.data()
+          } as User;
+        }
+      } catch (authError) {
+        // If we can't read from users collection, return basic data from public_users
+        const publicUserData = publicUserDoc.data();
+        return {
+          id: userId,
+          username: publicUserData.username || '',
+          email: '', // Email not available from public_users
+          riotId: publicUserData.riotId || '',
+          discordUsername: publicUserData.discordUsername || '',
+        } as User;
+      }
+    }
+    
+    // Final fallback: try users collection if authenticated (for backward compatibility)
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', username.trim()), limit(1));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        return {
+          id: userDoc.id,
+          ...userDoc.data()
+        } as User;
+      }
+    } catch (authError) {
+      // If not authenticated, this will fail - that's expected
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting user by username:', error);
+    return null;
+  }
+};
+
 // Get public user data
 export const getPublicUserData = async (userId: string): Promise<any> => {
   try {
@@ -6430,7 +6562,11 @@ export const unlinkRiotAccount = async (userId: string): Promise<void> => {
 };
 
 // --- Double Elimination Bracket Generator ---
-export const generateDoubleEliminationBracket = async (tournamentId: string, teamIds: string[]): Promise<void> => {
+export const generateDoubleEliminationBracket = async (
+  tournamentId: string,
+  teamIds: string[],
+  stageMeta?: StageMeta
+): Promise<void> => {
   if (!teamIds || teamIds.length < 2) throw new Error('At least 2 teams required');
 
   // Validate team count for double elimination
@@ -6482,6 +6618,8 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
         tournamentId,
         tournamentType: 'double-elim',
         bracketType: 'winners',
+        stageId: stageMeta?.stageId,
+        stageType: stageMeta?.stageType,
         matchFormat: defaultMatchFormat,
         matchState: 'ready_up',
         mapPool,
@@ -6512,6 +6650,8 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
         tournamentId,
         tournamentType: 'double-elim',
         bracketType: 'losers',
+        stageId: stageMeta?.stageId,
+        stageType: stageMeta?.stageType,
         matchFormat: defaultMatchFormat,
         matchState: 'ready_up',
         mapPool,
@@ -6538,6 +6678,8 @@ export const generateDoubleEliminationBracket = async (tournamentId: string, tea
     tournamentId,
     tournamentType: 'double-elim',
     bracketType: 'grand_final',
+    stageId: stageMeta?.stageId,
+    stageType: stageMeta?.stageType,
     matchFormat: finalsMatchFormat,
     matchState: 'ready_up',
     mapPool,
@@ -7815,7 +7957,11 @@ const generateSeededFirstRound = (seededTeams: string[]): [string, string][] => 
   return matches;
 };
 
-export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: string, seededTeams: string[]): Promise<void> => {
+export const generateDoubleEliminationBracketWithSeeding = async (
+  tournamentId: string,
+  seededTeams: string[],
+  stageMeta?: StageMeta
+): Promise<void> => {
   if (!seededTeams || seededTeams.length < 2) throw new Error('At least 2 teams required');
 
   // Validate team count for double elimination
@@ -7859,6 +8005,8 @@ export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: 
       tournamentId,
       tournamentType: 'double-elim',
       bracketType: 'winners',
+      stageId: stageMeta?.stageId,
+      stageType: stageMeta?.stageType,
       matchFormat: defaultMatchFormat,
       matchState: 'ready_up',
       mapPool,
@@ -7887,6 +8035,8 @@ export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: 
         tournamentId,
         tournamentType: 'double-elim',
         bracketType: 'winners',
+        stageId: stageMeta?.stageId,
+        stageType: stageMeta?.stageType,
         matchFormat: defaultMatchFormat,
         matchState: 'ready_up',
         mapPool,
@@ -7917,6 +8067,8 @@ export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: 
         tournamentId,
         tournamentType: 'double-elim',
         bracketType: 'losers',
+        stageId: stageMeta?.stageId,
+        stageType: stageMeta?.stageType,
         matchFormat: defaultMatchFormat,
         matchState: 'ready_up',
         mapPool,
@@ -7943,6 +8095,8 @@ export const generateDoubleEliminationBracketWithSeeding = async (tournamentId: 
     tournamentId,
     tournamentType: 'double-elim',
     bracketType: 'grand_final',
+    stageId: stageMeta?.stageId,
+    stageType: stageMeta?.stageType,
     matchFormat: finalsMatchFormat,
     matchState: 'ready_up',
     mapPool,

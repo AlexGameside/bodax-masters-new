@@ -47,6 +47,12 @@ import StreamerDashboard from './pages/StreamerDashboard';
 import TournamentBracketPage from './pages/TournamentBracketPage';
 import RiotApiTesting from './pages/RiotApiTesting';
 import RiotMatchDetails from './pages/RiotMatchDetails';
+import OrganizerApplication from './pages/OrganizerApplication';
+import OrganizerDashboard from './pages/OrganizerDashboard';
+import OrganizerTournamentManagement from './pages/OrganizerTournamentManagement';
+import OrganizerTournamentManagementPage from './pages/OrganizerTournamentManagementPage';
+import UserLogin from './pages/UserLogin';
+import UserRegistration from './pages/UserRegistration';
 import type { User, Team, Match, TeamInvitation } from './types/tournament';
 import { 
   getTeams, 
@@ -205,13 +211,15 @@ function App() {
     };
   }, [currentUser, userTeam]);
 
-  // Riot-only authentication - registration and login handled via Riot OAuth
+  // Email/Password authentication
   const handleUserRegister = async (userData: Omit<User, 'id' | 'createdAt'> & { password: string }) => {
-    throw new Error('Registration is only available through Riot Sign-On. Please use the Riot login.');
+    const { registerUser } = await import('./services/authService');
+    await registerUser(userData);
   };
 
   const handleUserLogin = async (username: string, password: string) => {
-    throw new Error('Email/password login is no longer supported. Please use Riot Sign-On.');
+    const { loginUser } = await import('./services/authService');
+    await loginUser(username, password);
   };
 
   const handleUserLogout = async () => {
@@ -399,7 +407,7 @@ function App() {
 function AppContent({
   currentUser,
   isAdmin,
-  loading,
+  loading: authLoading,
   teams,
   matches,
   userTeam,
@@ -469,8 +477,9 @@ function AppContent({
           {/* Public routes - always accessible */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/landing" element={<LandingPage />} />
-          <Route path="/login" element={<RiotLogin />} />
-          <Route path="/register" element={<RiotLogin />} />
+          <Route path="/login" element={<UserLogin onLogin={onUserLogin} />} />
+          <Route path="/register" element={<UserRegistration onRegister={onUserRegister} />} />
+          <Route path="/riot-login" element={<RiotLogin />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/cookie-policy" element={<CookiePolicy />} />
@@ -483,7 +492,10 @@ function AppContent({
           <Route path="/riot-callback" element={<RiotCallback />} />
 
           {/* User routes - require authentication */}
-          <Route path="/profile" element={currentUser ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/profile" element={authLoading ? <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div> : (currentUser ? <Profile /> : <Navigate to="/login" />)} />
+          <Route path="/organizer/apply" element={authLoading ? <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div> : (currentUser ? <OrganizerApplication /> : <Navigate to="/login" />)} />
+          <Route path="/organizer/dashboard" element={authLoading ? <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div> : <OrganizerDashboard />} />
+          <Route path="/organizer/tournaments" element={authLoading ? <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div> : (currentUser?.isVerifiedOrganizer ? <OrganizerTournamentManagement /> : <Navigate to="/organizer/apply" />)} />
           <Route path="/team/register" element={
             currentUser ? (
               <TeamRegistration 
@@ -565,8 +577,32 @@ function AppContent({
               />
             ) : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>
           } />
-          <Route path="/admin/tournaments/create" element={isAdmin === true ? <TournamentCreation /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/tournaments/create" element={
+            (isAdmin === true || currentUser?.isVerifiedOrganizer) ? (
+              <TournamentCreation />
+            ) : isAdmin === false ? (
+              <Navigate to="/" />
+            ) : (
+              <div>Loading...</div>
+            )
+          } />
           <Route path="/admin/tournaments/manage" element={isAdmin === true ? <TournamentManagement /> : isAdmin === false ? <Navigate to="/" /> : <div>Loading...</div>} />
+          <Route path="/admin/tournaments/:id/edit" element={
+            (isAdmin === true || currentUser?.isVerifiedOrganizer) ? (
+              <TournamentCreation />
+            ) : isAdmin === false ? (
+              <Navigate to="/" />
+            ) : (
+              <div>Loading...</div>
+            )
+          } />
+          <Route path="/organizer/tournaments/:id/manage" element={
+            currentUser?.isVerifiedOrganizer ? (
+              <OrganizerTournamentManagementPage />
+            ) : (
+              <Navigate to="/organizer/tournaments" />
+            )
+          } />
 
           {/* Back-compat: old create tournament URL -> admin scoped route */}
           <Route
